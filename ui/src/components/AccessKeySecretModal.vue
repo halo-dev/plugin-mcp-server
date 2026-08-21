@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import McpConnectionGuide from '@/components/McpConnectionGuide.vue'
-import { Toast, VButton, VModal, VSpace } from '@halo-dev/components'
+import { VButton, VModal, VSpace } from '@halo-dev/components'
+import { useClipboard } from '@vueuse/core'
 import { useTemplateRef } from 'vue'
 
-const props = defineProps<{
+const { token } = defineProps<{
   token: string
 }>()
 
@@ -13,14 +14,10 @@ const emit = defineEmits<{
 
 const modal = useTemplateRef<InstanceType<typeof VModal>>('modal')
 
-async function copyToken() {
-  try {
-    await navigator.clipboard.writeText(props.token)
-    Toast.success('MCP Key 已复制')
-  } catch (error) {
-    Toast.error(error instanceof Error ? error.message : '复制失败')
-  }
-}
+const { copy, copied } = useClipboard({
+  source: token,
+  legacy: true,
+})
 </script>
 
 <template>
@@ -37,7 +34,7 @@ async function copyToken() {
     </div>
     <template #footer>
       <VSpace>
-        <VButton type="secondary" @click="copyToken">复制 Key</VButton>
+        <VButton type="secondary" @click="copy">{{ copied ? '已复制' : '复制 Key' }}</VButton>
         <VButton @click="modal?.close()">关闭</VButton>
       </VSpace>
     </template>

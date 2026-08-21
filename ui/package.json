@@ -21,6 +21,7 @@
     "@halo-dev/components": "^2.26.0",
     "@halo-dev/ui-shared": "^2.26.0",
     "@tanstack/vue-query": "^4.44.0",
+    "@vueuse/core": "^14.4.0",
     "axios": "^1.19.0",
     "vue": "^3.5.41",
     "vue-router": "~5.1.0"
