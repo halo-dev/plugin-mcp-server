@@ -112,18 +112,23 @@ function handleDelete() {
     <template #end>
       <div class=":uno: flex flex-wrap items-center justify-end gap-3 text-xs text-gray-500">
         <VTag>{{ mcpAccessKey.allowedTools.length }} 个工具</VTag>
-        <span
-          >创建：{{
+        <span v-tooltip="utils.date.format(mcpAccessKey.creationTimestamp)">
+          创建：{{
             mcpAccessKey.creationTimestamp
               ? utils.date.timeAgo(mcpAccessKey.creationTimestamp)
               : '-'
-          }}</span
-        >
+          }}
+        </span>
         <span
-          >最后使用：{{
-            mcpAccessKey.lastUsedAt ? utils.date.timeAgo(mcpAccessKey.lastUsedAt) : '从未'
-          }}</span
+          v-tooltip="{
+            content: utils.date.format(mcpAccessKey.lastUsedAt),
+            disabled: !mcpAccessKey.lastUsedAt,
+          }"
         >
+          最后使用：{{
+            mcpAccessKey.lastUsedAt ? utils.date.timeAgo(mcpAccessKey.lastUsedAt) : '从未'
+          }}
+        </span>
         <span v-if="mcpAccessKey.expiresAt" :class="{ 'text-red-600': expired }">
           {{ expired ? '已过期' : '到期' }}：{{ utils.date.format(mcpAccessKey.expiresAt) }}
         </span>
