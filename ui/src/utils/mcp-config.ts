@@ -53,7 +53,7 @@ export function mcpClientGuides(token?: string): McpClientGuide[] {
       content: `# ~/.codex/config.toml
 [mcp_servers.${SERVER_NAME}]
 url = "${endpoint}"
-bearer_token_env_var = "HALO_MCP_TOKEN"`,
+http_headers = { Authorization = "${bearer}" }`,
     },
     {
       id: 'cursor',

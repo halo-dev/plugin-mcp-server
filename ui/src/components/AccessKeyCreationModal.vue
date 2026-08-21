@@ -31,14 +31,14 @@ const { mutate, isLoading: submitting } = useMutation({
     return data
   },
   onSuccess: async (data) => {
-    Toast.success('MCP Key 已创建')
+    Toast.success('MCP 密钥已创建')
     await queryClient.invalidateQueries({ queryKey: [QK_ACCESS_KEYS] })
     createdToken.value = data.token
     modal.value?.close()
   },
   onError: (error) => {
     console.error('Failed to create MCP key', error)
-    Toast.error('创建 MCP Key 失败')
+    Toast.error('创建 MCP 密钥失败')
   },
 })
 
@@ -54,7 +54,7 @@ function handleModalClose() {
   <VModal
     v-else
     ref="modal"
-    title="创建 MCP Key"
+    title="创建 MCP 密钥"
     :width="760"
     mount-to-body
     @close="handleModalClose"

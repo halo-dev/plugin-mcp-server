@@ -8,7 +8,7 @@ const categoryLabels: Record<string, string> = {
   TAG: '标签',
   COMMENT: '评论管理',
   ATTACHMENT: '附件管理',
-  PLUGIN: '插件 Tool',
+  PLUGIN: '插件工具',
 }
 
 export function toolCategoryLabel(category: string) {

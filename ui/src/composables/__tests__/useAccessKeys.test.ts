@@ -1,6 +1,6 @@
 import type { McpAccessKey } from '@/api'
 import { describe, expect, it } from 'vitest'
-import { accessKeyRefetchInterval } from './useAccessKeys'
+import { accessKeyRefetchInterval } from '../useAccessKeys'
 
 function accessKey(deletionTimestamp?: string): McpAccessKey {
   return {

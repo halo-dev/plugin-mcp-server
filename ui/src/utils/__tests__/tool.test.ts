@@ -1,6 +1,6 @@
 import type { McpTool } from '@/api'
 import { describe, expect, it } from 'vitest'
-import { groupTools } from './tool'
+import { groupTools } from '../tool'
 
 function tool(name: string, category: string, pluginName = 'PluginMcpServer'): McpTool {
   return {
@@ -52,7 +52,7 @@ describe('groupTools', () => {
     expect(pluginGroup).toMatchObject({
       source: { pluginName: 'PluginDemo' },
       toolCount: 1,
-      categories: [{ category: 'PLUGIN', label: '插件 Tool' }],
+      categories: [{ category: 'PLUGIN', label: '插件工具' }],
     })
   })
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { mcpClientGuides, type McpClientId } from '@/utils/mcp-config'
-import { Toast, VButton } from '@halo-dev/components'
+import { Toast } from '@halo-dev/components'
 import { computed, shallowRef, type Component } from 'vue'
 import ClaudeIcon from '~icons/simple-icons/claude'
 import OpenaiIcon from '~icons/simple-icons/openai'
@@ -59,12 +59,18 @@ async function copy(value: string) {
         >
           安装
         </a>
-        <VButton size="sm" @click="copy(current.content)">复制</VButton>
+        <button
+          type="button"
+          class=":uno: inline-flex items-center rounded-md bg-white px-2 py-1 text-xs text-gray-900 font-medium hover:bg-gray-200"
+          @click="copy(current.content)"
+        >
+          复制
+        </button>
       </div>
     </div>
     <p v-if="!token" class=":uno: mt-2 text-xs text-gray-400">
-      将配置中的 $HALO_MCP_TOKEN 替换为创建 Key 时获得的完整 Key；创建或轮换 Key 后可一键安装到
-      Cursor / VS Code。
+      将配置中的 $HALO_MCP_TOKEN 替换为创建密钥时获得的完整密钥；创建或轮换密钥后可一键安装到 Cursor
+      / VS Code。
     </p>
   </div>
 </template>

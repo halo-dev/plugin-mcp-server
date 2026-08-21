@@ -80,13 +80,13 @@ defineExpose({
       <div class=":uno: mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div class=":uno: flex items-center gap-2 text-sm text-gray-900 font-medium">
-            <span>可用 Tool</span>
+            <span>可用工具</span>
             <span class=":uno: text-xs text-gray-500 font-normal">
               已选 {{ selectedCount }}/{{ tools.length }}
             </span>
           </div>
           <div class=":uno: mt-1 text-xs text-gray-500">
-            新增 Tool 不会自动授予现有 Key；「内容管理」预设不含破坏性 Tool。
+            新增工具不会自动授予现有密钥；「内容管理」预设不含破坏性工具。
           </div>
         </div>
         <VSpace>

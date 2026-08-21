@@ -11,7 +11,7 @@ const creationModalVisible = shallowRef(false)
 </script>
 
 <template>
-  <VCard :body-class="['!p-0']" title="MCP Keys">
+  <VCard :body-class="['!p-0']" title="MCP 密钥">
     <template #actions>
       <div class=":uno: px-4">
         <VButton type="secondary" size="sm" @click="creationModalVisible = true">新建</VButton>
@@ -21,7 +21,7 @@ const creationModalVisible = shallowRef(false)
     <VEmpty
       v-else-if="isError"
       title="加载失败"
-      message="无法获取 MCP Key 列表，请检查网络后重试。"
+      message="无法获取 MCP 密钥列表，请检查网络后重试。"
     >
       <template #actions>
         <VButton type="primary" @click="refetch()">重试</VButton>
@@ -29,12 +29,12 @@ const creationModalVisible = shallowRef(false)
     </VEmpty>
     <VEmpty
       v-else-if="!keys?.length"
-      title="还没有 MCP Key"
-      message="生成一个 Key，并为它选择允许调用的 Tool。"
+      title="还没有 MCP 密钥"
+      message="生成一个密钥，并为它选择允许调用的工具。"
     >
       <template #actions>
         <VSpace>
-          <VButton type="secondary" @click="creationModalVisible = true">新建 Key</VButton>
+          <VButton type="secondary" @click="creationModalVisible = true">新建密钥</VButton>
           <VButton @click="refetch()">刷新</VButton>
         </VSpace>
       </template>

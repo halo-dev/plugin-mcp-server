@@ -29,19 +29,19 @@ const { mutate, isLoading: submitting } = useMutation({
     })
   },
   onSuccess: async () => {
-    Toast.success('MCP Key 已更新')
+    Toast.success('MCP 密钥已更新')
     await queryClient.invalidateQueries({ queryKey: [QK_ACCESS_KEYS] })
     modal.value?.close()
   },
   onError: (error) => {
     console.error('Failed to update MCP key', error)
-    Toast.error('更新 MCP Key 失败')
+    Toast.error('更新 MCP 密钥失败')
   },
 })
 </script>
 
 <template>
-  <VModal ref="modal" title="编辑 MCP Key" :width="760" mount-to-body @close="emit('close')">
+  <VModal ref="modal" title="编辑 MCP 密钥" :width="760" mount-to-body @close="emit('close')">
     <VLoading v-if="isLoading" />
     <AccessKeyForm
       v-else

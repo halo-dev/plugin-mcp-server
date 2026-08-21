@@ -10,7 +10,7 @@ const groups = computed(() => groupTools(tools.value ?? []))
 </script>
 
 <template>
-  <VCard v-if="groups.length" title="Tools">
+  <VCard v-if="groups.length" title="已注册工具">
     <div class=":uno: flex flex-col divide-y divide-gray-100">
       <section
         v-for="group in groups"
@@ -25,7 +25,7 @@ const groups = computed(() => groupTools(tools.value ?? []))
           <span v-if="group.source.version" class=":uno: text-xs text-gray-400">
             v{{ group.source.version }}
           </span>
-          <span class=":uno: text-xs text-gray-400">{{ group.toolCount }} 个 Tool</span>
+          <span class=":uno: text-xs text-gray-400">{{ group.toolCount }} 个工具</span>
         </div>
         <div class=":uno: flex flex-col gap-4">
           <div v-for="category in group.categories" :key="category.category">
