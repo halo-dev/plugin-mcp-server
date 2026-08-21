@@ -37,8 +37,8 @@ async function copyToken() {
     </div>
     <template #footer>
       <VSpace>
-        <VButton @click="modal?.close()">关闭</VButton>
         <VButton type="secondary" @click="copyToken">复制 Key</VButton>
+        <VButton @click="modal?.close()">关闭</VButton>
       </VSpace>
     </template>
   </VModal>

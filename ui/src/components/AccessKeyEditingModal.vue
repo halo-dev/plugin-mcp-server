@@ -52,7 +52,6 @@ const { mutate, isLoading: submitting } = useMutation({
     />
     <template #footer>
       <VSpace>
-        <VButton @click="modal?.close()">取消</VButton>
         <VButton
           type="secondary"
           :loading="submitting"
@@ -61,6 +60,7 @@ const { mutate, isLoading: submitting } = useMutation({
         >
           保存
         </VButton>
+        <VButton @click="modal?.close()">取消</VButton>
       </VSpace>
     </template>
   </VModal>

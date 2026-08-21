@@ -43,7 +43,6 @@ const { mutate, isLoading: submitting } = useMutation({
 })
 
 function handleModalClose() {
-  // 创建成功后切换到 Secret 弹窗，不向父级传递关闭
   if (!createdToken.value) {
     emit('close')
   }
@@ -64,15 +63,15 @@ function handleModalClose() {
     <AccessKeyForm v-else ref="form" :tools="tools ?? []" @submit="mutate" />
     <template #footer>
       <VSpace>
-        <VButton @click="modal?.close()">取消</VButton>
         <VButton
           type="secondary"
           :loading="submitting"
           :disabled="submitting"
           @click="form?.submit()"
         >
-          生成 Key
+          创建
         </VButton>
+        <VButton @click="modal?.close()">取消</VButton>
       </VSpace>
     </template>
   </VModal>
