@@ -1,0 +1,3 @@
+[mcp_servers.halo]
+url = "http://localhost:8090/mcp"
+bearer_token_env_var = "HALO_MCP_TOKEN"

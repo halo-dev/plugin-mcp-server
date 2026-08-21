@@ -1,0 +1,17 @@
+apiVersion: plugin.halo.run/v1alpha1
+kind: Plugin
+metadata:
+  name: mcp-tool-clock
+spec:
+  enabled: true
+  requires: ">=2.26.0"
+  pluginDependencies:
+    mcp-server?: ">=1.0.0 & <2.0.0"
+  author:
+    name: Halo MCP Server
+    website: https://github.com/ryanwang/mcp-server
+  displayName: MCP Tool Clock
+  description: Adds an optional current-time tool when Halo MCP Server is available.
+  license:
+    - name: GPL-3.0
+      url: https://www.gnu.org/licenses/gpl-3.0.html

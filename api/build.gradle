@@ -1,0 +1,61 @@
+plugins {
+    id 'java-library'
+    id 'com.vanniktech.maven.publish' version '0.36.0'
+}
+
+group = 'run.halo.mcpserver'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly platform('run.halo.tools.platform:plugin:2.26.0')
+    compileOnly 'run.halo.app:api'
+    compileOnly 'io.projectreactor:reactor-core'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+tasks.named('jar') {
+    archiveBaseName = 'plugin-mcp-server-api'
+}
+
+mavenPublishing {
+    publishToMavenCentral()
+    signAllPublications()
+
+    coordinates('run.halo.mcpserver', 'api', project.version.toString())
+
+    pom {
+        name = 'Halo MCP Server API'
+        description = 'Cross-plugin API for contributing Halo tools to the MCP Server plugin.'
+        url = 'https://github.com/ryanwang/mcp-server'
+        licenses {
+            license {
+                name = 'The GNU General Public License v3.0'
+                url = 'https://www.gnu.org/licenses/gpl-3.0.en.html'
+            }
+        }
+        developers {
+            developer {
+                id = 'ryanwang'
+                name = 'Ryan Wang'
+            }
+        }
+        scm {
+            url = 'https://github.com/ryanwang/mcp-server'
+            connection = 'scm:git:git@github.com:ryanwang/mcp-server.git'
+            developerConnection = 'scm:git:ssh://git@github.com/ryanwang/mcp-server.git'
+        }
+    }
+}

@@ -1,0 +1,9 @@
+apiVersion: plugin.halo.run/v1alpha1
+kind: ExtensionPointDefinition
+metadata:
+  name: mcp-tool-provider
+spec:
+  className: run.halo.mcpserver.api.McpToolProvider
+  displayName: MCP Tool Provider
+  type: MULTI_INSTANCE
+  description: Contributes discoverable and executable tools to the Halo MCP server.

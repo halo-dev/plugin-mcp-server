@@ -1,0 +1,19 @@
+apiVersion: plugin.halo.run/v1alpha1
+kind: Plugin
+metadata:
+  name: mcp-server
+spec:
+  enabled: true
+  requires: ">=2.26.0"
+  author:
+    name: Halo
+    website: https://github.com/halo-dev
+  logo: logo.svg
+  homepage: https://github.com/halo-dev/plugin-mcp-server#readme
+  repo: https://github.com/halo-dev/plugin-mcp-server
+  issues: https://github.com/halo-dev/plugin-mcp-server/issues
+  displayName: "MCP Server"
+  description: "Halo 的 MCP 服务端插件，使用 AI Agent 管理 Halo 网站"
+  license:
+    - name: "GPL-3.0"
+      url: "https://github.com/halo-dev/plugin-mcp-server/blob/main/LICENSE"

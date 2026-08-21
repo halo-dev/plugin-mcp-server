@@ -1,0 +1,473 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "Halo",
+    "version" : "2.26.0"
+  },
+  "servers" : [ {
+    "url" : "http://localhost:57127",
+    "description" : "Generated server url"
+  } ],
+  "security" : [ {
+    "basicAuth" : [ ],
+    "bearerAuth" : [ ]
+  } ],
+  "paths" : {
+    "/apis/console.api.mcp.halo.run/v1alpha1/keys" : {
+      "get" : {
+        "description" : "List MCP access keys.",
+        "operationId" : "listMcpAccessKeys",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/McpAccessKey"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "console.api.mcp.halo.run/v1alpha1/McpAccessKey" ]
+      },
+      "post" : {
+        "description" : "Create an MCP access key.",
+        "operationId" : "createMcpAccessKey",
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateMcpAccessKeyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CreatedMcpAccessKey"
+                }
+              }
+            },
+            "description" : "Created"
+          }
+        },
+        "tags" : [ "console.api.mcp.halo.run/v1alpha1/McpAccessKey" ]
+      }
+    },
+    "/apis/console.api.mcp.halo.run/v1alpha1/keys/{name}" : {
+      "delete" : {
+        "description" : "Delete an MCP access key.",
+        "operationId" : "deleteMcpAccessKey",
+        "parameters" : [ {
+          "description" : "MCP access key metadata name.",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          }
+        },
+        "tags" : [ "console.api.mcp.halo.run/v1alpha1/McpAccessKey" ]
+      },
+      "put" : {
+        "description" : "Update an MCP access key.",
+        "operationId" : "updateMcpAccessKey",
+        "parameters" : [ {
+          "description" : "MCP access key metadata name.",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateMcpAccessKeyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/McpAccessKey"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "console.api.mcp.halo.run/v1alpha1/McpAccessKey" ]
+      }
+    },
+    "/apis/console.api.mcp.halo.run/v1alpha1/keys/{name}/rotate" : {
+      "post" : {
+        "description" : "Rotate an MCP access key.",
+        "operationId" : "rotateMcpAccessKey",
+        "parameters" : [ {
+          "description" : "MCP access key metadata name.",
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CreatedMcpAccessKey"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "console.api.mcp.halo.run/v1alpha1/McpAccessKey" ]
+      }
+    },
+    "/apis/console.api.mcp.halo.run/v1alpha1/tools" : {
+      "get" : {
+        "description" : "List MCP tools available for access keys.",
+        "operationId" : "listMcpTools",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/McpTool"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "console.api.mcp.halo.run/v1alpha1/McpAccessKey" ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "AddOperation" : {
+        "required" : [ "op", "path", "value" ],
+        "type" : "object",
+        "properties" : {
+          "op" : {
+            "type" : "string",
+            "enum" : [ "add" ]
+          },
+          "path" : {
+            "pattern" : "^(/[^/~]*(~[01][^/~]*)*)*$",
+            "type" : "string",
+            "description" : "A JSON Pointer path pointing to the location to move/copy from.",
+            "example" : "/a/b/c"
+          },
+          "value" : {
+            "description" : "Value can be any JSON value"
+          }
+        }
+      },
+      "CopyOperation" : {
+        "required" : [ "from", "op", "path" ],
+        "type" : "object",
+        "properties" : {
+          "from" : {
+            "pattern" : "^(/[^/~]*(~[01][^/~]*)*)*$",
+            "type" : "string",
+            "description" : "A JSON Pointer path pointing to the location to move/copy from.",
+            "example" : "/a/b/c"
+          },
+          "op" : {
+            "type" : "string",
+            "enum" : [ "copy" ]
+          },
+          "path" : {
+            "pattern" : "^(/[^/~]*(~[01][^/~]*)*)*$",
+            "type" : "string",
+            "description" : "A JSON Pointer path pointing to the location to move/copy from.",
+            "example" : "/a/b/c"
+          }
+        }
+      },
+      "CreateMcpAccessKeyRequest" : {
+        "required" : [ "allowedTools", "displayName" ],
+        "type" : "object",
+        "properties" : {
+          "allowedTools" : {
+            "uniqueItems" : true,
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "CreatedMcpAccessKey" : {
+        "required" : [ "key", "token" ],
+        "type" : "object",
+        "properties" : {
+          "key" : {
+            "$ref" : "#/components/schemas/McpAccessKey"
+          },
+          "token" : {
+            "type" : "string"
+          }
+        }
+      },
+      "JsonPatch" : {
+        "minItems" : 1,
+        "uniqueItems" : true,
+        "type" : "array",
+        "description" : "JSON schema for JSONPatch operations",
+        "items" : {
+          "oneOf" : [ {
+            "$ref" : "#/components/schemas/AddOperation"
+          }, {
+            "$ref" : "#/components/schemas/ReplaceOperation"
+          }, {
+            "$ref" : "#/components/schemas/TestOperation"
+          }, {
+            "$ref" : "#/components/schemas/RemoveOperation"
+          }, {
+            "$ref" : "#/components/schemas/MoveOperation"
+          }, {
+            "$ref" : "#/components/schemas/CopyOperation"
+          } ]
+        }
+      },
+      "McpAccessKey" : {
+        "required" : [ "allowedTools", "displayName", "enabled", "keyPrefix", "name", "ownerName" ],
+        "type" : "object",
+        "properties" : {
+          "allowedTools" : {
+            "uniqueItems" : true,
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "creationTimestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "expiresAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "keyPrefix" : {
+            "type" : "string"
+          },
+          "lastUsedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "ownerName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "McpTool" : {
+        "required" : [ "available", "category", "destructive", "name", "readOnly", "source" ],
+        "type" : "object",
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "destructive" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "readOnly" : {
+            "type" : "boolean"
+          },
+          "source" : {
+            "$ref" : "#/components/schemas/McpToolSource"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        }
+      },
+      "McpToolSource" : {
+        "required" : [ "displayName", "pluginName", "type" ],
+        "type" : "object",
+        "properties" : {
+          "displayName" : {
+            "type" : "string"
+          },
+          "logo" : {
+            "type" : "string"
+          },
+          "pluginName" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string",
+            "enum" : [ "BUILT_IN", "PLUGIN" ]
+          },
+          "version" : {
+            "type" : "string"
+          }
+        }
+      },
+      "MoveOperation" : {
+        "required" : [ "from", "op", "path" ],
+        "type" : "object",
+        "properties" : {
+          "from" : {
+            "pattern" : "^(/[^/~]*(~[01][^/~]*)*)*$",
+            "type" : "string",
+            "description" : "A JSON Pointer path pointing to the location to move/copy from.",
+            "example" : "/a/b/c"
+          },
+          "op" : {
+            "type" : "string",
+            "enum" : [ "move" ]
+          },
+          "path" : {
+            "pattern" : "^(/[^/~]*(~[01][^/~]*)*)*$",
+            "type" : "string",
+            "description" : "A JSON Pointer path pointing to the location to move/copy from.",
+            "example" : "/a/b/c"
+          }
+        }
+      },
+      "RemoveOperation" : {
+        "required" : [ "op", "path" ],
+        "type" : "object",
+        "properties" : {
+          "op" : {
+            "type" : "string",
+            "enum" : [ "remove" ]
+          },
+          "path" : {
+            "pattern" : "^(/[^/~]*(~[01][^/~]*)*)*$",
+            "type" : "string",
+            "description" : "A JSON Pointer path pointing to the location to move/copy from.",
+            "example" : "/a/b/c"
+          }
+        }
+      },
+      "ReplaceOperation" : {
+        "required" : [ "op", "path", "value" ],
+        "type" : "object",
+        "properties" : {
+          "op" : {
+            "type" : "string",
+            "enum" : [ "replace" ]
+          },
+          "path" : {
+            "pattern" : "^(/[^/~]*(~[01][^/~]*)*)*$",
+            "type" : "string",
+            "description" : "A JSON Pointer path pointing to the location to move/copy from.",
+            "example" : "/a/b/c"
+          },
+          "value" : {
+            "description" : "Value can be any JSON value"
+          }
+        }
+      },
+      "TestOperation" : {
+        "required" : [ "op", "path", "value" ],
+        "type" : "object",
+        "properties" : {
+          "op" : {
+            "type" : "string",
+            "enum" : [ "test" ]
+          },
+          "path" : {
+            "pattern" : "^(/[^/~]*(~[01][^/~]*)*)*$",
+            "type" : "string",
+            "description" : "A JSON Pointer path pointing to the location to move/copy from.",
+            "example" : "/a/b/c"
+          },
+          "value" : {
+            "description" : "Value can be any JSON value"
+          }
+        }
+      },
+      "UpdateMcpAccessKeyRequest" : {
+        "required" : [ "allowedTools", "displayName", "enabled" ],
+        "type" : "object",
+        "properties" : {
+          "allowedTools" : {
+            "uniqueItems" : true,
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "expiresAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "basicAuth" : {
+        "scheme" : "basic",
+        "type" : "http"
+      },
+      "bearerAuth" : {
+        "bearerFormat" : "JWT",
+        "scheme" : "bearer",
+        "type" : "http"
+      }
+    }
+  }
+}
