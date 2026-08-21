@@ -37,6 +37,12 @@ export interface McpAccessKey {
      * @type {string}
      * @memberof McpAccessKey
      */
+    'deletionTimestamp'?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof McpAccessKey
+     */
     'displayName': string;
     /**
      * 

@@ -201,7 +201,8 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
                 spec.getExpiresAt(),
                 spec.getAllowedTools() == null ? Set.of() : Set.copyOf(spec.getAllowedTools()),
                 status == null ? null : status.getLastUsedAt(),
-                metadata.getCreationTimestamp());
+                metadata.getCreationTimestamp(),
+                metadata.getDeletionTimestamp());
     }
 
     @Override
@@ -232,7 +233,8 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
             Instant expiresAt,
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Set<String> allowedTools,
             Instant lastUsedAt,
-            Instant creationTimestamp) {}
+            Instant creationTimestamp,
+            Instant deletionTimestamp) {}
 
     @Schema(name = "CreatedMcpAccessKey")
     record CreatedKeyResponse(

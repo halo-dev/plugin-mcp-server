@@ -75,6 +75,16 @@ class McpAccessKeyServiceTest {
     }
 
     @Test
+    void rejectsKeysBeingDeleted() {
+        var created = service.create("Deleting", "admin", Set.of(), null).block();
+        created.accessKey().getMetadata().setDeletionTimestamp(Instant.now());
+        when(client.fetch(McpAccessKey.class, created.accessKey().getMetadata().getName()))
+                .thenReturn(Mono.just(created.accessKey()));
+
+        assertThat(service.authenticate(created.token()).block()).isNull();
+    }
+
+    @Test
     void rotationInvalidatesThePreviousSecret() {
         var created = service.create("Automation", "admin", Set.of(), null).block();
         var id = created.accessKey().getMetadata().getName();

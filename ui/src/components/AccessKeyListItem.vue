@@ -24,6 +24,9 @@ const props = defineProps<{
 const queryClient = useQueryClient()
 
 const status = computed(() => {
+  if (props.mcpAccessKey.deletionTimestamp) {
+    return { state: 'warning' as const, text: '删除中' }
+  }
   if (!props.mcpAccessKey.enabled) {
     return { state: 'warning' as const, text: '已禁用' }
   }
@@ -74,11 +77,7 @@ function handleDelete() {
     onConfirm: async () => {
       try {
         await mcpConsoleApiClient.deleteMcpAccessKey({ name: props.mcpAccessKey.name })
-        // 后端删除是异步的，立即刷新仍会返回该 Key，先从缓存中移除，稍后再同步
-        queryClient.setQueryData<McpAccessKey[]>([QK_ACCESS_KEYS], (old) =>
-          old?.filter((key) => key.name !== props.mcpAccessKey.name),
-        )
-        setTimeout(invalidateAccessKeys, 3000)
+        await invalidateAccessKeys()
         Toast.success('MCP Key 已删除')
       } catch (error) {
         console.error('Failed to delete MCP key', error)
@@ -116,14 +115,20 @@ function handleDelete() {
         <span v-if="mcpAccessKey.expiresAt">
           到期：{{ utils.date.format(mcpAccessKey.expiresAt) }}
         </span>
-        <VStatusDot :state="status.state" :text="status.text" />
+        <VStatusDot
+          :state="status.state"
+          :text="status.text"
+          :animate="Boolean(mcpAccessKey.deletionTimestamp)"
+        />
       </div>
     </template>
     <template #dropdownItems>
-      <VDropdownItem @click="editingModalVisible = true">编辑</VDropdownItem>
-      <VDropdownItem @click="handleRotate">轮换 Key</VDropdownItem>
-      <VDropdownDivider />
-      <VDropdownItem type="danger" @click="handleDelete">删除</VDropdownItem>
+      <template v-if="!mcpAccessKey.deletionTimestamp">
+        <VDropdownItem @click="editingModalVisible = true">编辑</VDropdownItem>
+        <VDropdownItem @click="handleRotate">轮换 Key</VDropdownItem>
+        <VDropdownDivider />
+        <VDropdownItem type="danger" @click="handleDelete">删除</VDropdownItem>
+      </template>
     </template>
   </VEntity>
 

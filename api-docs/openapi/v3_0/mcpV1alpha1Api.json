@@ -5,7 +5,7 @@
     "version" : "2.26.0"
   },
   "servers" : [ {
-    "url" : "http://localhost:57127",
+    "url" : "http://localhost:59195",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -278,6 +278,10 @@
             }
           },
           "creationTimestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "deletionTimestamp" : {
             "type" : "string",
             "format" : "date-time"
           },

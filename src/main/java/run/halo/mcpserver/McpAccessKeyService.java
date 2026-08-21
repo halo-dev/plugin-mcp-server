@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import run.halo.app.extension.ExtensionUtil;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
@@ -131,7 +132,8 @@ class McpAccessKeyService {
 
     private boolean active(McpAccessKey accessKey) {
         var spec = accessKey.getSpec();
-        return spec != null
+        return !ExtensionUtil.isDeleted(accessKey)
+                && spec != null
                 && spec.isEnabled()
                 && (spec.getExpiresAt() == null || spec.getExpiresAt().isAfter(Instant.now()));
     }
