@@ -5,6 +5,8 @@ import io.modelcontextprotocol.spec.McpSchema;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -17,6 +19,7 @@ import run.halo.mcpserver.tools.BuiltInTools;
 @Component
 class McpToolCatalog {
 
+    private static final Logger log = LoggerFactory.getLogger(McpToolCatalog.class);
     private static final String BUILT_IN_PLUGIN = "plugin-mcp-server";
     private final BuiltInTools builtInTools;
     private final McpToolRegistry toolRegistry;
@@ -36,7 +39,7 @@ class McpToolCatalog {
         var builtIn = builtInTools.tools().stream()
                 .map(tool -> descriptor(tool, builtInSource))
                 .toList();
-        return toolRegistry.registeredTools().flatMap(definitions ->
+        return contributedTools().flatMap(definitions ->
                 Flux.fromIterable(definitions)
                         .flatMap(tool -> source(tool.pluginName())
                                 .map(source -> descriptor(tool.definition(), source)))
@@ -49,7 +52,7 @@ class McpToolCatalog {
     }
 
     Mono<List<McpSchema.Tool>> protocolTools() {
-        return toolRegistry.registeredTools().map(definitions -> {
+        return contributedTools().map(definitions -> {
             var tools = new java.util.ArrayList<>(builtInTools.tools().stream()
                     .map(BuiltInTool::protocolTool)
                     .toList());
@@ -58,6 +61,13 @@ class McpToolCatalog {
                     .map(McpToolCatalog::protocolTool)
                     .forEach(tools::add);
             return List.copyOf(tools);
+        });
+    }
+
+    private Mono<List<RegisteredTool>> contributedTools() {
+        return toolRegistry.registeredTools().onErrorResume(error -> {
+            log.warn("Ignoring unavailable contributed MCP tools", error);
+            return Mono.just(List.of());
         });
     }
 
@@ -81,6 +91,10 @@ class McpToolCatalog {
                         logo = spec.getLogo();
                     }
                     return new ToolSource("PLUGIN", pluginName, displayName, version, logo);
+                })
+                .onErrorResume(error -> {
+                    log.warn("Using fallback metadata for contributed MCP tools from {}", pluginName, error);
+                    return Mono.just(fallback);
                 })
                 .defaultIfEmpty(fallback);
     }

@@ -47,7 +47,7 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
         if (!hasMcpBearerToken(authorization)) {
             return unauthorized(exchange);
         }
-        if (!rateLimiter.allowAuthentication(exchange.getRequest().getRemoteAddress())) {
+        if (!rateLimiter.allowRequest(exchange.getRequest().getRemoteAddress())) {
             return tooManyRequests(exchange);
         }
         var rawToken = authorization.substring(BEARER_SCHEME.length());

@@ -165,9 +165,9 @@ class McpKeyAuthenticationFilterTest {
     }
 
     @Test
-    void rateLimitsAuthenticationBeforeAccessKeyLookup() {
-        for (var i = 0; i < McpRequestRateLimiter.AUTHENTICATIONS_PER_MINUTE; i++) {
-            assertThat(rateLimiter.allowAuthentication(null)).isTrue();
+    void rateLimitsRequestsBeforeAccessKeyLookup() {
+        for (var i = 0; i < McpRequestRateLimiter.REQUESTS_PER_MINUTE; i++) {
+            assertThat(rateLimiter.allowRequest(null)).isTrue();
         }
         var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)

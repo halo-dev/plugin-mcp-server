@@ -52,10 +52,7 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
                 return switch (request.method()) {
                     case "tools/list" -> listTools(request);
                     case "tools/call" -> callTool(context, request, handler);
-                    default -> handler.handleRequest(context, request)
-                            .onErrorResume(McpError.class, error -> Mono.just(
-                                    McpSchema.JSONRPCResponse.error(
-                                            request.id(), error.getJsonRpcError())));
+                    default -> delegatedRequest(context, request, handler);
                 };
             }
 
@@ -111,13 +108,49 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
             McpSchema.CallToolRequest call,
             String toolName) {
         if (!toolName.contains("/")) {
-            return handler.handleRequest(context, request);
+            return delegatedRequest(context, request, handler);
         }
         return registry.executeIfContributed(toolName, arguments(call.arguments()))
                 .flatMap(result -> result
                         .map(value -> Mono.just(McpSchema.JSONRPCResponse.result(request.id(), value)))
-                        .orElseGet(() -> handler.handleRequest(context, request)))
+                        .orElseGet(() -> delegatedRequest(context, request, handler)))
                 .onErrorResume(error -> Mono.just(internalError(request, error)));
+    }
+
+    private Mono<McpSchema.JSONRPCResponse> delegatedRequest(
+            McpTransportContext context,
+            McpSchema.JSONRPCRequest request,
+            McpStatelessServerHandler handler) {
+        final Mono<McpSchema.JSONRPCResponse> response;
+        try {
+            response = handler.handleRequest(context, request);
+        } catch (Throwable error) {
+            return Mono.just(internalError(request, error));
+        }
+        if (response == null) {
+            return Mono.just(internalError(
+                    request, new IllegalStateException("MCP handler returned no response")));
+        }
+        return response
+                .map(value -> sanitizeInternalError(request, value))
+                .switchIfEmpty(Mono.fromSupplier(() -> internalError(
+                        request, new IllegalStateException("MCP handler returned no response"))))
+                .onErrorResume(McpError.class, error -> error.getJsonRpcError() == null
+                        ? Mono.just(internalError(request, error))
+                        : Mono.just(sanitizeInternalError(
+                                request,
+                                McpSchema.JSONRPCResponse.error(
+                                        request.id(), error.getJsonRpcError()))))
+                .onErrorResume(error -> Mono.just(internalError(request, error)));
+    }
+
+    private McpSchema.JSONRPCResponse sanitizeInternalError(
+            McpSchema.JSONRPCRequest request, McpSchema.JSONRPCResponse response) {
+        if (response.error() != null && Integer.valueOf(-32603).equals(response.error().code())) {
+            log.warn("MCP handler returned an internal error for method {}", request.method());
+            return protocolError(request, -32603, "Internal error");
+        }
+        return response;
     }
 
     @Override

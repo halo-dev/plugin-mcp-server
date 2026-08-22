@@ -40,9 +40,11 @@ Tool access is independent of Halo content RBAC: the key's exact tool allowlist
 is the authorization boundary. Newly installed tools are denied until an
 administrator explicitly adds them to a key. Disabled and expired keys are
 rejected, and rotating a key invalidates its previous secret immediately.
-Authentication is limited to 600 attempts per minute per network source. Tool
-calls are limited to 120 per minute for each access-key and tool pair. Limits are
-process-local and therefore apply independently to each Halo replica.
+Requests carrying an MCP Bearer token are limited to 600 per minute per observed
+network source before key validation. This is an overall source-level ceiling and
+includes successful requests. Tool calls are additionally limited to 120 per
+minute for each access-key and tool pair. Limits are process-local and therefore
+apply independently to each Halo replica.
 
 Use a dedicated, least-privilege key. Do not put keys in URLs, configuration
 files committed to source control, shell history, or logs.

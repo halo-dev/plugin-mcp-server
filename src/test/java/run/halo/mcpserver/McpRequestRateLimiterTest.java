@@ -9,18 +9,18 @@ import org.junit.jupiter.api.Test;
 class McpRequestRateLimiterTest {
 
     @Test
-    void limitsAuthenticationByRemoteAddressAndResetsAfterAWindow() {
+    void limitsRequestsByRemoteAddressAndResetsAfterAWindow() {
         var now = new AtomicLong();
         var limiter = new McpRequestRateLimiter(now::get);
         var remote = new InetSocketAddress("127.0.0.1", 8090);
 
-        for (var i = 0; i < McpRequestRateLimiter.AUTHENTICATIONS_PER_MINUTE; i++) {
-            assertThat(limiter.allowAuthentication(remote)).isTrue();
+        for (var i = 0; i < McpRequestRateLimiter.REQUESTS_PER_MINUTE; i++) {
+            assertThat(limiter.allowRequest(remote)).isTrue();
         }
-        assertThat(limiter.allowAuthentication(remote)).isFalse();
+        assertThat(limiter.allowRequest(remote)).isFalse();
 
         now.addAndGet(60_000);
-        assertThat(limiter.allowAuthentication(remote)).isTrue();
+        assertThat(limiter.allowRequest(remote)).isTrue();
     }
 
     @Test

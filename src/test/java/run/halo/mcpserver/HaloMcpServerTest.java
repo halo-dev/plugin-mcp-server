@@ -325,7 +325,7 @@ class HaloMcpServerTest {
     }
 
     @Test
-    void doesNotExposeInternalProviderDiscoveryErrors() {
+    void keepsBuiltInToolsWhenProviderDiscoveryFails() {
         when(extensionGetter.getEnabledExtensions(McpToolProvider.class))
                 .thenThrow(new IllegalStateException("storage password must stay private"));
 
@@ -339,8 +339,9 @@ class HaloMcpServerTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.error.code").isEqualTo(-32603)
-                .jsonPath("$.error.message").isEqualTo("Internal error")
+                .jsonPath("$.result.tools.length()").isEqualTo(2)
+                .jsonPath("$.result.tools[0].name").isEqualTo("halo_search_content")
+                .jsonPath("$.result.tools[1].name").isEqualTo("halo_get_post")
                 .jsonPath("$").value(body -> org.assertj.core.api.Assertions
                         .assertThat(body.toString()).doesNotContain("storage password"));
     }
