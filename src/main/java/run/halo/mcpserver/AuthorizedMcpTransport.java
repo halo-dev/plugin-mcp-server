@@ -59,6 +59,10 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
             @Override
             public Mono<Void> handleNotification(
                     McpTransportContext context, McpSchema.JSONRPCNotification notification) {
+                if (McpSchema.METHOD_NOTIFICATION_INITIALIZED.equals(notification.method())) {
+                    // Stateless servers have no session state to update after initialization.
+                    return Mono.empty();
+                }
                 return handler.handleNotification(context, notification);
             }
         });

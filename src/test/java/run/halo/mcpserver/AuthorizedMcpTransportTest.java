@@ -3,6 +3,7 @@ package run.halo.mcpserver;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +18,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.ai.mcp.server.webflux.transport.WebFluxStatelessServerTransport;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 import tools.jackson.databind.json.JsonMapper;
 
 class AuthorizedMcpTransportTest {
@@ -49,6 +51,30 @@ class AuthorizedMcpTransportTest {
         assertInternalErrorIsSanitized(response, 2);
     }
 
+    @Test
+    void acceptsInitializedNotificationWithoutDelegatingToMissingSdkHandler() {
+        var fixture = fixture();
+        var notification = new McpSchema.JSONRPCNotification("notifications/initialized", Map.of());
+
+        StepVerifier.create(fixture.handler()
+                        .handleNotification(McpTransportContext.EMPTY, notification))
+                .verifyComplete();
+
+        verify(fixture.sdkHandler(), never()).handleNotification(any(), any());
+    }
+
+    @Test
+    void delegatesOtherNotificationsToSdkHandler() {
+        var fixture = fixture();
+        var notification = new McpSchema.JSONRPCNotification("notifications/progress", Map.of());
+
+        StepVerifier.create(fixture.handler()
+                        .handleNotification(McpTransportContext.EMPTY, notification))
+                .verifyComplete();
+
+        verify(fixture.sdkHandler()).handleNotification(McpTransportContext.EMPTY, notification);
+    }
+
     private static Fixture fixture() {
         var delegate = mock(WebFluxStatelessServerTransport.class);
         var catalog = mock(McpToolCatalog.class);
@@ -63,6 +89,7 @@ class AuthorizedMcpTransportTest {
                 new McpRequestRateLimiter(),
                 new McpRecentCallHistory());
         var sdkHandler = mock(McpStatelessServerHandler.class);
+        when(sdkHandler.handleNotification(any(), any())).thenReturn(Mono.empty());
         when(sdkHandler.handleRequest(any(), any())).thenReturn(Mono.just(
                 McpSchema.JSONRPCResponse.error(
                         1,
@@ -72,7 +99,7 @@ class AuthorizedMcpTransportTest {
         transport.setMcpHandler(sdkHandler);
         var captor = ArgumentCaptor.forClass(McpStatelessServerHandler.class);
         verify(delegate).setMcpHandler(captor.capture());
-        return new Fixture(captor.getValue());
+        return new Fixture(captor.getValue(), sdkHandler);
     }
 
     private static void assertInternalErrorIsSanitized(
@@ -85,5 +112,5 @@ class AuthorizedMcpTransportTest {
         assertThat(response.toString()).doesNotContain("database password");
     }
 
-    private record Fixture(McpStatelessServerHandler handler) {}
+    private record Fixture(McpStatelessServerHandler handler, McpStatelessServerHandler sdkHandler) {}
 }

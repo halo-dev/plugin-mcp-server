@@ -72,11 +72,12 @@ normally omit that header.
 
 Native and plugin-contributed tools are exposed directly in `tools/list`; there
 are no discovery or execution gateway tools. The response contains only the
-tools selected for the current key. Update, publish, unpublish, recycle, and
-attachment deletion accept an optional `expectedVersion`; a stale version
-returns `CONFLICT` instead of overwriting a newer resource. Attachment uploads
-intentionally accept inline Base64 only, avoiding server-side URL fetching and
-SSRF exposure.
+tools selected for the current key. Comment moderation and attachment deletion
+accept an optional `expectedVersion`; a stale version returns `CONFLICT` instead
+of overwriting a newer resource. Post and single-page writes instead re-read and
+retry the latest resource because Halo reconcilers may advance their metadata
+versions independently. Attachment uploads intentionally accept inline Base64
+only, avoiding server-side URL fetching and SSRF exposure.
 
 ## Plugin integration
 

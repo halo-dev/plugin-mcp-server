@@ -2,11 +2,13 @@ package run.halo.mcpserver.tools;
 
 import io.modelcontextprotocol.server.McpStatelessServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,7 +17,10 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
+import run.halo.app.extension.Extension;
 import run.halo.app.extension.Metadata;
+import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.mcpserver.McpAuthorization;
 import run.halo.mcpserver.api.McpToolException;
 
@@ -103,6 +108,24 @@ abstract class ToolSupport {
 
     static <T> Mono<T> unavailable(String name) {
         return Mono.error(new McpToolException("CONTENT_UNAVAILABLE", "Content is unavailable for " + name));
+    }
+
+    static <E extends Extension> Mono<E> updateLatest(
+            ReactiveExtensionClient client,
+            Class<E> type,
+            String name,
+            String resourceType,
+            Consumer<E> mutation) {
+        return Mono.defer(() -> client.fetch(type, name)
+                        .switchIfEmpty(notFound(resourceType, name))
+                        .flatMap(resource -> {
+                            mutation.accept(resource);
+                            return client.update(resource);
+                        }))
+                .retryWhen(Retry.backoff(3, Duration.ofMillis(25))
+                        .maxBackoff(Duration.ofMillis(100))
+                        .filter(OptimisticLockingFailureException.class::isInstance)
+                        .onRetryExhaustedThrow((spec, signal) -> signal.failure()));
     }
 
     static Map<String, Object> objectSchema(Map<String, Object> properties, List<String> required) {
