@@ -58,6 +58,8 @@ class McpKeyAuthenticationFilterTest {
         var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
         var authentication = new McpKeyAuthenticationToken(
                 "00000000-0000-0000-0000-000000000000",
+                "Automation",
+                "hmcp_00000000",
                 "admin",
                 Set.of("halo_search_content"));
         when(accessKeyService.authenticate(rawToken)).thenReturn(Mono.just(authentication));

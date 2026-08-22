@@ -7,10 +7,18 @@ export const mcpConsoleApiClient = new ConsoleApiMcpHaloRunV1alpha1McpAccessKeyA
   axiosInstance,
 )
 
+export {
+  ListMcpRecentCallsOutcomeEnum,
+  McpRecentCallOutcomeEnum,
+  McpRecentCallSourceTypeEnum,
+} from './generated'
+
 export type {
   CreateMcpAccessKeyRequest,
   CreatedMcpAccessKey,
   McpAccessKey,
+  McpRecentCall,
+  McpRecentCallPage,
   McpTool,
   McpToolSource,
   UpdateMcpAccessKeyRequest,

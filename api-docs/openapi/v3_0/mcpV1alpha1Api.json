@@ -5,7 +5,7 @@
     "version" : "2.26.0"
   },
   "servers" : [ {
-    "url" : "http://localhost:59195",
+    "url" : "http://localhost:40221",
     "description" : "Generated server url"
   } ],
   "security" : [ {
@@ -138,6 +138,64 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/CreatedMcpAccessKey"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "console.api.mcp.halo.run/v1alpha1/McpAccessKey" ]
+      }
+    },
+    "/apis/console.api.mcp.halo.run/v1alpha1/recent-calls" : {
+      "get" : {
+        "description" : "List recent MCP tool calls from the current plugin instance.",
+        "operationId" : "listMcpRecentCalls",
+        "parameters" : [ {
+          "description" : "One-based page number.",
+          "in" : "query",
+          "name" : "page",
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }, {
+          "description" : "Page size, up to 100.",
+          "in" : "query",
+          "name" : "size",
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }, {
+          "description" : "Exact MCP access key ID.",
+          "in" : "query",
+          "name" : "keyId",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Exact MCP tool name.",
+          "in" : "query",
+          "name" : "toolName",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Exact call outcome.",
+          "in" : "query",
+          "name" : "outcome",
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "SUCCESS", "TOOL_ERROR", "PROTOCOL_ERROR", "INTERNAL_ERROR", "CANCELLED" ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/McpRecentCallPage"
                 }
               }
             },
@@ -307,6 +365,84 @@
           },
           "ownerName" : {
             "type" : "string"
+          }
+        }
+      },
+      "McpRecentCall" : {
+        "required" : [ "durationMillis", "id", "keyDisplayName", "keyId", "keyPrefix", "outcome", "ownerName", "sourceType", "startedAt", "toolName" ],
+        "type" : "object",
+        "properties" : {
+          "durationMillis" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "keyDisplayName" : {
+            "type" : "string"
+          },
+          "keyId" : {
+            "type" : "string"
+          },
+          "keyPrefix" : {
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string",
+            "enum" : [ "SUCCESS", "TOOL_ERROR", "PROTOCOL_ERROR", "INTERNAL_ERROR", "CANCELLED" ]
+          },
+          "ownerName" : {
+            "type" : "string"
+          },
+          "sourcePlugin" : {
+            "type" : "string"
+          },
+          "sourceType" : {
+            "type" : "string",
+            "enum" : [ "BUILT_IN", "PLUGIN", "UNKNOWN" ]
+          },
+          "startedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "toolName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "McpRecentCallPage" : {
+        "required" : [ "hasNext", "items", "page", "size", "total", "totalPages" ],
+        "type" : "object",
+        "properties" : {
+          "hasNext" : {
+            "type" : "boolean"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/McpRecentCall"
+            }
+          },
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
