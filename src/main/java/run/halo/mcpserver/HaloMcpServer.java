@@ -27,6 +27,7 @@ class HaloMcpServer {
             McpToolRegistry toolRegistry,
             McpToolCatalog toolCatalog,
             McpAuthorization authorization,
+            McpRecentCallHistory recentCallHistory,
             PluginContext pluginContext) {
         var jsonMapper = JsonMapper.shared();
         var mcpJsonMapper = new JacksonMcpJsonMapper(jsonMapper);
@@ -36,13 +37,16 @@ class HaloMcpServer {
                 .securityValidator(DefaultServerTransportSecurityValidator.builder().build())
                 .build();
         var authorizedTransport = new AuthorizedMcpTransport(
-                transport, mcpJsonMapper, toolCatalog, toolRegistry, authorization);
+                transport, mcpJsonMapper, toolCatalog, toolRegistry, authorization, recentCallHistory);
         this.server = McpServer.async(authorizedTransport)
                 .jsonMapper(mcpJsonMapper)
                 .jsonSchemaValidator(new DefaultJsonSchemaValidator(jsonMapper))
                 .serverInfo("halo-mcp-server", pluginContext.getVersion())
                 .instructions("Manage posts, single pages, comments, and attachments, and read categories and tags from this Halo site.")
-                .capabilities(McpSchema.ServerCapabilities.builder().tools(false).build())
+                .capabilities(McpSchema.ServerCapabilities.builder()
+                        .resources(false, false)
+                        .tools(false)
+                        .build())
                 .requestTimeout(Duration.ofSeconds(30))
                 .tools(builtInTools.specifications())
                 .build();

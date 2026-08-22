@@ -16,6 +16,7 @@ import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
@@ -33,10 +34,15 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
 
     private final McpAccessKeyService accessKeyService;
     private final McpToolCatalog toolCatalog;
+    private final McpRecentCallHistory recentCallHistory;
 
-    McpAccessKeyEndpoint(McpAccessKeyService accessKeyService, McpToolCatalog toolCatalog) {
+    McpAccessKeyEndpoint(
+            McpAccessKeyService accessKeyService,
+            McpToolCatalog toolCatalog,
+            McpRecentCallHistory recentCallHistory) {
         this.accessKeyService = accessKeyService;
         this.toolCatalog = toolCatalog;
+        this.recentCallHistory = recentCallHistory;
     }
 
     @Override
@@ -92,6 +98,18 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
                         .response(responseBuilder()
                                 .responseCode("200")
                                 .implementation(McpToolCatalog.ToolDescriptor[].class)))
+                .GET("/recent-calls", this::recentCalls, builder -> builder
+                        .operationId("listMcpRecentCalls")
+                        .description("List recent MCP tool calls from the current plugin instance.")
+                        .tag(tag)
+                        .parameter(queryParameter("page", "One-based page number.", Integer.class))
+                        .parameter(queryParameter("size", "Page size, up to 100.", Integer.class))
+                        .parameter(queryParameter("keyId", "Exact MCP access key ID.", String.class))
+                        .parameter(queryParameter("toolName", "Exact MCP tool name.", String.class))
+                        .parameter(queryParameter("outcome", "Exact call outcome.", McpCallOutcome.class))
+                        .response(responseBuilder()
+                                .responseCode("200")
+                                .implementation(McpRecentCallPage.class)))
                 .build();
     }
 
@@ -102,6 +120,16 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
                 .description("MCP access key metadata name.")
                 .required(true)
                 .implementation(String.class);
+    }
+
+    private static org.springdoc.core.fn.builders.parameter.Builder queryParameter(
+            String name, String description, Class<?> implementation) {
+        return parameterBuilder()
+                .name(name)
+                .in(ParameterIn.QUERY)
+                .description(description)
+                .required(false)
+                .implementation(implementation);
     }
 
     private Mono<ServerResponse> list(ServerRequest request) {
@@ -162,6 +190,55 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
 
     private Mono<ServerResponse> tools(ServerRequest request) {
         return toolCatalog.tools().flatMap(tools -> ServerResponse.ok().bodyValue(tools));
+    }
+
+    private Mono<ServerResponse> recentCalls(ServerRequest request) {
+        final McpRecentCallQuery query;
+        try {
+            query = new McpRecentCallQuery(
+                    boundedQueryInt(request, "page", 1, 1, Integer.MAX_VALUE),
+                    boundedQueryInt(request, "size", 20, 1, 100),
+                    queryText(request, "keyId"),
+                    queryText(request, "toolName"),
+                    queryOutcome(request));
+        } catch (IllegalArgumentException error) {
+            return Mono.error(new ServerWebInputException(error.getMessage(), null, error));
+        }
+        return ServerResponse.ok().bodyValue(recentCallHistory.list(query));
+    }
+
+    private static int boundedQueryInt(
+            ServerRequest request, String name, int defaultValue, int minimum, int maximum) {
+        var raw = request.queryParam(name).orElse(null);
+        if (!StringUtils.hasText(raw)) {
+            return defaultValue;
+        }
+        final int value;
+        try {
+            value = Integer.parseInt(raw);
+        } catch (NumberFormatException error) {
+            throw new IllegalArgumentException(name + " must be an integer", error);
+        }
+        if (value < minimum || value > maximum) {
+            throw new IllegalArgumentException(name + " must be between " + minimum + " and " + maximum);
+        }
+        return value;
+    }
+
+    private static String queryText(ServerRequest request, String name) {
+        return request.queryParam(name).filter(StringUtils::hasText).orElse(null);
+    }
+
+    private static McpCallOutcome queryOutcome(ServerRequest request) {
+        var raw = queryText(request, "outcome");
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return McpCallOutcome.valueOf(raw);
+        } catch (IllegalArgumentException error) {
+            throw new IllegalArgumentException("outcome is unsupported", error);
+        }
     }
 
     private Mono<Void> validateTools(Set<String> requestedTools) {

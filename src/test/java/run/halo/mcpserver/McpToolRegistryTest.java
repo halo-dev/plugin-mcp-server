@@ -135,7 +135,8 @@ class McpToolRegistryTest {
 
     private static reactor.util.context.Context context(String... tools) {
         return org.springframework.security.core.context.ReactiveSecurityContextHolder.withAuthentication(
-                new McpKeyAuthenticationToken("key-id", "admin", java.util.Set.of(tools)));
+                new McpKeyAuthenticationToken(
+                        "key-id", "Automation", "hmcp_key", "admin", java.util.Set.of(tools)));
     }
 
     private static Map<String, Object> objectSchema(Map<String, Object> properties) {

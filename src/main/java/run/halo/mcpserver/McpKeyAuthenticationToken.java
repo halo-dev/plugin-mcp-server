@@ -8,12 +8,21 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 final class McpKeyAuthenticationToken extends AbstractAuthenticationToken {
 
     private final String keyId;
+    private final String keyDisplayName;
+    private final String keyPrefix;
     private final String ownerName;
     private final Set<String> allowedTools;
 
-    McpKeyAuthenticationToken(String keyId, String ownerName, Set<String> allowedTools) {
+    McpKeyAuthenticationToken(
+            String keyId,
+            String keyDisplayName,
+            String keyPrefix,
+            String ownerName,
+            Set<String> allowedTools) {
         super(List.of(new SimpleGrantedAuthority("ROLE_super-role")));
         this.keyId = keyId;
+        this.keyDisplayName = keyDisplayName;
+        this.keyPrefix = keyPrefix;
         this.ownerName = ownerName;
         this.allowedTools = Set.copyOf(allowedTools);
         setAuthenticated(true);
@@ -21,6 +30,14 @@ final class McpKeyAuthenticationToken extends AbstractAuthenticationToken {
 
     String keyId() {
         return keyId;
+    }
+
+    String keyDisplayName() {
+        return keyDisplayName;
+    }
+
+    String keyPrefix() {
+        return keyPrefix;
     }
 
     Set<String> allowedTools() {

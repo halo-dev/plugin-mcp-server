@@ -43,6 +43,7 @@ class HaloMcpServerTest {
     BuiltInTools builtInTools;
 
     HaloMcpServer server;
+    McpRecentCallHistory recentCallHistory;
     WebTestClient client;
 
     @BeforeEach
@@ -58,9 +59,13 @@ class HaloMcpServerTest {
                 searchTool.specification(), getPostTool.specification()));
         var registry = new McpToolRegistry(extensionGetter, authorization);
         var catalog = new McpToolCatalog(builtInTools, registry, extensionClient);
-        server = new HaloMcpServer(builtInTools, registry, catalog, authorization, pluginContext);
+        recentCallHistory = new McpRecentCallHistory();
+        server = new HaloMcpServer(
+                builtInTools, registry, catalog, authorization, recentCallHistory, pluginContext);
         var authentication = new McpKeyAuthenticationToken(
                 "key-id",
+                "Automation",
+                "hmcp_key",
                 "admin",
                 java.util.Set.of(
                         "halo_search_content",
@@ -105,7 +110,30 @@ class HaloMcpServerTest {
                 .jsonPath("$.result.protocolVersion")
                 .isEqualTo("2025-11-25")
                 .jsonPath("$.result.serverInfo.name")
-                .isEqualTo("halo-mcp-server");
+                .isEqualTo("halo-mcp-server")
+                .jsonPath("$.result.capabilities.resources.subscribe")
+                .isEqualTo(false)
+                .jsonPath("$.result.capabilities.resources.listChanged")
+                .isEqualTo(false);
+
+        client.post()
+                .uri("/mcp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
+                .bodyValue("""
+                        {
+                          "jsonrpc": "2.0",
+                          "id": 2,
+                          "method": "resources/list",
+                          "params": {}
+                        }
+                        """)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.result.resources.length()")
+                .isEqualTo(0);
     }
 
     @Test
@@ -119,6 +147,32 @@ class HaloMcpServerTest {
                 .exchange()
                 .expectStatus()
                 .isForbidden();
+    }
+
+    @Test
+    void returnsJsonRpcErrorForUnsupportedRequestMethods() {
+        client.post()
+                .uri("/mcp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
+                .bodyValue("""
+                        {
+                          "jsonrpc": "2.0",
+                          "id": 3,
+                          "method": "unsupported/method",
+                          "params": {}
+                        }
+                        """)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.id")
+                .isEqualTo(3)
+                .jsonPath("$.error.code")
+                .isEqualTo(-32601)
+                .jsonPath("$.error.message")
+                .isEqualTo("Missing handler for request type: unsupported/method");
     }
 
     @Test
@@ -145,6 +199,38 @@ class HaloMcpServerTest {
                 .isEqualTo("halo_search_content")
                 .jsonPath("$.result.tools[1].name")
                 .isEqualTo("halo_get_post");
+
+        org.assertj.core.api.Assertions.assertThat(recentCallHistory
+                        .list(new McpRecentCallQuery(1, 20, null, null, null))
+                        .total())
+                .isZero();
+    }
+
+    @Test
+    void recordsABuiltInToolCallOnce() {
+        client.post()
+                .uri("/mcp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
+                .bodyValue("""
+                        {
+                          "jsonrpc":"2.0",
+                          "id":5,
+                          "method":"tools/call",
+                          "params":{"name":"halo_get_post","arguments":{"content":"must-not-be-recorded"}}
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isOk();
+
+        var page = recentCallHistory.list(new McpRecentCallQuery(1, 20, null, null, null));
+        org.assertj.core.api.Assertions.assertThat(page.total()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(page.items().getFirst().toolName())
+                .isEqualTo("halo_get_post");
+        org.assertj.core.api.Assertions.assertThat(page.items().getFirst().outcome())
+                .isEqualTo(McpCallOutcome.SUCCESS);
+        org.assertj.core.api.Assertions.assertThat(page.items().getFirst().toString())
+                .doesNotContain("must-not-be-recorded");
     }
 
     @Test
@@ -192,6 +278,13 @@ class HaloMcpServerTest {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.result.structuredContent.message").isEqualTo("Hello Halo");
+
+        var page = recentCallHistory.list(new McpRecentCallQuery(1, 20, null, null, null));
+        org.assertj.core.api.Assertions.assertThat(page.total()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(page.items().getFirst().toolName())
+                .isEqualTo("demo/hello");
+        org.assertj.core.api.Assertions.assertThat(page.items().getFirst().sourceType())
+                .isEqualTo(McpToolSourceType.PLUGIN);
     }
 
     @Test

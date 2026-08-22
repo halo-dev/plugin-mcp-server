@@ -4,6 +4,8 @@ export * from './create-mcp-access-key-request';
 export * from './created-mcp-access-key';
 export * from './json-patch-inner';
 export * from './mcp-access-key';
+export * from './mcp-recent-call';
+export * from './mcp-recent-call-page';
 export * from './mcp-tool';
 export * from './mcp-tool-source';
 export * from './move-operation';

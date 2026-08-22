@@ -55,6 +55,8 @@ class McpAccessKeyServiceTest {
 
         assertThat(authentication).isNotNull();
         assertThat(authentication.getName()).isEqualTo("admin");
+        assertThat(authentication.keyDisplayName()).isEqualTo("Automation");
+        assertThat(authentication.keyPrefix()).startsWith("hmcp_");
         assertThat(authentication.allows("halo_search_content")).isTrue();
         verify(client).update(created.accessKey());
         assertThat(created.accessKey().getStatus().getLastUsedAt()).isNotNull();

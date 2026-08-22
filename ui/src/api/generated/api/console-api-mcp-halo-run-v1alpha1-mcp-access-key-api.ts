@@ -28,6 +28,8 @@ import type { CreatedMcpAccessKey } from '../models';
 // @ts-ignore
 import type { McpAccessKey } from '../models';
 // @ts-ignore
+import type { McpRecentCallPage } from '../models';
+// @ts-ignore
 import type { McpTool } from '../models';
 // @ts-ignore
 import type { UpdateMcpAccessKeyRequest } from '../models';
@@ -146,6 +148,68 @@ export const ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiAxiosParamCreator = func
             // authentication bearerAuth required
             // http bearer authentication required
             await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * List recent MCP tool calls from the current plugin instance.
+         * @param {number} [page] One-based page number.
+         * @param {number} [size] Page size, up to 100.
+         * @param {string} [keyId] Exact MCP access key ID.
+         * @param {string} [toolName] Exact MCP tool name.
+         * @param {ListMcpRecentCallsOutcomeEnum} [outcome] Exact call outcome.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        listMcpRecentCalls: async (page?: number, size?: number, keyId?: string, toolName?: string, outcome?: ListMcpRecentCallsOutcomeEnum, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/apis/console.api.mcp.halo.run/v1alpha1/recent-calls`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication basicAuth required
+            // http basic authentication required
+            setBasicAuthToObject(localVarRequestOptions, configuration)
+
+            // authentication bearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+            if (page !== undefined) {
+                localVarQueryParameter['page'] = page;
+            }
+
+            if (size !== undefined) {
+                localVarQueryParameter['size'] = size;
+            }
+
+            if (keyId !== undefined) {
+                localVarQueryParameter['keyId'] = keyId;
+            }
+
+            if (toolName !== undefined) {
+                localVarQueryParameter['toolName'] = toolName;
+            }
+
+            if (outcome !== undefined) {
+                localVarQueryParameter['outcome'] = outcome;
+            }
 
 
     
@@ -329,6 +393,22 @@ export const ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiFp = function(configurat
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * List recent MCP tool calls from the current plugin instance.
+         * @param {number} [page] One-based page number.
+         * @param {number} [size] Page size, up to 100.
+         * @param {string} [keyId] Exact MCP access key ID.
+         * @param {string} [toolName] Exact MCP tool name.
+         * @param {ListMcpRecentCallsOutcomeEnum} [outcome] Exact call outcome.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async listMcpRecentCalls(page?: number, size?: number, keyId?: string, toolName?: string, outcome?: ListMcpRecentCallsOutcomeEnum, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<McpRecentCallPage>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.listMcpRecentCalls(page, size, keyId, toolName, outcome, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApi.listMcpRecentCalls']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * List MCP tools available for access keys.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -401,6 +481,15 @@ export const ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiFactory = function (conf
             return localVarFp.listMcpAccessKeys(options).then((request) => request(axios, basePath));
         },
         /**
+         * List recent MCP tool calls from the current plugin instance.
+         * @param {ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiListMcpRecentCallsRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        listMcpRecentCalls(requestParameters: ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiListMcpRecentCallsRequest = {}, options?: RawAxiosRequestConfig): AxiosPromise<McpRecentCallPage> {
+            return localVarFp.listMcpRecentCalls(requestParameters.page, requestParameters.size, requestParameters.keyId, requestParameters.toolName, requestParameters.outcome, options).then((request) => request(axios, basePath));
+        },
+        /**
          * List MCP tools available for access keys.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -455,6 +544,48 @@ export interface ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiDeleteMcpAccessKeyRe
      * @memberof ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiDeleteMcpAccessKey
      */
     readonly name: string
+}
+
+/**
+ * Request parameters for listMcpRecentCalls operation in ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApi.
+ * @export
+ * @interface ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiListMcpRecentCallsRequest
+ */
+export interface ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiListMcpRecentCallsRequest {
+    /**
+     * One-based page number.
+     * @type {number}
+     * @memberof ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiListMcpRecentCalls
+     */
+    readonly page?: number
+
+    /**
+     * Page size, up to 100.
+     * @type {number}
+     * @memberof ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiListMcpRecentCalls
+     */
+    readonly size?: number
+
+    /**
+     * Exact MCP access key ID.
+     * @type {string}
+     * @memberof ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiListMcpRecentCalls
+     */
+    readonly keyId?: string
+
+    /**
+     * Exact MCP tool name.
+     * @type {string}
+     * @memberof ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiListMcpRecentCalls
+     */
+    readonly toolName?: string
+
+    /**
+     * Exact call outcome.
+     * @type {'SUCCESS' | 'TOOL_ERROR' | 'PROTOCOL_ERROR' | 'INTERNAL_ERROR' | 'CANCELLED'}
+     * @memberof ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiListMcpRecentCalls
+     */
+    readonly outcome?: ListMcpRecentCallsOutcomeEnum
 }
 
 /**
@@ -532,6 +663,17 @@ export class ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApi extends BaseAPI {
     }
 
     /**
+     * List recent MCP tool calls from the current plugin instance.
+     * @param {ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiListMcpRecentCallsRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApi
+     */
+    public listMcpRecentCalls(requestParameters: ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiListMcpRecentCallsRequest = {}, options?: RawAxiosRequestConfig) {
+        return ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApiFp(this.configuration).listMcpRecentCalls(requestParameters.page, requestParameters.size, requestParameters.keyId, requestParameters.toolName, requestParameters.outcome, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
      * List MCP tools available for access keys.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -564,3 +706,14 @@ export class ConsoleApiMcpHaloRunV1alpha1McpAccessKeyApi extends BaseAPI {
     }
 }
 
+/**
+ * @export
+ */
+export const ListMcpRecentCallsOutcomeEnum = {
+    Success: 'SUCCESS',
+    ToolError: 'TOOL_ERROR',
+    ProtocolError: 'PROTOCOL_ERROR',
+    InternalError: 'INTERNAL_ERROR',
+    Cancelled: 'CANCELLED'
+} as const;
+export type ListMcpRecentCallsOutcomeEnum = typeof ListMcpRecentCallsOutcomeEnum[keyof typeof ListMcpRecentCallsOutcomeEnum];

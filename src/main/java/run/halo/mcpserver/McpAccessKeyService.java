@@ -119,6 +119,8 @@ class McpAccessKeyService {
                         .filter(Boolean::booleanValue)
                         .flatMap(ignored -> touch(accessKey).thenReturn(new McpKeyAuthenticationToken(
                                 parsed.id(),
+                                accessKey.getSpec().getDisplayName(),
+                                accessKey.getSpec().getKeyPrefix(),
                                 accessKey.getSpec().getOwnerName(),
                                 accessKey.getSpec().getAllowedTools() == null
                                         ? Set.of()
