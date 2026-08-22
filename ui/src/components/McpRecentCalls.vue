@@ -154,18 +154,25 @@ function toolDisplayName(name: string) {
             />
           </template>
           <template #end>
-            <div class=":uno: flex flex-wrap items-center gap-3 text-xs text-gray-500">
-              <span v-tooltip="utils.date.format(call.startedAt)">
-                {{ utils.date.timeAgo(call.startedAt) }}
-              </span>
-              <span>{{ formatDuration(call.durationMillis) }}</span>
-              <VTag :theme="sourceTagTheme[call.sourceType]">
-                {{ sourceLabels[call.sourceType] }}
-              </VTag>
-              <VTag :theme="outcomeTagTheme[call.outcome]">
-                {{ outcomeLabels[call.outcome] }}
-              </VTag>
-            </div>
+            <VEntityField
+              v-tooltip="utils.date.format(call.startedAt)"
+              :description="utils.date.timeAgo(call.startedAt)"
+            ></VEntityField>
+            <VEntityField :description="formatDuration(call.durationMillis)"></VEntityField>
+            <VEntityField>
+              <template #description>
+                <VTag :theme="sourceTagTheme[call.sourceType]">
+                  {{ sourceLabels[call.sourceType] }}
+                </VTag>
+              </template>
+            </VEntityField>
+            <VEntityField>
+              <template #description>
+                <VTag :theme="outcomeTagTheme[call.outcome]">
+                  {{ outcomeLabels[call.outcome] }}
+                </VTag>
+              </template>
+            </VEntityField>
           </template>
         </VEntity>
       </VEntityContainer>
