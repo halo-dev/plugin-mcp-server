@@ -55,7 +55,7 @@ function handleModalClose() {
     v-else
     ref="modal"
     title="创建 MCP 密钥"
-    :width="760"
+    :width="1000"
     mount-to-body
     @close="handleModalClose"
   >

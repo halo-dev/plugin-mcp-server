@@ -41,7 +41,7 @@ const { mutate, isLoading: submitting } = useMutation({
 </script>
 
 <template>
-  <VModal ref="modal" title="编辑 MCP 密钥" :width="760" mount-to-body @close="emit('close')">
+  <VModal ref="modal" title="编辑 MCP 密钥" :width="1000" mount-to-body @close="emit('close')">
     <VLoading v-if="isLoading" />
     <AccessKeyForm
       v-else
