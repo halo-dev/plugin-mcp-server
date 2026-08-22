@@ -79,14 +79,14 @@ const successRate = computed(() => (callTotal.value ? `${successRateValue.value}
       </VAlert>
 
       <div class=":uno: grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div class=":uno: flex items-center gap-3 rounded-md border border-gray-100 p-3">
+        <div class=":uno: flex items-center gap-3 rounded-md bg-gray-50 p-3">
           <div
             class=":uno: flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500"
           >
             <KeyIcon class=":uno: h-5 w-5" />
           </div>
           <div class=":uno: min-w-0 flex-1">
-            <div class=":uno: text-xs text-gray-400">访问密钥</div>
+            <div class=":uno: text-xs text-gray-500">访问密钥</div>
             <div class=":uno: mt-0.5 text-xl text-gray-900 font-semibold leading-6">
               {{ keys?.length ?? '–' }}
             </div>
@@ -103,14 +103,14 @@ const successRate = computed(() => (callTotal.value ? `${successRateValue.value}
           </div>
         </div>
 
-        <div class=":uno: flex items-center gap-3 rounded-md border border-gray-100 p-3">
+        <div class=":uno: flex items-center gap-3 rounded-md bg-gray-50 p-3">
           <div
             class=":uno: flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500"
           >
             <ToolIcon class=":uno: h-5 w-5" />
           </div>
           <div class=":uno: min-w-0 flex-1">
-            <div class=":uno: text-xs text-gray-400">已注册工具</div>
+            <div class=":uno: text-xs text-gray-500">已注册工具</div>
             <div class=":uno: mt-0.5 text-xl text-gray-900 font-semibold leading-6">
               {{ tools ? toolStats.total : '–' }}
             </div>
@@ -138,14 +138,14 @@ const successRate = computed(() => (callTotal.value ? `${successRateValue.value}
           </div>
         </div>
 
-        <div class=":uno: flex items-center gap-3 rounded-md border border-gray-100 p-3">
+        <div class=":uno: flex items-center gap-3 rounded-md bg-gray-50 p-3">
           <div
             class=":uno: flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500"
           >
             <FlashIcon class=":uno: h-5 w-5" />
           </div>
           <div class=":uno: min-w-0 flex-1">
-            <div class=":uno: text-xs text-gray-400">最近调用</div>
+            <div class=":uno: text-xs text-gray-500">最近调用</div>
             <div class=":uno: mt-0.5 text-xl text-gray-900 font-semibold leading-6">
               {{ recentTotal ? callTotal : '–' }}
             </div>
@@ -163,14 +163,14 @@ const successRate = computed(() => (callTotal.value ? `${successRateValue.value}
           </div>
         </div>
 
-        <div class=":uno: flex items-center gap-3 rounded-md border border-gray-100 p-3">
+        <div class=":uno: flex items-center gap-3 rounded-md bg-gray-50 p-3">
           <div
             class=":uno: flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500"
           >
             <CheckCircleIcon class=":uno: h-5 w-5" />
           </div>
           <div class=":uno: min-w-0 flex-1">
-            <div class=":uno: text-xs text-gray-400">调用成功率</div>
+            <div class=":uno: text-xs text-gray-500">调用成功率</div>
             <div class=":uno: mt-0.5 text-xl text-gray-900 font-semibold leading-6">
               {{ successRate }}
             </div>

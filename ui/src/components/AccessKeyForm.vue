@@ -97,13 +97,13 @@ defineExpose({
         </VSpace>
       </div>
 
-      <div class=":uno: flex flex-col gap-4">
+      <div class=":uno: flex flex-col gap-6">
         <section v-for="group in groups" :key="group.source.pluginName">
           <div class=":uno: mb-3 flex items-center gap-2 text-sm text-gray-900 font-medium">
             <span>{{ group.source.displayName }}</span>
             <VTag>{{ group.source.type === 'BUILT_IN' ? '内置' : '插件' }}</VTag>
           </div>
-          <div class=":uno: flex flex-col gap-3">
+          <div class=":uno: flex flex-col gap-4">
             <div v-for="category in group.categories" :key="category.category">
               <div class=":uno: mb-2 flex items-center gap-2 text-xs text-gray-500 font-medium">
                 <span>{{ category.label }}</span>
@@ -113,7 +113,12 @@ defineExpose({
                 <label
                   v-for="tool in category.tools"
                   :key="tool.name"
-                  class=":uno: flex cursor-pointer items-start gap-2.5 rounded-md border border-gray-100 p-3 transition-colors hover:border-gray-200 hover:bg-gray-50"
+                  class=":uno: flex cursor-pointer items-start gap-2.5 rounded-md border p-3 transition-colors"
+                  :class="
+                    selected[tool.name]
+                      ? 'border-[rgb(var(--colors-primary))] bg-[rgb(var(--colors-primary)/0.06)]'
+                      : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                  "
                 >
                   <input
                     v-model="selected[tool.name]"
@@ -127,7 +132,7 @@ defineExpose({
                       <VTag v-else-if="tool.readOnly">只读</VTag>
                       <VTag v-else>写入</VTag>
                     </div>
-                    <code class=":uno: mt-0.5 block break-all text-xs text-gray-400">{{
+                    <code class=":uno: mt-0.5 block break-all text-xs text-gray-500">{{
                       tool.name
                     }}</code>
                     <p v-if="tool.description" class=":uno: mt-1 text-xs text-gray-500 leading-5">

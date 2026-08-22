@@ -22,10 +22,10 @@ const groups = computed(() => groupTools(tools.value ?? []))
             group.source.displayName
           }}</span>
           <VTag>{{ group.source.type === 'BUILT_IN' ? '内置' : '插件' }}</VTag>
-          <span v-if="group.source.version" class=":uno: text-xs text-gray-400">
+          <span v-if="group.source.version" class=":uno: text-xs text-gray-500">
             v{{ group.source.version }}
           </span>
-          <span class=":uno: text-xs text-gray-400">{{ group.toolCount }} 个工具</span>
+          <span class=":uno: text-xs text-gray-500">{{ group.toolCount }} 个工具</span>
         </div>
         <div class=":uno: flex flex-col gap-4">
           <div v-for="category in group.categories" :key="category.category">
@@ -37,14 +37,14 @@ const groups = computed(() => groupTools(tools.value ?? []))
               <div
                 v-for="tool in category.tools"
                 :key="tool.name"
-                class=":uno: rounded-md border border-gray-100 p-3"
+                class=":uno: rounded-md bg-gray-50 p-3 transition-colors hover:bg-gray-100"
               >
                 <div class=":uno: flex items-start justify-between gap-2">
                   <div class=":uno: min-w-0">
                     <div class=":uno: truncate text-sm text-gray-800 font-medium">
                       {{ tool.title || tool.name }}
                     </div>
-                    <code class=":uno: mt-1 block break-all text-xs text-gray-400">{{
+                    <code class=":uno: mt-1 block break-all text-xs text-gray-500">{{
                       tool.name
                     }}</code>
                   </div>
