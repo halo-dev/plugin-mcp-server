@@ -27,7 +27,16 @@ class McpRecentCallHistoryTest {
         history = new McpRecentCallHistory(
                 Clock.fixed(STARTED_AT, ZoneOffset.UTC), nanoTime::get);
         authentication = new McpKeyAuthenticationToken(
-                "key-1", "Automation", "hmcp_key", "admin", Set.of("halo_get_post"));
+                "key-1",
+                "Automation",
+                "hmcp_key",
+                "admin",
+                Set.of(
+                        "halo_get_post",
+                        "demo/private",
+                        "demo/broken",
+                        "demo/slow",
+                        "demo/read"));
     }
 
     @Test
@@ -99,6 +108,55 @@ class McpRecentCallHistoryTest {
                 McpCallOutcome.TOOL_ERROR);
         assertThat(calls.getLast().errorCode()).isEqualTo("FORBIDDEN");
         assertThat(calls.toString()).doesNotContain("secret");
+    }
+
+    @Test
+    void sanitizesUntrustedToolNamesAndErrorCodes() {
+        var toolError = McpSchema.CallToolResult.builder()
+                .isError(true)
+                .structuredContent(Map.of(
+                        "error", Map.of("code", "secret data that must not be retained")))
+                .build();
+        history.observe(
+                        authentication,
+                        "SECRET_TOKEN_MUST_NOT_BE_RETAINED",
+                        () -> Mono.just(McpSchema.JSONRPCResponse.result(1, toolError)))
+                .block();
+        history.observe(
+                        authentication,
+                        "a".repeat(129),
+                        () -> Mono.just(McpSchema.JSONRPCResponse.result(2, Map.of())))
+                .block();
+        var numericToolError = McpSchema.CallToolResult.builder()
+                .isError(true)
+                .structuredContent(Map.of(
+                        "error", Map.of("code", new java.math.BigInteger("9".repeat(11)))))
+                .build();
+        history.observe(
+                        authentication,
+                        "demo/private",
+                        () -> Mono.just(McpSchema.JSONRPCResponse.result(3, numericToolError)))
+                .block();
+
+        var calls = history.list(new McpRecentCallQuery(1, 20, null, null, null)).items();
+
+        assertThat(calls)
+                .extracting(
+                        McpRecentCall::toolName,
+                        McpRecentCall::sourceType,
+                        McpRecentCall::sourcePlugin,
+                        McpRecentCall::errorCode)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                "demo/private", McpToolSourceType.PLUGIN, "demo", null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                "<invalid>", McpToolSourceType.UNKNOWN, null, null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                "<invalid>", McpToolSourceType.UNKNOWN, null, null));
+        assertThat(calls.toString())
+                .doesNotContain("MUST_NOT_BE_RETAINED")
+                .doesNotContain("must not be retained")
+                .doesNotContain("9".repeat(11));
     }
 
     @Test

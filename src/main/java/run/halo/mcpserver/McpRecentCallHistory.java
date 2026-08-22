@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Mono;
@@ -20,6 +21,10 @@ import reactor.core.publisher.Mono;
 class McpRecentCallHistory {
 
     static final int CAPACITY = 500;
+    private static final Pattern TOOL_NAME_PATTERN =
+            Pattern.compile("[A-Za-z0-9_.:/-]{1,128}");
+    private static final Pattern ERROR_CODE_PATTERN =
+            Pattern.compile("(?:[A-Z][A-Z0-9_]{0,63}|-?[0-9]{1,10})");
 
     private final Object monitor = new Object();
     private final Deque<McpRecentCall> calls = new ArrayDeque<>(CAPACITY);
@@ -108,6 +113,7 @@ class McpRecentCallHistory {
             return;
         }
         try {
+            var normalizedToolName = normalizedToolName(authentication, toolName);
             append(new McpRecentCall(
                     sequence.incrementAndGet(),
                     startedAt,
@@ -116,9 +122,9 @@ class McpRecentCallHistory {
                     authentication.keyDisplayName(),
                     authentication.keyPrefix(),
                     authentication.getName(),
-                    normalizedToolName(toolName),
-                    sourceType(toolName),
-                    sourcePlugin(toolName),
+                    normalizedToolName,
+                    sourceType(normalizedToolName),
+                    sourcePlugin(normalizedToolName),
                     result.outcome(),
                     result.errorCode()));
         } catch (RuntimeException ignored) {
@@ -159,22 +165,35 @@ class McpRecentCallHistory {
             return null;
         }
         var code = error.get("code");
-        return code instanceof String || code instanceof Number ? String.valueOf(code) : null;
+        return code instanceof String || code instanceof Number
+                ? normalizedErrorCode(String.valueOf(code))
+                : null;
     }
 
-    private static String normalizedToolName(String toolName) {
-        return StringUtils.hasText(toolName) ? toolName : "<invalid>";
+    private static String normalizedToolName(
+            McpKeyAuthenticationToken authentication, String toolName) {
+        return toolName != null
+                        && authentication.allows(toolName)
+                        && TOOL_NAME_PATTERN.matcher(toolName).matches()
+                ? toolName
+                : "<invalid>";
+    }
+
+    private static String normalizedErrorCode(String errorCode) {
+        return errorCode != null && ERROR_CODE_PATTERN.matcher(errorCode).matches()
+                ? errorCode
+                : null;
     }
 
     private static McpToolSourceType sourceType(String toolName) {
-        if (!StringUtils.hasText(toolName)) {
+        if ("<invalid>".equals(toolName)) {
             return McpToolSourceType.UNKNOWN;
         }
         return toolName.contains("/") ? McpToolSourceType.PLUGIN : McpToolSourceType.BUILT_IN;
     }
 
     private static String sourcePlugin(String toolName) {
-        if (!StringUtils.hasText(toolName)) {
+        if ("<invalid>".equals(toolName)) {
             return null;
         }
         var separator = toolName.indexOf('/');
