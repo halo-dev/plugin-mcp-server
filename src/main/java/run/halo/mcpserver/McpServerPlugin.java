@@ -23,14 +23,17 @@ public class McpServerPlugin extends BasePlugin {
     private static final Logger log = LoggerFactory.getLogger(McpServerPlugin.class);
 
     private final HaloMcpServer mcpServer;
+    private final McpRequestRateLimiter rateLimiter;
     private final SchemeManager schemeManager;
 
     public McpServerPlugin(
             PluginContext pluginContext,
             HaloMcpServer mcpServer,
+            McpRequestRateLimiter rateLimiter,
             SchemeManager schemeManager) {
         super(pluginContext);
         this.mcpServer = mcpServer;
+        this.rateLimiter = rateLimiter;
         this.schemeManager = schemeManager;
     }
 
@@ -43,6 +46,7 @@ public class McpServerPlugin extends BasePlugin {
     @Override
     public void stop() {
         mcpServer.closeGracefully().block(Duration.ofSeconds(5));
+        rateLimiter.clear();
         schemeManager.unregister(Scheme.buildFromType(McpAccessKey.class));
         log.info("Halo MCP server stopped");
     }

@@ -45,6 +45,7 @@ class HaloMcpServerTest {
     HaloMcpServer server;
     McpRecentCallHistory recentCallHistory;
     WebTestClient client;
+    McpRequestRateLimiter rateLimiter;
 
     @BeforeEach
     void setUp() {
@@ -57,11 +58,18 @@ class HaloMcpServerTest {
         lenient().when(builtInTools.tools()).thenReturn(java.util.List.of(searchTool, getPostTool));
         when(builtInTools.specifications()).thenReturn(java.util.List.of(
                 searchTool.specification(), getPostTool.specification()));
-        var registry = new McpToolRegistry(extensionGetter, authorization);
+        var registry = new McpToolRegistry(extensionGetter, extensionClient, authorization);
         var catalog = new McpToolCatalog(builtInTools, registry, extensionClient);
         recentCallHistory = new McpRecentCallHistory();
+        rateLimiter = new McpRequestRateLimiter();
         server = new HaloMcpServer(
-                builtInTools, registry, catalog, authorization, recentCallHistory, pluginContext);
+                builtInTools,
+                registry,
+                catalog,
+                authorization,
+                rateLimiter,
+                recentCallHistory,
+                pluginContext);
         var authentication = new McpKeyAuthenticationToken(
                 "key-id",
                 "Automation",
@@ -111,29 +119,8 @@ class HaloMcpServerTest {
                 .isEqualTo("2025-11-25")
                 .jsonPath("$.result.serverInfo.name")
                 .isEqualTo("halo-mcp-server")
-                .jsonPath("$.result.capabilities.resources.subscribe")
-                .isEqualTo(false)
-                .jsonPath("$.result.capabilities.resources.listChanged")
-                .isEqualTo(false);
-
-        client.post()
-                .uri("/mcp")
-                .contentType(MediaType.APPLICATION_JSON)
-                .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
-                .bodyValue("""
-                        {
-                          "jsonrpc": "2.0",
-                          "id": 2,
-                          "method": "resources/list",
-                          "params": {}
-                        }
-                        """)
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.result.resources.length()")
-                .isEqualTo(0);
+                .jsonPath("$.result.capabilities.resources")
+                .doesNotExist();
     }
 
     @Test
@@ -248,6 +235,24 @@ class HaloMcpServerTest {
                 .build();
         when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(provider));
         when(provider.tools()).thenReturn(Flux.just(definition));
+        var plugin = new run.halo.app.core.extension.Plugin();
+        var metadata = new run.halo.app.extension.Metadata();
+        metadata.setName("demo");
+        plugin.setMetadata(metadata);
+        var pluginStatus = new run.halo.app.core.extension.Plugin.PluginStatus();
+        try {
+            pluginStatus.setLoadLocation(provider.getClass()
+                    .getProtectionDomain()
+                    .getCodeSource()
+                    .getLocation()
+                    .toURI()
+                    .normalize());
+        } catch (java.net.URISyntaxException error) {
+            throw new AssertionError(error);
+        }
+        plugin.setStatus(pluginStatus);
+        when(extensionClient.fetch(run.halo.app.core.extension.Plugin.class, "demo"))
+                .thenReturn(Mono.just(plugin));
 
         client.post()
                 .uri("/mcp")
@@ -291,6 +296,53 @@ class HaloMcpServerTest {
     void getIsNotSupportedAndOtherPathsAreNotExposed() {
         client.get().uri("/mcp").exchange().expectStatus().isEqualTo(405);
         client.post().uri("/other").exchange().expectStatus().isNotFound();
+    }
+
+    @Test
+    void rateLimitsToolInvocationsPerKeyAndTool() {
+        for (var i = 0; i < McpRequestRateLimiter.TOOL_CALLS_PER_MINUTE; i++) {
+            org.assertj.core.api.Assertions.assertThat(
+                    rateLimiter.allowTool("key-id", "halo_get_post")).isTrue();
+        }
+
+        client.post()
+                .uri("/mcp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
+                .bodyValue("""
+                        {
+                          "jsonrpc":"2.0",
+                          "id":9,
+                          "method":"tools/call",
+                          "params":{"name":"halo_get_post","arguments":{}}
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.result.isError").isEqualTo(true)
+                .jsonPath("$.result.structuredContent.error.code").isEqualTo("RATE_LIMITED");
+    }
+
+    @Test
+    void doesNotExposeInternalProviderDiscoveryErrors() {
+        when(extensionGetter.getEnabledExtensions(McpToolProvider.class))
+                .thenThrow(new IllegalStateException("storage password must stay private"));
+
+        client.post()
+                .uri("/mcp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
+                .bodyValue("""
+                        {"jsonrpc":"2.0","id":10,"method":"tools/list","params":{}}
+                        """)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.error.code").isEqualTo(-32603)
+                .jsonPath("$.error.message").isEqualTo("Internal error")
+                .jsonPath("$").value(body -> org.assertj.core.api.Assertions
+                        .assertThat(body.toString()).doesNotContain("storage password"));
     }
 
     private static BuiltInTool builtInTool(String name, String title) {

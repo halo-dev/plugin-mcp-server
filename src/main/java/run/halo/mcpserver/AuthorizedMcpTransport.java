@@ -8,17 +8,22 @@ import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpStatelessServerTransport;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.mcp.server.webflux.transport.WebFluxStatelessServerTransport;
 import reactor.core.publisher.Mono;
 
 /** Adds request-scoped tool discovery to the SDK's otherwise global stateless tool registry. */
 final class AuthorizedMcpTransport implements McpStatelessServerTransport {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthorizedMcpTransport.class);
+
     private final WebFluxStatelessServerTransport delegate;
     private final McpJsonMapper jsonMapper;
     private final McpToolCatalog catalog;
     private final McpToolRegistry registry;
     private final McpAuthorization authorization;
+    private final McpRequestRateLimiter rateLimiter;
     private final McpRecentCallHistory recentCallHistory;
 
     AuthorizedMcpTransport(
@@ -27,12 +32,14 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
             McpToolCatalog catalog,
             McpToolRegistry registry,
             McpAuthorization authorization,
+            McpRequestRateLimiter rateLimiter,
             McpRecentCallHistory recentCallHistory) {
         this.delegate = delegate;
         this.jsonMapper = jsonMapper;
         this.catalog = catalog;
         this.registry = registry;
         this.authorization = authorization;
+        this.rateLimiter = rateLimiter;
         this.recentCallHistory = recentCallHistory;
     }
 
@@ -89,7 +96,11 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
             return recentCallHistory.observe(
                     authentication,
                     toolName,
-                    () -> executeTool(context, request, handler, call, toolName));
+                    () -> rateLimiter.allowTool(
+                                    authentication.keyId(),
+                                    authentication.allows(toolName) ? toolName : "<unauthorized>")
+                            ? executeTool(context, request, handler, call, toolName)
+                            : Mono.just(rateLimited(request)));
         });
     }
 
@@ -123,9 +134,22 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
         return arguments == null ? Map.of() : arguments;
     }
 
-    private static McpSchema.JSONRPCResponse internalError(
+    private McpSchema.JSONRPCResponse internalError(
             McpSchema.JSONRPCRequest request, Throwable error) {
-        return protocolError(request, -32603, error.getMessage());
+        log.warn("MCP request failed internally", error);
+        return protocolError(request, -32603, "Internal error");
+    }
+
+    private static McpSchema.JSONRPCResponse rateLimited(McpSchema.JSONRPCRequest request) {
+        var error = run.halo.mcpserver.api.McpToolResult.error(
+                "RATE_LIMITED", "Tool invocation rate limit exceeded");
+        return McpSchema.JSONRPCResponse.result(
+                request.id(),
+                McpSchema.CallToolResult.builder()
+                        .structuredContent(error.structuredContent())
+                        .addTextContent(error.textContent())
+                        .isError(true)
+                        .build());
     }
 
     private static McpSchema.JSONRPCResponse protocolError(

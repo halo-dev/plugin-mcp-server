@@ -36,9 +36,10 @@ class McpToolCatalog {
         var builtIn = builtInTools.tools().stream()
                 .map(tool -> descriptor(tool, builtInSource))
                 .toList();
-        return toolRegistry.definitions().onErrorReturn(List.of()).flatMap(definitions ->
+        return toolRegistry.registeredTools().flatMap(definitions ->
                 Flux.fromIterable(definitions)
-                        .flatMap(definition -> source(definition).map(source -> descriptor(definition, source)))
+                        .flatMap(tool -> source(tool.pluginName())
+                                .map(source -> descriptor(tool.definition(), source)))
                         .collectList()
                         .map(contributed -> {
                             var tools = new java.util.ArrayList<>(builtIn);
@@ -48,11 +49,14 @@ class McpToolCatalog {
     }
 
     Mono<List<McpSchema.Tool>> protocolTools() {
-        return toolRegistry.definitions().map(definitions -> {
+        return toolRegistry.registeredTools().map(definitions -> {
             var tools = new java.util.ArrayList<>(builtInTools.tools().stream()
                     .map(BuiltInTool::protocolTool)
                     .toList());
-            definitions.stream().map(McpToolCatalog::protocolTool).forEach(tools::add);
+            definitions.stream()
+                    .map(RegisteredTool::definition)
+                    .map(McpToolCatalog::protocolTool)
+                    .forEach(tools::add);
             return List.copyOf(tools);
         });
     }
@@ -63,8 +67,7 @@ class McpToolCatalog {
                 .collect(java.util.stream.Collectors.toUnmodifiableSet()));
     }
 
-    private Mono<ToolSource> source(McpToolDefinition definition) {
-        var pluginName = definition.name().substring(0, definition.name().indexOf('/'));
+    private Mono<ToolSource> source(String pluginName) {
         var fallback = new ToolSource("PLUGIN", pluginName, pluginName, null, null);
         return extensionClient.fetch(Plugin.class, pluginName)
                 .map(plugin -> {

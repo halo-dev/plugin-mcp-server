@@ -48,7 +48,7 @@ class McpToolCatalogTest {
                 .build();
         var builtIn = new BuiltInTool(specification, "POST", "查询文章", "分页查询文章。");
         when(builtInTools.tools()).thenReturn(List.of(builtIn));
-        when(registry.definitions()).thenReturn(Mono.just(List.of()));
+        when(registry.registeredTools()).thenReturn(Mono.just(List.of()));
         var catalog = new McpToolCatalog(builtInTools, registry, extensionClient);
 
         assertThat(catalog.tools().block()).singleElement().satisfies(tool -> {
@@ -74,7 +74,8 @@ class McpToolCatalogTest {
                 .handler(invocation -> Mono.empty())
                 .build();
         when(builtInTools.tools()).thenReturn(List.of());
-        when(registry.definitions()).thenReturn(Mono.just(List.of(definition)));
+        when(registry.registeredTools())
+                .thenReturn(Mono.just(List.of(new RegisteredTool("demo", definition))));
         when(extensionClient.fetch(run.halo.app.core.extension.Plugin.class, "demo"))
                 .thenReturn(Mono.empty());
         var catalog = new McpToolCatalog(builtInTools, registry, extensionClient);
