@@ -105,14 +105,15 @@ class PostTools extends ToolSupport implements ToolGroup {
             return client.create(post)
                     .flatMap(created -> snapshots.createBase(Ref.of(created), content, username)
                             .flatMap(snapshot -> {
-                                var postSpec = created.getSpec();
                                 var snapshotName = snapshot.getMetadata().getName();
-                                postSpec.setBaseSnapshot(snapshotName);
-                                postSpec.setHeadSnapshot(snapshotName);
-                                if (Boolean.TRUE.equals(postSpec.getPublish())) {
-                                    postSpec.setReleaseSnapshot(snapshotName);
-                                }
-                                return client.update(created);
+                                return updateLatest(client, Post.class, name, "Post", latest -> {
+                                    var postSpec = latest.getSpec();
+                                    postSpec.setBaseSnapshot(snapshotName);
+                                    postSpec.setHeadSnapshot(snapshotName);
+                                    if (Boolean.TRUE.equals(postSpec.getPublish())) {
+                                        postSpec.setReleaseSnapshot(snapshotName);
+                                    }
+                                });
                             }))
                     .map(created -> payload(ContentPayloads.post(created), "Created post " + name));
         });
@@ -120,23 +121,20 @@ class PostTools extends ToolSupport implements ToolGroup {
 
     Mono<ToolPayload> update(Map<String, Object> arguments) {
         var name = resourceName(arguments, "name");
-        var expectedVersion = optionalLong(arguments, "expectedVersion");
         var content = content(arguments);
         return authorization.username().flatMap(username -> client.fetch(Post.class, name)
                 .switchIfEmpty(notFound("Post", name))
-                .flatMap(post -> checkVersion(post.getMetadata().getVersion(), expectedVersion)
-                        .then(snapshots.update(
+                .flatMap(post -> snapshots.update(
                                 Ref.of(post),
                                 post.getSpec().getBaseSnapshot(),
                                 post.getSpec().getHeadSnapshot(),
                                 post.getSpec().getReleaseSnapshot(),
                                 content,
-                                username))
-                        .flatMap(snapshot -> {
-                            applyMetadata(post, arguments);
-                            post.getSpec().setHeadSnapshot(snapshot.getMetadata().getName());
-                            return client.update(post);
-                        }))
+                                username)
+                        .flatMap(snapshot -> updateLatest(client, Post.class, name, "Post", latest -> {
+                            applyMetadata(latest, arguments);
+                            latest.getSpec().setHeadSnapshot(snapshot.getMetadata().getName());
+                        })))
                 .map(updated -> payload(ContentPayloads.post(updated), "Updated post " + name)));
     }
 
@@ -155,25 +153,20 @@ class PostTools extends ToolSupport implements ToolGroup {
     private Mono<ToolPayload> updateState(
             Map<String, Object> arguments, boolean publish, boolean recycle, String summary) {
         var name = resourceName(arguments, "name");
-        var expectedVersion = optionalLong(arguments, "expectedVersion");
-        return client.fetch(Post.class, name)
-                .switchIfEmpty(notFound("Post", name))
-                .flatMap(post -> checkVersion(post.getMetadata().getVersion(), expectedVersion)
-                        .then(Mono.defer(() -> {
-                            var spec = post.getSpec();
-                            if (recycle) {
-                                spec.setDeleted(true);
-                            } else {
-                                spec.setPublish(publish);
-                                if (publish) {
-                                    if (spec.getHeadSnapshot() == null) {
-                                        spec.setHeadSnapshot(spec.getBaseSnapshot());
-                                    }
-                                    spec.setReleaseSnapshot(spec.getHeadSnapshot());
-                                }
+        return updateLatest(client, Post.class, name, "Post", post -> {
+                    var spec = post.getSpec();
+                    if (recycle) {
+                        spec.setDeleted(true);
+                    } else {
+                        spec.setPublish(publish);
+                        if (publish) {
+                            if (spec.getHeadSnapshot() == null) {
+                                spec.setHeadSnapshot(spec.getBaseSnapshot());
                             }
-                            return client.update(post);
-                        })))
+                            spec.setReleaseSnapshot(spec.getHeadSnapshot());
+                        }
+                    }
+                })
                 .map(post -> payload(ContentPayloads.post(post), summary + name));
     }
 
@@ -262,8 +255,7 @@ class PostTools extends ToolSupport implements ToolGroup {
                                 "visible", enumSchema(Post.VisibleEnum.class),
                                 "allowComment", booleanSchema(),
                                 "categories", arrayStringSchema(),
-                                "tags", arrayStringSchema(),
-                                "expectedVersion", integerSchema()),
+                                "tags", arrayStringSchema()),
                         List.of("name", "raw")),
                 permissiveObjectSchema(),
                 UPDATE,
@@ -286,7 +278,7 @@ class PostTools extends ToolSupport implements ToolGroup {
                 displayDescription,
                 "POST",
                 objectSchema(
-                        map("name", stringSchema(), "expectedVersion", integerSchema()),
+                        map("name", stringSchema()),
                         List.of("name")),
                 permissiveObjectSchema(),
                 destructive ? DESTRUCTIVE : UPDATE,

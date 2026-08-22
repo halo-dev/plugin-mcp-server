@@ -5,6 +5,8 @@ import io.modelcontextprotocol.spec.McpSchema;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -17,6 +19,7 @@ import run.halo.mcpserver.tools.BuiltInTools;
 @Component
 class McpToolCatalog {
 
+    private static final Logger log = LoggerFactory.getLogger(McpToolCatalog.class);
     private static final String BUILT_IN_PLUGIN = "plugin-mcp-server";
     private final BuiltInTools builtInTools;
     private final McpToolRegistry toolRegistry;
@@ -36,9 +39,10 @@ class McpToolCatalog {
         var builtIn = builtInTools.tools().stream()
                 .map(tool -> descriptor(tool, builtInSource))
                 .toList();
-        return toolRegistry.definitions().onErrorReturn(List.of()).flatMap(definitions ->
+        return contributedTools().flatMap(definitions ->
                 Flux.fromIterable(definitions)
-                        .flatMap(definition -> source(definition).map(source -> descriptor(definition, source)))
+                        .flatMap(tool -> source(tool.pluginName())
+                                .map(source -> descriptor(tool.definition(), source)))
                         .collectList()
                         .map(contributed -> {
                             var tools = new java.util.ArrayList<>(builtIn);
@@ -48,12 +52,22 @@ class McpToolCatalog {
     }
 
     Mono<List<McpSchema.Tool>> protocolTools() {
-        return toolRegistry.definitions().map(definitions -> {
+        return contributedTools().map(definitions -> {
             var tools = new java.util.ArrayList<>(builtInTools.tools().stream()
                     .map(BuiltInTool::protocolTool)
                     .toList());
-            definitions.stream().map(McpToolCatalog::protocolTool).forEach(tools::add);
+            definitions.stream()
+                    .map(RegisteredTool::definition)
+                    .map(McpToolCatalog::protocolTool)
+                    .forEach(tools::add);
             return List.copyOf(tools);
+        });
+    }
+
+    private Mono<List<RegisteredTool>> contributedTools() {
+        return toolRegistry.registeredTools().onErrorResume(error -> {
+            log.warn("Ignoring unavailable contributed MCP tools", error);
+            return Mono.just(List.of());
         });
     }
 
@@ -63,8 +77,7 @@ class McpToolCatalog {
                 .collect(java.util.stream.Collectors.toUnmodifiableSet()));
     }
 
-    private Mono<ToolSource> source(McpToolDefinition definition) {
-        var pluginName = definition.name().substring(0, definition.name().indexOf('/'));
+    private Mono<ToolSource> source(String pluginName) {
         var fallback = new ToolSource("PLUGIN", pluginName, pluginName, null, null);
         return extensionClient.fetch(Plugin.class, pluginName)
                 .map(plugin -> {
@@ -78,6 +91,10 @@ class McpToolCatalog {
                         logo = spec.getLogo();
                     }
                     return new ToolSource("PLUGIN", pluginName, displayName, version, logo);
+                })
+                .onErrorResume(error -> {
+                    log.warn("Using fallback metadata for contributed MCP tools from {}", pluginName, error);
+                    return Mono.just(fallback);
                 })
                 .defaultIfEmpty(fallback);
     }

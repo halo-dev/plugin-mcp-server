@@ -1,6 +1,8 @@
 package run.halo.mcpserver;
 
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.http.HttpHeaders.RETRY_AFTER;
+import static org.springframework.http.HttpHeaders.WWW_AUTHENTICATE;
 
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -18,14 +20,21 @@ import run.halo.app.security.BeforeSecurityWebFilter;
 class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
 
     static final String MCP_PATH = "/mcp";
-    private static final String BEARER_PREFIX = "Bearer hmcp_";
+    private static final String BEARER_SCHEME = "Bearer ";
 
     private final McpAccessKeyService accessKeyService;
+    private final McpRequestRateLimiter rateLimiter;
     private final WebHandler mcpHandler;
+    private final java.util.Set<String> protocolVersions;
 
-    McpKeyAuthenticationFilter(McpAccessKeyService accessKeyService, HaloMcpServer mcpServer) {
+    McpKeyAuthenticationFilter(
+            McpAccessKeyService accessKeyService,
+            McpRequestRateLimiter rateLimiter,
+            HaloMcpServer mcpServer) {
         this.accessKeyService = accessKeyService;
+        this.rateLimiter = rateLimiter;
         this.mcpHandler = RouterFunctions.toWebHandler(mcpServer.routerFunction());
+        this.protocolVersions = java.util.Set.copyOf(mcpServer.protocolVersions());
     }
 
     @Override
@@ -35,28 +44,64 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
         if (!isMcpPath(path)) {
             return chain.filter(exchange);
         }
-        if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
+        if (!hasMcpBearerToken(authorization)) {
             return unauthorized(exchange);
         }
-        var rawToken = authorization.substring("Bearer ".length());
+        if (!rateLimiter.allowRequest(exchange.getRequest().getRemoteAddress())) {
+            return tooManyRequests(exchange);
+        }
+        var rawToken = authorization.substring(BEARER_SCHEME.length());
         return accessKeyService.authenticate(rawToken)
                 .flatMap(authentication -> {
+                    if (!hasSupportedProtocolVersion(exchange)) {
+                        return badRequest(exchange).thenReturn(true);
+                    }
                     var request = exchange.getRequest().mutate()
                             .headers(headers -> headers.remove(AUTHORIZATION))
                             .build();
                     return mcpHandler.handle(exchange.mutate().request(request).build())
                             .contextWrite(org.springframework.security.core.context.ReactiveSecurityContextHolder
-                                    .withAuthentication(authentication));
+                                    .withAuthentication(authentication))
+                            .thenReturn(true);
                 })
-                .switchIfEmpty(Mono.defer(() -> unauthorized(exchange)));
+                .defaultIfEmpty(false)
+                .flatMap(handled -> handled ? Mono.empty() : unauthorized(exchange));
     }
 
     private static boolean isMcpPath(String path) {
         return MCP_PATH.equals(path) || (MCP_PATH + "/").equals(path);
     }
 
+    private static boolean hasMcpBearerToken(String authorization) {
+        return authorization != null
+                && authorization.regionMatches(true, 0, BEARER_SCHEME, 0, BEARER_SCHEME.length())
+                && authorization.regionMatches(
+                        false, BEARER_SCHEME.length(), "hmcp_", 0, "hmcp_".length());
+    }
+
     private static Mono<Void> unauthorized(ServerWebExchange exchange) {
         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+        exchange.getResponse().getHeaders().set(WWW_AUTHENTICATE, "Bearer realm=\"MCP\"");
+        return exchange.getResponse().setComplete();
+    }
+
+    private boolean hasSupportedProtocolVersion(ServerWebExchange exchange) {
+        var versions = exchange.getRequest().getHeaders()
+                .get(io.modelcontextprotocol.spec.HttpHeaders.PROTOCOL_VERSION);
+        return versions == null
+                || versions.isEmpty()
+                || (versions.size() == 1 && protocolVersions.contains(versions.getFirst()));
+    }
+
+    private static Mono<Void> badRequest(ServerWebExchange exchange) {
+        exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
+        return exchange.getResponse().setComplete();
+    }
+
+    private static Mono<Void> tooManyRequests(ServerWebExchange exchange) {
+        exchange.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
+        exchange.getResponse().getHeaders().set(
+                RETRY_AFTER, String.valueOf(McpRequestRateLimiter.RETRY_AFTER_SECONDS));
         return exchange.getResponse().setComplete();
     }
 }

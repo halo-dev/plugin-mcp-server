@@ -8,17 +8,22 @@ import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpStatelessServerTransport;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.mcp.server.webflux.transport.WebFluxStatelessServerTransport;
 import reactor.core.publisher.Mono;
 
 /** Adds request-scoped tool discovery to the SDK's otherwise global stateless tool registry. */
 final class AuthorizedMcpTransport implements McpStatelessServerTransport {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthorizedMcpTransport.class);
+
     private final WebFluxStatelessServerTransport delegate;
     private final McpJsonMapper jsonMapper;
     private final McpToolCatalog catalog;
     private final McpToolRegistry registry;
     private final McpAuthorization authorization;
+    private final McpRequestRateLimiter rateLimiter;
     private final McpRecentCallHistory recentCallHistory;
 
     AuthorizedMcpTransport(
@@ -27,12 +32,14 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
             McpToolCatalog catalog,
             McpToolRegistry registry,
             McpAuthorization authorization,
+            McpRequestRateLimiter rateLimiter,
             McpRecentCallHistory recentCallHistory) {
         this.delegate = delegate;
         this.jsonMapper = jsonMapper;
         this.catalog = catalog;
         this.registry = registry;
         this.authorization = authorization;
+        this.rateLimiter = rateLimiter;
         this.recentCallHistory = recentCallHistory;
     }
 
@@ -45,16 +52,17 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
                 return switch (request.method()) {
                     case "tools/list" -> listTools(request);
                     case "tools/call" -> callTool(context, request, handler);
-                    default -> handler.handleRequest(context, request)
-                            .onErrorResume(McpError.class, error -> Mono.just(
-                                    McpSchema.JSONRPCResponse.error(
-                                            request.id(), error.getJsonRpcError())));
+                    default -> delegatedRequest(context, request, handler);
                 };
             }
 
             @Override
             public Mono<Void> handleNotification(
                     McpTransportContext context, McpSchema.JSONRPCNotification notification) {
+                if (McpSchema.METHOD_NOTIFICATION_INITIALIZED.equals(notification.method())) {
+                    // Stateless servers have no session state to update after initialization.
+                    return Mono.empty();
+                }
                 return handler.handleNotification(context, notification);
             }
         });
@@ -89,7 +97,11 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
             return recentCallHistory.observe(
                     authentication,
                     toolName,
-                    () -> executeTool(context, request, handler, call, toolName));
+                    () -> rateLimiter.allowTool(
+                                    authentication.keyId(),
+                                    authentication.allows(toolName) ? toolName : "<unauthorized>")
+                            ? executeTool(context, request, handler, call, toolName)
+                            : Mono.just(rateLimited(request)));
         });
     }
 
@@ -100,13 +112,49 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
             McpSchema.CallToolRequest call,
             String toolName) {
         if (!toolName.contains("/")) {
-            return handler.handleRequest(context, request);
+            return delegatedRequest(context, request, handler);
         }
         return registry.executeIfContributed(toolName, arguments(call.arguments()))
                 .flatMap(result -> result
                         .map(value -> Mono.just(McpSchema.JSONRPCResponse.result(request.id(), value)))
-                        .orElseGet(() -> handler.handleRequest(context, request)))
+                        .orElseGet(() -> delegatedRequest(context, request, handler)))
                 .onErrorResume(error -> Mono.just(internalError(request, error)));
+    }
+
+    private Mono<McpSchema.JSONRPCResponse> delegatedRequest(
+            McpTransportContext context,
+            McpSchema.JSONRPCRequest request,
+            McpStatelessServerHandler handler) {
+        final Mono<McpSchema.JSONRPCResponse> response;
+        try {
+            response = handler.handleRequest(context, request);
+        } catch (Throwable error) {
+            return Mono.just(internalError(request, error));
+        }
+        if (response == null) {
+            return Mono.just(internalError(
+                    request, new IllegalStateException("MCP handler returned no response")));
+        }
+        return response
+                .map(value -> sanitizeInternalError(request, value))
+                .switchIfEmpty(Mono.fromSupplier(() -> internalError(
+                        request, new IllegalStateException("MCP handler returned no response"))))
+                .onErrorResume(McpError.class, error -> error.getJsonRpcError() == null
+                        ? Mono.just(internalError(request, error))
+                        : Mono.just(sanitizeInternalError(
+                                request,
+                                McpSchema.JSONRPCResponse.error(
+                                        request.id(), error.getJsonRpcError()))))
+                .onErrorResume(error -> Mono.just(internalError(request, error)));
+    }
+
+    private McpSchema.JSONRPCResponse sanitizeInternalError(
+            McpSchema.JSONRPCRequest request, McpSchema.JSONRPCResponse response) {
+        if (response.error() != null && Integer.valueOf(-32603).equals(response.error().code())) {
+            log.warn("MCP handler returned an internal error for method {}", request.method());
+            return protocolError(request, -32603, "Internal error");
+        }
+        return response;
     }
 
     @Override
@@ -123,9 +171,22 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
         return arguments == null ? Map.of() : arguments;
     }
 
-    private static McpSchema.JSONRPCResponse internalError(
+    private McpSchema.JSONRPCResponse internalError(
             McpSchema.JSONRPCRequest request, Throwable error) {
-        return protocolError(request, -32603, error.getMessage());
+        log.warn("MCP request failed internally", error);
+        return protocolError(request, -32603, "Internal error");
+    }
+
+    private static McpSchema.JSONRPCResponse rateLimited(McpSchema.JSONRPCRequest request) {
+        var error = run.halo.mcpserver.api.McpToolResult.error(
+                "RATE_LIMITED", "Tool invocation rate limit exceeded");
+        return McpSchema.JSONRPCResponse.result(
+                request.id(),
+                McpSchema.CallToolResult.builder()
+                        .structuredContent(error.structuredContent())
+                        .addTextContent(error.textContent())
+                        .isError(true)
+                        .build());
     }
 
     private static McpSchema.JSONRPCResponse protocolError(

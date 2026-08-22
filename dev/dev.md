@@ -36,9 +36,11 @@ spec:
 ## Implement a provider
 
 Implement `McpToolProvider` in a class that is not a Spring component. Tool names
-must be globally unique and should use the provider plugin name as a namespace.
-Every tool requires an object input schema, a permission callback, and a reactive
-handler.
+must be globally unique and must use the owning plugin's `metadata.name` as the
+namespace. MCP Server rejects a provider that claims another plugin's namespace.
+Every tool requires a valid JSON Schema 2020-12 object input schema, a permission
+callback, and a reactive handler. If `outputSchema` is declared, successful
+structured results must conform to it.
 
 ```java
 public final class ExportToolProvider implements McpToolProvider {
@@ -97,6 +99,8 @@ MCP Server resolves enabled providers on each `tools/list` and `tools/call`.
 Plugin lifecycle changes therefore take effect on the next request. A newly
 contributed tool is denied to existing keys until an administrator selects it in
 **Tools → MCP 管理**. Only tools selected for that key appear in `tools/list`.
+Provider failures are isolated: an unavailable or invalid provider is logged and
+omitted without hiding built-in tools or tools from healthy providers.
 
 ## Build and verify
 

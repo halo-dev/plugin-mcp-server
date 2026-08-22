@@ -32,6 +32,7 @@ class McpKeyAuthenticationFilterTest {
     HaloMcpServer mcpServer;
 
     McpKeyAuthenticationFilter filter;
+    McpRequestRateLimiter rateLimiter;
     AtomicReference<String> handledPath;
     AtomicReference<String> handledAuthorization;
     AtomicReference<Object> currentAuthentication;
@@ -41,16 +42,20 @@ class McpKeyAuthenticationFilterTest {
         handledPath = new AtomicReference<>();
         handledAuthorization = new AtomicReference<>();
         currentAuthentication = new AtomicReference<>();
+        org.springframework.web.reactive.function.server.HandlerFunction<ServerResponse> handler = request -> {
+            handledPath.set(request.path());
+            handledAuthorization.set(request.headers().firstHeader(HttpHeaders.AUTHORIZATION));
+            return ReactiveSecurityContextHolder.getContext()
+                    .doOnNext(context -> currentAuthentication.set(context.getAuthentication()))
+                    .then(ServerResponse.noContent().build());
+        };
         when(mcpServer.routerFunction()).thenReturn(RouterFunctions.route()
-                .POST("/mcp", request -> {
-                    handledPath.set(request.path());
-                    handledAuthorization.set(request.headers().firstHeader(HttpHeaders.AUTHORIZATION));
-                    return ReactiveSecurityContextHolder.getContext()
-                            .doOnNext(context -> currentAuthentication.set(context.getAuthentication()))
-                            .then(ServerResponse.noContent().build());
-                })
+                .POST("/mcp", handler)
+                .POST("/mcp/", handler)
                 .build());
-        filter = new McpKeyAuthenticationFilter(accessKeyService, mcpServer);
+        when(mcpServer.protocolVersions()).thenReturn(java.util.List.of("2025-11-25"));
+        rateLimiter = new McpRequestRateLimiter();
+        filter = new McpKeyAuthenticationFilter(accessKeyService, rateLimiter, mcpServer);
     }
 
     @Test
@@ -64,7 +69,7 @@ class McpKeyAuthenticationFilterTest {
                 Set.of("halo_search_content"));
         when(accessKeyService.authenticate(rawToken)).thenReturn(Mono.just(authentication));
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
+                .header(HttpHeaders.AUTHORIZATION, "bEaReR " + rawToken));
         filter.filter(exchange, ignored -> Mono.error(new AssertionError("Halo chain must not continue")))
                 .block();
 
@@ -84,6 +89,8 @@ class McpKeyAuthenticationFilterTest {
                 .block();
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(exchange.getResponse().getHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE))
+                .isEqualTo("Bearer realm=\"MCP\"");
     }
 
     @Test
@@ -95,6 +102,8 @@ class McpKeyAuthenticationFilterTest {
                 .block();
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(exchange.getResponse().getHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE))
+                .isEqualTo("Bearer realm=\"MCP\"");
     }
 
     @Test
@@ -113,5 +122,63 @@ class McpKeyAuthenticationFilterTest {
         verify(accessKeyService, never()).authenticate(rawToken);
         assertThat(forwarded.get().getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION))
                 .isEqualTo("Bearer " + rawToken);
+    }
+
+    @Test
+    void authenticatesATrailingSlashAsTheSameMcpEndpoint() {
+        var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
+        var authentication = new McpKeyAuthenticationToken(
+                "00000000-0000-0000-0000-000000000000",
+                "Automation",
+                "hmcp_00000000",
+                "admin",
+                Set.of());
+        when(accessKeyService.authenticate(rawToken)).thenReturn(Mono.just(authentication));
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/mcp/")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
+
+        filter.filter(exchange, ignored -> Mono.error(new AssertionError("Halo chain must not continue")))
+                .block();
+
+        verify(accessKeyService).authenticate(rawToken);
+        assertThat(handledPath.get()).isEqualTo("/mcp/");
+    }
+
+    @Test
+    void rejectsAnUnsupportedProtocolVersionAfterAuthentication() {
+        var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
+        var authentication = new McpKeyAuthenticationToken(
+                "00000000-0000-0000-0000-000000000000",
+                "Automation",
+                "hmcp_00000000",
+                "admin",
+                Set.of("halo_search_content"));
+        when(accessKeyService.authenticate(rawToken)).thenReturn(Mono.just(authentication));
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken)
+                .header(io.modelcontextprotocol.spec.HttpHeaders.PROTOCOL_VERSION, "2099-01-01"));
+
+        filter.filter(exchange, ignored -> Mono.error(new AssertionError("Request must not continue")))
+                .block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void rateLimitsRequestsBeforeAccessKeyLookup() {
+        for (var i = 0; i < McpRequestRateLimiter.REQUESTS_PER_MINUTE; i++) {
+            assertThat(rateLimiter.allowRequest(null)).isTrue();
+        }
+        var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
+
+        filter.filter(exchange, ignored -> Mono.error(new AssertionError("Request must not continue")))
+                .block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(exchange.getResponse().getHeaders().getFirst(HttpHeaders.RETRY_AFTER))
+                .isEqualTo("60");
+        verify(accessKeyService, never()).authenticate(rawToken);
     }
 }

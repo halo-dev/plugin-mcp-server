@@ -104,14 +104,15 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
             return client.create(page)
                     .flatMap(created -> snapshots.createBase(Ref.of(created), content, username)
                             .flatMap(snapshot -> {
-                                var pageSpec = created.getSpec();
                                 var snapshotName = snapshot.getMetadata().getName();
-                                pageSpec.setBaseSnapshot(snapshotName);
-                                pageSpec.setHeadSnapshot(snapshotName);
-                                if (Boolean.TRUE.equals(pageSpec.getPublish())) {
-                                    pageSpec.setReleaseSnapshot(snapshotName);
-                                }
-                                return client.update(created);
+                                return updateLatest(client, SinglePage.class, name, "SinglePage", latest -> {
+                                    var pageSpec = latest.getSpec();
+                                    pageSpec.setBaseSnapshot(snapshotName);
+                                    pageSpec.setHeadSnapshot(snapshotName);
+                                    if (Boolean.TRUE.equals(pageSpec.getPublish())) {
+                                        pageSpec.setReleaseSnapshot(snapshotName);
+                                    }
+                                });
                             }))
                     .map(created -> payload(ContentPayloads.singlePage(created), "Created single page " + name));
         });
@@ -119,23 +120,20 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
 
     Mono<ToolPayload> update(Map<String, Object> arguments) {
         var name = resourceName(arguments, "name");
-        var expectedVersion = optionalLong(arguments, "expectedVersion");
         var content = content(arguments);
         return authorization.username().flatMap(username -> client.fetch(SinglePage.class, name)
                 .switchIfEmpty(notFound("SinglePage", name))
-                .flatMap(page -> checkVersion(page.getMetadata().getVersion(), expectedVersion)
-                        .then(snapshots.update(
+                .flatMap(page -> snapshots.update(
                                 Ref.of(page),
                                 page.getSpec().getBaseSnapshot(),
                                 page.getSpec().getHeadSnapshot(),
                                 page.getSpec().getReleaseSnapshot(),
                                 content,
-                                username))
-                        .flatMap(snapshot -> {
-                            applyMetadata(page, arguments);
-                            page.getSpec().setHeadSnapshot(snapshot.getMetadata().getName());
-                            return client.update(page);
-                        }))
+                                username)
+                        .flatMap(snapshot -> updateLatest(client, SinglePage.class, name, "SinglePage", latest -> {
+                            applyMetadata(latest, arguments);
+                            latest.getSpec().setHeadSnapshot(snapshot.getMetadata().getName());
+                        })))
                 .map(updated -> payload(ContentPayloads.singlePage(updated), "Updated single page " + name)));
     }
 
@@ -154,25 +152,20 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
     private Mono<ToolPayload> updateState(
             Map<String, Object> arguments, boolean publish, boolean recycle, String summary) {
         var name = resourceName(arguments, "name");
-        var expectedVersion = optionalLong(arguments, "expectedVersion");
-        return client.fetch(SinglePage.class, name)
-                .switchIfEmpty(notFound("SinglePage", name))
-                .flatMap(page -> checkVersion(page.getMetadata().getVersion(), expectedVersion)
-                        .then(Mono.defer(() -> {
-                            var spec = page.getSpec();
-                            if (recycle) {
-                                spec.setDeleted(true);
-                            } else {
-                                spec.setPublish(publish);
-                                if (publish) {
-                                    if (spec.getHeadSnapshot() == null) {
-                                        spec.setHeadSnapshot(spec.getBaseSnapshot());
-                                    }
-                                    spec.setReleaseSnapshot(spec.getHeadSnapshot());
-                                }
+        return updateLatest(client, SinglePage.class, name, "SinglePage", page -> {
+                    var spec = page.getSpec();
+                    if (recycle) {
+                        spec.setDeleted(true);
+                    } else {
+                        spec.setPublish(publish);
+                        if (publish) {
+                            if (spec.getHeadSnapshot() == null) {
+                                spec.setHeadSnapshot(spec.getBaseSnapshot());
                             }
-                            return client.update(page);
-                        })))
+                            spec.setReleaseSnapshot(spec.getHeadSnapshot());
+                        }
+                    }
+                })
                 .map(page -> payload(ContentPayloads.singlePage(page), summary + name));
     }
 
@@ -257,8 +250,7 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                                 "content", stringSchema(),
                                 "rawType", stringSchemaWithDefault(DEFAULT_RAW_TYPE),
                                 "visible", enumSchema(Post.VisibleEnum.class),
-                                "allowComment", booleanSchema(),
-                                "expectedVersion", integerSchema()),
+                                "allowComment", booleanSchema()),
                         List.of("name", "raw")),
                 permissiveObjectSchema(),
                 UPDATE,
@@ -281,7 +273,7 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                 displayDescription,
                 "PAGE",
                 objectSchema(
-                        map("name", stringSchema(), "expectedVersion", integerSchema()),
+                        map("name", stringSchema()),
                         List.of("name")),
                 permissiveObjectSchema(),
                 destructive ? DESTRUCTIVE : UPDATE,

@@ -12,9 +12,9 @@ also contribute their own tools through the small, protocol-neutral MCP Server A
 - An HTTPS endpoint for production use
 - An MCP client that supports Streamable HTTP and custom bearer tokens
 
-The plugin uses MCP Java SDK 2.0.0 and negotiates MCP protocol version
-`2025-11-25`. It does not implement the legacy HTTP+SSE transport or MCP OAuth
-discovery.
+The plugin uses MCP Java SDK 2.0.0 and supports protocol versions `2024-11-05`,
+`2025-03-26`, `2025-06-18`, and `2025-11-25`. It does not implement the legacy
+HTTP+SSE transport, the 2026 protocol era, or MCP OAuth discovery.
 
 ## Endpoint and authentication
 
@@ -40,6 +40,11 @@ Tool access is independent of Halo content RBAC: the key's exact tool allowlist
 is the authorization boundary. Newly installed tools are denied until an
 administrator explicitly adds them to a key. Disabled and expired keys are
 rejected, and rotating a key invalidates its previous secret immediately.
+Requests carrying an MCP Bearer token are limited to 600 per minute per observed
+network source before key validation. This is an overall source-level ceiling and
+includes successful requests. Tool calls are additionally limited to 120 per
+minute for each access-key and tool pair. Limits are process-local and therefore
+apply independently to each Halo replica.
 
 Use a dedicated, least-privilege key. Do not put keys in URLs, configuration
 files committed to source control, shell history, or logs.
@@ -67,11 +72,12 @@ normally omit that header.
 
 Native and plugin-contributed tools are exposed directly in `tools/list`; there
 are no discovery or execution gateway tools. The response contains only the
-tools selected for the current key. Update, publish, unpublish, recycle, and
-attachment deletion accept an optional `expectedVersion`; a stale version
-returns `CONFLICT` instead of overwriting a newer resource. Attachment uploads
-intentionally accept inline Base64 only, avoiding server-side URL fetching and
-SSRF exposure.
+tools selected for the current key. Comment moderation and attachment deletion
+accept an optional `expectedVersion`; a stale version returns `CONFLICT` instead
+of overwriting a newer resource. Post and single-page writes instead re-read and
+retry the latest resource because Halo reconcilers may advance their metadata
+versions independently. Attachment uploads intentionally accept inline Base64
+only, avoiding server-side URL fetching and SSRF exposure.
 
 ## Plugin integration
 
@@ -168,6 +174,25 @@ Run a compatible Halo development server:
 bash gradlew haloServer
 ```
 
+The official conformance CLI cannot add the custom Bearer header required by
+this plugin. For local protocol checks, start the loopback-only authentication
+proxy with a temporary least-privilege key, then run applicable server scenarios:
+
+```bash
+HALO_MCP_TOKEN='hmcp_...' node dev/conformance-proxy.mjs
+npx @modelcontextprotocol/conformance@0.1.11 server \
+  --url http://127.0.0.1:8091/mcp \
+  --scenario server-initialize
+```
+
+Run scenarios matching the plugin's advertised capabilities, such as
+`server-initialize`, `ping`, and `tools-list`. The complete conformance server
+suite targets an everything-server fixture and also requires optional resources,
+prompts, audio, image, sampling, and elicitation features that this plugin does
+not advertise. Its localhost DNS-rebinding scenario is also scoped to servers
+without authentication, whereas this endpoint always requires an MCP key and
+rejects browser `Origin` headers.
+
 The distributable JAR is generated under `build/libs/`.
 
 ## Error model
@@ -175,15 +200,15 @@ The distributable JAR is generated under `build/libs/`.
 Tool failures return `isError: true` with a stable structured error code:
 
 - `INVALID_ARGUMENT`
+- `INVALID_ARGUMENTS`
 - `NOT_FOUND`
 - `FORBIDDEN`
 - `CONFLICT`
 - `SEARCH_UNAVAILABLE`
 - `CONTENT_UNAVAILABLE`
 - `ATTACHMENT_UNAVAILABLE`
-- `INVALID_TOOL_NAME`
-- `TOOL_CONFLICT`
-- `TOOL_PROVIDER_UNAVAILABLE`
+- `INVALID_TOOL_RESULT`
+- `RATE_LIMITED`
 - `INTERNAL`
 
 Search can be unavailable when Halo has no active search engine. Listing and

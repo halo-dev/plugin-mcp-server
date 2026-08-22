@@ -23,6 +23,9 @@ class McpServerPluginTest {
     @Mock
     SchemeManager schemeManager;
 
+    @Mock
+    McpRequestRateLimiter rateLimiter;
+
     @InjectMocks
     McpServerPlugin plugin;
 

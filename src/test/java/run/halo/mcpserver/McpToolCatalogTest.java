@@ -48,7 +48,7 @@ class McpToolCatalogTest {
                 .build();
         var builtIn = new BuiltInTool(specification, "POST", "查询文章", "分页查询文章。");
         when(builtInTools.tools()).thenReturn(List.of(builtIn));
-        when(registry.definitions()).thenReturn(Mono.just(List.of()));
+        when(registry.registeredTools()).thenReturn(Mono.just(List.of()));
         var catalog = new McpToolCatalog(builtInTools, registry, extensionClient);
 
         assertThat(catalog.tools().block()).singleElement().satisfies(tool -> {
@@ -74,9 +74,10 @@ class McpToolCatalogTest {
                 .handler(invocation -> Mono.empty())
                 .build();
         when(builtInTools.tools()).thenReturn(List.of());
-        when(registry.definitions()).thenReturn(Mono.just(List.of(definition)));
+        when(registry.registeredTools())
+                .thenReturn(Mono.just(List.of(new RegisteredTool("demo", definition))));
         when(extensionClient.fetch(run.halo.app.core.extension.Plugin.class, "demo"))
-                .thenReturn(Mono.empty());
+                .thenReturn(Mono.error(new IllegalStateException("plugin metadata unavailable")));
         var catalog = new McpToolCatalog(builtInTools, registry, extensionClient);
 
         assertThat(catalog.tools().block()).singleElement().satisfies(tool -> {
@@ -87,5 +88,34 @@ class McpToolCatalogTest {
             assertThat(tool.title()).isEqualTo("Export data");
             assertThat(tool.description()).isEqualTo("Export plugin data.");
         });
+    }
+
+    @Test
+    void keepsBuiltInToolsWhenContributedToolDiscoveryFails() {
+        var protocolTool = McpSchema.Tool.builder(
+                        "halo_list_posts", Map.of("type", "object", "properties", Map.of()))
+                .title("List Halo posts")
+                .description("List posts with pagination.")
+                .annotations(McpSchema.ToolAnnotations.builder()
+                        .readOnlyHint(true)
+                        .destructiveHint(false)
+                        .idempotentHint(true)
+                        .openWorldHint(false)
+                        .build())
+                .build();
+        var specification = McpStatelessServerFeatures.AsyncToolSpecification.builder()
+                .tool(protocolTool)
+                .callHandler((context, request) -> Mono.empty())
+                .build();
+        var builtIn = new BuiltInTool(specification, "POST", "查询文章", "分页查询文章。");
+        when(builtInTools.tools()).thenReturn(List.of(builtIn));
+        when(registry.registeredTools())
+                .thenReturn(Mono.error(new IllegalStateException("provider discovery secret")));
+        var catalog = new McpToolCatalog(builtInTools, registry, extensionClient);
+
+        assertThat(catalog.tools().block()).singleElement().satisfies(tool ->
+                assertThat(tool.name()).isEqualTo("halo_list_posts"));
+        assertThat(catalog.protocolTools().block()).singleElement().satisfies(tool ->
+                assertThat(tool.name()).isEqualTo("halo_list_posts"));
     }
 }
