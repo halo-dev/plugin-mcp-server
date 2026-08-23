@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { McpTool } from '@/api'
+import McpToolCard from '@/components/McpToolCard.vue'
 import McpToolDetailsModal from '@/components/McpToolDetailsModal.vue'
 import { useTools } from '@/composables/useTools'
 import { groupTools } from '@/utils/tool'
@@ -37,31 +38,12 @@ const selectedTool = shallowRef<McpTool>()
               <span>{{ category.tools.length }}</span>
             </div>
             <div class=":uno: grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <button
+              <McpToolCard
                 v-for="tool in category.tools"
                 :key="tool.name"
-                type="button"
-                class=":uno: w-full rounded-md bg-gray-50 p-3 text-left transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                :aria-label="`查看 ${tool.title || tool.name} 的详情`"
-                @click="selectedTool = tool"
-              >
-                <div class=":uno: flex items-start justify-between gap-2">
-                  <div class=":uno: min-w-0">
-                    <div class=":uno: truncate text-sm text-gray-800 font-medium">
-                      {{ tool.title || tool.name }}
-                    </div>
-                    <code class=":uno: mt-1 block break-all text-xs text-gray-500">{{
-                      tool.name
-                    }}</code>
-                  </div>
-                  <VTag v-if="tool.destructive" theme="danger">破坏性</VTag>
-                  <VTag v-else-if="tool.readOnly">只读</VTag>
-                  <VTag v-else>写入</VTag>
-                </div>
-                <p v-if="tool.description" class=":uno: mt-2 text-xs text-gray-500 leading-5">
-                  {{ tool.description }}
-                </p>
-              </button>
+                :tool="tool"
+                @activate="selectedTool = tool"
+              />
             </div>
           </div>
         </div>

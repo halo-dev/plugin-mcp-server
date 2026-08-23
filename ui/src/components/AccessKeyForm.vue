@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { McpAccessKey, McpTool, UpdateMcpAccessKeyRequest } from '@/api'
+import McpToolCard from '@/components/McpToolCard.vue'
 import { groupTools } from '@/utils/tool'
 import { submitForm } from '@formkit/core'
 import { VButton, VSpace, VTag } from '@halo-dev/components'
@@ -110,36 +111,13 @@ defineExpose({
                 <span>{{ category.tools.length }}</span>
               </div>
               <div class=":uno: grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label
+                <McpToolCard
                   v-for="tool in category.tools"
                   :key="tool.name"
-                  class=":uno: flex cursor-pointer items-start gap-2.5 rounded-md border p-3 transition-colors"
-                  :class="
-                    selected[tool.name]
-                      ? 'border-[rgb(var(--colors-primary))] bg-[rgb(var(--colors-primary)/0.06)]'
-                      : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
-                  "
-                >
-                  <input
-                    v-model="selected[tool.name]"
-                    type="checkbox"
-                    class=":uno: mt-0.5 h-4 w-4 shrink-0 accent-[rgb(var(--colors-primary))]"
-                  />
-                  <div class=":uno: min-w-0">
-                    <div class=":uno: flex flex-wrap items-center gap-1.5">
-                      <span class=":uno: text-sm text-gray-800">{{ tool.title || tool.name }}</span>
-                      <VTag v-if="tool.destructive" theme="danger">破坏性</VTag>
-                      <VTag v-else-if="tool.readOnly">只读</VTag>
-                      <VTag v-else>写入</VTag>
-                    </div>
-                    <code class=":uno: mt-0.5 block break-all text-xs text-gray-500">{{
-                      tool.name
-                    }}</code>
-                    <p v-if="tool.description" class=":uno: mt-1 text-xs text-gray-500 leading-5">
-                      {{ tool.description }}
-                    </p>
-                  </div>
-                </label>
+                  v-model="selected[tool.name]"
+                  selectable
+                  :tool="tool"
+                />
               </div>
             </div>
           </div>
