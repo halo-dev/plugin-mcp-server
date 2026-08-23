@@ -1,12 +1,15 @@
 <script setup lang="ts">
+import type { McpTool } from '@/api'
+import McpToolDetailsModal from '@/components/McpToolDetailsModal.vue'
 import { useTools } from '@/composables/useTools'
 import { groupTools } from '@/utils/tool'
 import { VCard, VTag } from '@halo-dev/components'
-import { computed } from 'vue'
+import { computed, shallowRef } from 'vue'
 
 const { data: tools } = useTools()
 
 const groups = computed(() => groupTools(tools.value ?? []))
+const selectedTool = shallowRef<McpTool>()
 </script>
 
 <template>
@@ -34,10 +37,13 @@ const groups = computed(() => groupTools(tools.value ?? []))
               <span>{{ category.tools.length }}</span>
             </div>
             <div class=":uno: grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <div
+              <button
                 v-for="tool in category.tools"
                 :key="tool.name"
-                class=":uno: rounded-md bg-gray-50 p-3 transition-colors hover:bg-gray-100"
+                type="button"
+                class=":uno: w-full rounded-md bg-gray-50 p-3 text-left transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                :aria-label="`查看 ${tool.title || tool.name} 的详情`"
+                @click="selectedTool = tool"
               >
                 <div class=":uno: flex items-start justify-between gap-2">
                   <div class=":uno: min-w-0">
@@ -55,11 +61,12 @@ const groups = computed(() => groupTools(tools.value ?? []))
                 <p v-if="tool.description" class=":uno: mt-2 text-xs text-gray-500 leading-5">
                   {{ tool.description }}
                 </p>
-              </div>
+              </button>
             </div>
           </div>
         </div>
       </section>
     </div>
   </VCard>
+  <McpToolDetailsModal v-if="selectedTool" :tool="selectedTool" @close="selectedTool = undefined" />
 </template>

@@ -49,10 +49,22 @@ export interface McpTool {
     'destructive': boolean;
     /**
      * 
+     * @type {{ [key: string]: any; }}
+     * @memberof McpTool
+     */
+    'inputSchema': { [key: string]: any; };
+    /**
+     * 
      * @type {string}
      * @memberof McpTool
      */
     'name': string;
+    /**
+     * 
+     * @type {{ [key: string]: any; }}
+     * @memberof McpTool
+     */
+    'outputSchema'?: { [key: string]: any; };
     /**
      * 
      * @type {boolean}

@@ -8,6 +8,7 @@ function tool(name: string, category: string, pluginName = 'PluginMcpServer'): M
     category,
     available: true,
     destructive: false,
+    inputSchema: { type: 'object', properties: {} },
     readOnly: true,
     source: {
       pluginName,

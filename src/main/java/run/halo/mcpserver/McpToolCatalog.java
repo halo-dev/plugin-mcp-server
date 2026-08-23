@@ -104,6 +104,8 @@ class McpToolCatalog {
                 tool.protocolTool().name(),
                 tool.displayTitle(),
                 tool.displayDescription(),
+                tool.protocolTool().inputSchema(),
+                tool.protocolTool().outputSchema(),
                 tool.category(),
                 Boolean.TRUE.equals(tool.protocolTool().annotations().readOnlyHint()),
                 Boolean.TRUE.equals(tool.protocolTool().annotations().destructiveHint()),
@@ -116,6 +118,8 @@ class McpToolCatalog {
                 definition.name(),
                 definition.displayTitle(),
                 definition.displayDescription(),
+                definition.inputSchema(),
+                definition.outputSchema(),
                 "PLUGIN",
                 definition.annotations().readOnlyHint(),
                 definition.annotations().destructiveHint(),
@@ -157,6 +161,13 @@ class McpToolCatalog {
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String name,
             String title,
             String description,
+            @Schema(
+                            requiredMode = Schema.RequiredMode.REQUIRED,
+                            type = "object",
+                            additionalProperties = Schema.AdditionalPropertiesValue.TRUE)
+                    Map<String, Object> inputSchema,
+            @Schema(type = "object", additionalProperties = Schema.AdditionalPropertiesValue.TRUE)
+                    Map<String, Object> outputSchema,
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String category,
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean readOnly,
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean destructive,
