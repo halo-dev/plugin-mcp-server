@@ -31,10 +31,17 @@ class McpToolCatalogTest {
 
     @Test
     void separatesProtocolDescriptionsFromChineseConsoleDescriptions() {
+        var inputSchema = Map.<String, Object>of(
+                "type", "object",
+                "properties", Map.of("page", Map.of("type", "integer")));
+        var outputSchema = Map.<String, Object>of(
+                "type", "object",
+                "properties", Map.of("items", Map.of("type", "array")));
         var protocolTool = McpSchema.Tool.builder(
-                        "halo_list_posts", Map.of("type", "object", "properties", Map.of()))
+                        "halo_list_posts", inputSchema)
                 .title("List Halo posts")
                 .description("List posts with pagination.")
+                .outputSchema(outputSchema)
                 .annotations(McpSchema.ToolAnnotations.builder()
                         .readOnlyHint(true)
                         .destructiveHint(false)
@@ -54,6 +61,8 @@ class McpToolCatalogTest {
         assertThat(catalog.tools().block()).singleElement().satisfies(tool -> {
             assertThat(tool.title()).isEqualTo("查询文章");
             assertThat(tool.description()).isEqualTo("分页查询文章。");
+            assertThat(tool.inputSchema()).isEqualTo(inputSchema);
+            assertThat(tool.outputSchema()).isEqualTo(outputSchema);
         });
         assertThat(catalog.protocolTools().block()).singleElement().satisfies(tool -> {
             assertThat(tool.title()).isEqualTo("List Halo posts");
@@ -70,6 +79,9 @@ class McpToolCatalogTest {
                 .displayTitle("导出数据")
                 .displayDescription("导出插件数据。")
                 .inputSchema(Map.of("type", "object", "properties", Map.of()))
+                .outputSchema(Map.of(
+                        "type", "object",
+                        "properties", Map.of("url", Map.of("type", "string"))))
                 .permission(invocation -> Mono.just(true))
                 .handler(invocation -> Mono.empty())
                 .build();
@@ -83,6 +95,8 @@ class McpToolCatalogTest {
         assertThat(catalog.tools().block()).singleElement().satisfies(tool -> {
             assertThat(tool.title()).isEqualTo("导出数据");
             assertThat(tool.description()).isEqualTo("导出插件数据。");
+            assertThat(tool.inputSchema()).containsEntry("type", "object");
+            assertThat(tool.outputSchema()).containsEntry("type", "object");
         });
         assertThat(catalog.protocolTools().block()).singleElement().satisfies(tool -> {
             assertThat(tool.title()).isEqualTo("Export data");

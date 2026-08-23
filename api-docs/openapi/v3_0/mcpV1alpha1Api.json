@@ -447,7 +447,7 @@
         }
       },
       "McpTool" : {
-        "required" : [ "available", "category", "destructive", "name", "readOnly", "source" ],
+        "required" : [ "available", "category", "destructive", "inputSchema", "name", "readOnly", "source" ],
         "type" : "object",
         "properties" : {
           "available" : {
@@ -462,8 +462,16 @@
           "destructive" : {
             "type" : "boolean"
           },
+          "inputSchema" : {
+            "type" : "object",
+            "additionalProperties" : true
+          },
           "name" : {
             "type" : "string"
+          },
+          "outputSchema" : {
+            "type" : "object",
+            "additionalProperties" : true
           },
           "readOnly" : {
             "type" : "boolean"

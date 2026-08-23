@@ -136,7 +136,7 @@ class CommentTools extends ToolSupport implements ToolGroup {
                                 "approved", booleanSchema(),
                                 "keyword", stringSchema()),
                         List.of()),
-                pageOutputSchema(),
+                pageOutputSchema(ContentPayloads.commentSchema()),
                 READ_ONLY,
                 this::list);
     }
@@ -159,7 +159,7 @@ class CommentTools extends ToolSupport implements ToolGroup {
                 objectSchema(
                         map("name", stringSchema(), "expectedVersion", integerSchema()),
                         List.of("name")),
-                permissiveObjectSchema(),
+                ContentPayloads.commentSchema(),
                 destructive ? DESTRUCTIVE : UPDATE,
                 handler);
     }

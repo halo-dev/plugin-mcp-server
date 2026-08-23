@@ -126,7 +126,7 @@ function mountComponent() {
   const entityFieldStub = defineComponent({
     props: ['title', 'description'],
     template:
-      '<div><div class="title">{{ title }}</div><div class="description">{{ description }}</div></div>',
+      '<div><div class="title">{{ title }}</div><div class="description"><slot name="description">{{ description }}</slot></div></div>',
   })
   const paginationStub = defineComponent({
     props: ['page', 'size', 'total', 'sizeOptions'],

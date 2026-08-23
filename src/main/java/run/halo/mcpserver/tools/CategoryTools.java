@@ -46,7 +46,7 @@ class CategoryTools extends ToolSupport implements ToolGroup {
                                 "keyword", stringSchema(),
                                 "parent", stringSchema()),
                         List.of()),
-                pageOutputSchema(),
+                pageOutputSchema(ContentPayloads.categorySchema()),
                 READ_ONLY,
                 this::list));
     }

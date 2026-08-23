@@ -48,13 +48,7 @@ class ContentSearchTools extends ToolSupport implements ToolGroup {
                                 "published", booleanSchema(),
                                 "recycled", booleanSchema(false)),
                         List.of("query")),
-                objectSchema(
-                        map(
-                                "items", arraySchema(Map.of("type", "object")),
-                                "total", Map.of("type", "integer"),
-                                "limit", Map.of("type", "integer"),
-                                "processingTimeMillis", Map.of("type", "integer")),
-                        List.of("items", "total", "limit", "processingTimeMillis")),
+                searchOutputSchema(),
                 READ_ONLY,
                 this::search));
     }
@@ -103,6 +97,46 @@ class ContentSearchTools extends ToolSupport implements ToolGroup {
                 "permalink", document.getPermalink(),
                 "creationTimestamp", instant(document.getCreationTimestamp()),
                 "updateTimestamp", instant(document.getUpdateTimestamp()));
+    }
+
+    private static Map<String, Object> searchOutputSchema() {
+        var itemSchema = objectSchema(
+                map(
+                        "type",
+                                described(
+                                        Map.of("type", "string", "enum", List.of("POST", "SINGLE_PAGE")),
+                                        "Halo content type represented by this search result."),
+                        "name",
+                                described(
+                                        HaloSchemaProperties.property(HaloDocument.class, "metadataName"),
+                                        "Metadata name of the matching Post or SinglePage."),
+                        "title", HaloSchemaProperties.property(HaloDocument.class, "title"),
+                        "excerpt",
+                                described(
+                                        HaloSchemaProperties.property(HaloDocument.class, "description"),
+                                        "Search excerpt or description of the matching content."),
+                        "published", HaloSchemaProperties.property(HaloDocument.class, "published"),
+                        "recycled", HaloSchemaProperties.property(HaloDocument.class, "recycled"),
+                        "exposed", HaloSchemaProperties.property(HaloDocument.class, "exposed"),
+                        "owner",
+                                described(
+                                        HaloSchemaProperties.property(HaloDocument.class, "ownerName"),
+                                        "User metadata.name of the content owner."),
+                        "categories", HaloSchemaProperties.property(HaloDocument.class, "categories"),
+                        "tags", HaloSchemaProperties.property(HaloDocument.class, "tags"),
+                        "permalink", HaloSchemaProperties.property(HaloDocument.class, "permalink"),
+                        "creationTimestamp",
+                                HaloSchemaProperties.property(HaloDocument.class, "creationTimestamp"),
+                        "updateTimestamp", HaloSchemaProperties.property(HaloDocument.class, "updateTimestamp")),
+                List.of("type", "published", "recycled", "exposed", "categories", "tags"));
+        return objectSchema(
+                map(
+                        "items", described(outputArraySchema(itemSchema), "Matching content items."),
+                        "total", described(outputIntegerSchema(), "Total number of matching content items."),
+                        "limit", described(outputIntegerSchema(), "Maximum number of returned items."),
+                        "processingTimeMillis",
+                                described(outputIntegerSchema(), "Search processing time in milliseconds.")),
+                List.of("items", "total", "limit", "processingTimeMillis"));
     }
 
     private static List<String> contentTypes(Object value) {

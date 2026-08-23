@@ -184,7 +184,7 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                                 "published", booleanSchema(),
                                 "recycled", booleanSchema(false)),
                         List.of()),
-                pageOutputSchema(),
+                pageOutputSchema(ContentPayloads.singlePageSchema()),
                 READ_ONLY,
                 this::list);
     }
@@ -203,7 +203,7 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                                 "version", enumSchema(ContentVersion.class, ContentVersion.HEAD.name()),
                                 "format", enumSchema(ContentFormat.class, ContentFormat.RAW.name())),
                         List.of("name")),
-                permissiveObjectSchema(),
+                contentOutputSchema(ContentPayloads.singlePageSchema()),
                 READ_ONLY,
                 this::get);
     }
@@ -228,7 +228,7 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                                 "visible", enumSchema(Post.VisibleEnum.class, Post.VisibleEnum.PUBLIC.name()),
                                 "allowComment", booleanSchema(true)),
                         List.of("name", "title", "raw")),
-                permissiveObjectSchema(),
+                ContentPayloads.singlePageSchema(),
                 CREATE,
                 this::create);
     }
@@ -252,7 +252,7 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                                 "visible", enumSchema(Post.VisibleEnum.class),
                                 "allowComment", booleanSchema()),
                         List.of("name", "raw")),
-                permissiveObjectSchema(),
+                ContentPayloads.singlePageSchema(),
                 UPDATE,
                 this::update);
     }
@@ -275,7 +275,7 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                 objectSchema(
                         map("name", stringSchema()),
                         List.of("name")),
-                permissiveObjectSchema(),
+                ContentPayloads.singlePageSchema(),
                 destructive ? DESTRUCTIVE : UPDATE,
                 handler);
     }
