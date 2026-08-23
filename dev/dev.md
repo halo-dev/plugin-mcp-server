@@ -28,9 +28,9 @@ provider plugin from starting on its own.
 
 ```yaml
 spec:
-  requires: ">=2.26.0"
-  pluginDependencies:
-    mcp-server?: ">=1.0.0 & <2.0.0"
+    requires: ">=2.26.0"
+    pluginDependencies:
+        mcp-server?: ">=1.0.0 & <2.0.0"
 ```
 
 ## Implement a provider
@@ -98,7 +98,7 @@ public class McpToolConfiguration {
 MCP Server resolves enabled providers on each `tools/list` and `tools/call`.
 Plugin lifecycle changes therefore take effect on the next request. A newly
 contributed tool is denied to existing keys until an administrator selects it in
-**Tools → MCP 管理**. Only tools selected for that key appear in `tools/list`.
+**Tools → MCP 服务**. Only tools selected for that key appear in `tools/list`.
 Provider failures are isolated: an unavailable or invalid provider is logged and
 omitted without hiding built-in tools or tools from healthy providers.
 
@@ -108,7 +108,7 @@ Build the provider plugin normally, then inspect its JAR to confirm that
 `run/halo/mcpserver/api` classes were not packaged. Verify both runtime states:
 
 1. Enable the provider plugin without MCP Server; the plugin must start normally.
-2. Enable MCP Server; the contributed tools must appear in **MCP 管理**.
+2. Enable MCP Server; the contributed tools must appear in **MCP 服务**.
 3. Add a tool to a key and call `tools/list`; only selected tools must be listed.
 4. Disable MCP Server; the provider plugin must remain enabled.
 

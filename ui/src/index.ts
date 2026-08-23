@@ -11,13 +11,13 @@ export default definePlugin({
         name: 'McpServer',
         component: () => import('./views/McpView.vue'),
         meta: {
-          title: 'MCP 管理',
+          title: 'MCP 服务',
           permissions: ['*'],
           menu: {
-            name: 'MCP 管理',
-            group: 'tool',
+            name: 'MCP 服务',
+            group: 'system',
             icon: markRaw(McpLineIcon),
-            priority: 50,
+            priority: 101,
           },
         },
       },

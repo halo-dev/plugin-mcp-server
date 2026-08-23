@@ -21,5 +21,5 @@ bash ../../gradlew build
 ```
 
 Install and enable the resulting JAR independently. If MCP Server is also
-installed and enabled, add these tools to a key in **MCP 管理**; they will then
+installed and enabled, add these tools to a key in **MCP 服务**; they will then
 appear directly in that key's `tools/list` response.

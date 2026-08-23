@@ -24,7 +24,7 @@ After installing and enabling the plugin, the MCP endpoint is:
 https://halo.example.com/mcp
 ```
 
-Open **Tools → MCP 管理** in Halo Console, generate a key, and select the exact
+Open **Tools → MCP 服务** in Halo Console, generate a key, and select the exact
 tools that key may call. The page also shows the endpoint, a quick client
 configuration, and each tool's built-in or provider-plugin source. The management
 page and API are restricted to Halo super administrators. The generated key is
@@ -55,20 +55,20 @@ normally omit that header.
 
 ## Tools
 
-| Tool | Purpose |
-| --- | --- |
-| `halo_search_content` | Search posts and single pages. |
-| `halo_list_posts` / `halo_get_post` | List posts or read HEAD/RELEASE content. |
-| `halo_create_post` / `halo_update_post` | Create or update a post and its content snapshots. |
-| `halo_publish_post` / `halo_unpublish_post` / `halo_recycle_post` | Change a post's publication or recycle state. |
-| `halo_list_single_pages` / `halo_get_single_page` | List single pages or read HEAD/RELEASE content. |
-| `halo_create_single_page` / `halo_update_single_page` | Create or update a single page and its content snapshots. |
-| `halo_publish_single_page` / `halo_unpublish_single_page` / `halo_recycle_single_page` | Change a page's publication or recycle state. |
-| `halo_list_categories` / `halo_list_tags` | List post categories or tags independently. |
-| `halo_list_comments` | List comments with moderation and keyword filters. |
-| `halo_approve_comment` / `halo_unapprove_comment` / `halo_delete_comment` | Moderate or delete comments. |
-| `halo_list_attachments` / `halo_get_attachment` | List or inspect attachments. |
-| `halo_upload_attachment` / `halo_delete_attachment` | Upload a Base64 attachment (up to 8 MiB) or delete an attachment. |
+| Tool                                                                                   | Purpose                                                           |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `halo_search_content`                                                                  | Search posts and single pages.                                    |
+| `halo_list_posts` / `halo_get_post`                                                    | List posts or read HEAD/RELEASE content.                          |
+| `halo_create_post` / `halo_update_post`                                                | Create or update a post and its content snapshots.                |
+| `halo_publish_post` / `halo_unpublish_post` / `halo_recycle_post`                      | Change a post's publication or recycle state.                     |
+| `halo_list_single_pages` / `halo_get_single_page`                                      | List single pages or read HEAD/RELEASE content.                   |
+| `halo_create_single_page` / `halo_update_single_page`                                  | Create or update a single page and its content snapshots.         |
+| `halo_publish_single_page` / `halo_unpublish_single_page` / `halo_recycle_single_page` | Change a page's publication or recycle state.                     |
+| `halo_list_categories` / `halo_list_tags`                                              | List post categories or tags independently.                       |
+| `halo_list_comments`                                                                   | List comments with moderation and keyword filters.                |
+| `halo_approve_comment` / `halo_unapprove_comment` / `halo_delete_comment`              | Moderate or delete comments.                                      |
+| `halo_list_attachments` / `halo_get_attachment`                                        | List or inspect attachments.                                      |
+| `halo_upload_attachment` / `halo_delete_attachment`                                    | Upload a Base64 attachment (up to 8 MiB) or delete an attachment. |
 
 Native and plugin-contributed tools are exposed directly in `tools/list`; there
 are no discovery or execution gateway tools. The response contains only the
@@ -120,15 +120,15 @@ Add a project-scoped `.mcp.json` that reads the token from the environment:
 
 ```json
 {
-  "mcpServers": {
-    "halo": {
-      "type": "http",
-      "url": "https://halo.example.com/mcp",
-      "headers": {
-        "Authorization": "Bearer ${HALO_MCP_TOKEN}"
-      }
+    "mcpServers": {
+        "halo": {
+            "type": "http",
+            "url": "https://halo.example.com/mcp",
+            "headers": {
+                "Authorization": "Bearer ${HALO_MCP_TOKEN}"
+            }
+        }
     }
-  }
 }
 ```
 

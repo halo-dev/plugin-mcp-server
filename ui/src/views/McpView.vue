@@ -8,7 +8,7 @@ import McpLineIcon from '~icons/mingcute/mcp-line'
 </script>
 
 <template>
-  <VPageHeader title="MCP 管理">
+  <VPageHeader title="MCP 服务">
     <template #icon>
       <McpLineIcon />
     </template>
