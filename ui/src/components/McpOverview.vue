@@ -65,7 +65,7 @@ const successRateValue = computed(() => {
   }
   return Math.round((callSuccess.value / callTotal.value) * 100)
 })
-const successRate = computed(() => (callTotal.value ? `${successRateValue.value}%` : '–'))
+const successRate = computed(() => (callTotal.value ? `${successRateValue.value}%` : '0'))
 </script>
 
 <template>
@@ -79,7 +79,7 @@ const successRate = computed(() => (callTotal.value ? `${successRateValue.value}
       </VAlert>
 
       <div class=":uno: grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div class=":uno: flex items-center gap-3 rounded-md bg-gray-50 p-3">
+        <div class=":uno: flex items-center gap-3 rounded-lg bg-gray-50 p-3">
           <div
             class=":uno: flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500"
           >
@@ -88,22 +88,19 @@ const successRate = computed(() => (callTotal.value ? `${successRateValue.value}
           <div class=":uno: min-w-0 flex-1">
             <div class=":uno: text-xs text-gray-500">访问密钥</div>
             <div class=":uno: mt-0.5 text-xl text-gray-900 font-semibold leading-6">
-              {{ keys?.length ?? '–' }}
+              {{ keys?.length ?? '0' }}
             </div>
             <div class=":uno: mt-0.5 truncate text-xs text-gray-500">
               {{ enabledKeyCount }} 个已启用
             </div>
-            <div
-              v-if="keys?.length"
-              class=":uno: mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-gray-100"
-            >
+            <div class=":uno: mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-gray-100">
               <div class=":uno: bg-emerald-400" :style="{ width: enabledKeyWidth }" />
               <div class=":uno: flex-1 bg-gray-200" />
             </div>
           </div>
         </div>
 
-        <div class=":uno: flex items-center gap-3 rounded-md bg-gray-50 p-3">
+        <div class=":uno: flex items-center gap-3 rounded-lg bg-gray-50 p-3">
           <div
             class=":uno: flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500"
           >
@@ -112,16 +109,13 @@ const successRate = computed(() => (callTotal.value ? `${successRateValue.value}
           <div class=":uno: min-w-0 flex-1">
             <div class=":uno: text-xs text-gray-500">已注册工具</div>
             <div class=":uno: mt-0.5 text-xl text-gray-900 font-semibold leading-6">
-              {{ tools ? toolStats.total : '–' }}
+              {{ tools ? toolStats.total : '0' }}
             </div>
             <div class=":uno: mt-0.5 truncate text-xs text-gray-500">
               只读 {{ toolStats.readOnly }} · 写入 {{ toolStats.write }} · 破坏性
               {{ toolStats.destructive }}
             </div>
-            <div
-              v-if="toolStats.total"
-              class=":uno: mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-gray-100"
-            >
+            <div class=":uno: mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-gray-100">
               <div
                 class=":uno: bg-gray-300"
                 :style="{ width: toolSegmentWidth(toolStats.readOnly) }"
@@ -138,7 +132,7 @@ const successRate = computed(() => (callTotal.value ? `${successRateValue.value}
           </div>
         </div>
 
-        <div class=":uno: flex items-center gap-3 rounded-md bg-gray-50 p-3">
+        <div class=":uno: flex items-center gap-3 rounded-lg bg-gray-50 p-3">
           <div
             class=":uno: flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500"
           >
@@ -147,7 +141,7 @@ const successRate = computed(() => (callTotal.value ? `${successRateValue.value}
           <div class=":uno: min-w-0 flex-1">
             <div class=":uno: text-xs text-gray-500">最近调用</div>
             <div class=":uno: mt-0.5 text-xl text-gray-900 font-semibold leading-6">
-              {{ recentTotal ? callTotal : '–' }}
+              {{ recentTotal ? callTotal : '0' }}
             </div>
             <div class=":uno: mt-0.5 truncate text-xs text-gray-500">成功 {{ callSuccess }} 次</div>
             <div
@@ -163,7 +157,7 @@ const successRate = computed(() => (callTotal.value ? `${successRateValue.value}
           </div>
         </div>
 
-        <div class=":uno: flex items-center gap-3 rounded-md bg-gray-50 p-3">
+        <div class=":uno: flex items-center gap-3 rounded-lg bg-gray-50 p-3">
           <div
             class=":uno: flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500"
           >

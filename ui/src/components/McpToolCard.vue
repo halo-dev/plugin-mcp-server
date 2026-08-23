@@ -40,7 +40,7 @@ function handleClick() {
   <component
     :is="selectable ? 'label' : 'button'"
     :type="selectable ? undefined : 'button'"
-    class=":uno: flex w-full items-start gap-2.5 rounded-md bg-gray-50 p-3 text-left transition-colors"
+    class=":uno: flex w-full items-start gap-2.5 rounded-lg bg-gray-50 p-3 text-left transition-colors"
     :class="cardClass"
     :aria-label="selectable ? undefined : `查看 ${tool.title || tool.name} 的详情`"
     @click="handleClick"
