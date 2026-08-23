@@ -136,20 +136,66 @@ abstract class ToolSupport {
                 "additionalProperties", false);
     }
 
-    static Map<String, Object> permissiveObjectSchema() {
-        return Map.of("type", "object", "additionalProperties", true);
-    }
-
-    static Map<String, Object> pageOutputSchema() {
+    static Map<String, Object> pageOutputSchema(Map<String, Object> itemSchema) {
         return objectSchema(
                 map(
-                        "items", arraySchema(Map.of("type", "object")),
-                        "page", Map.of("type", "integer"),
-                        "size", Map.of("type", "integer"),
-                        "total", Map.of("type", "integer"),
-                        "totalPages", Map.of("type", "integer"),
-                        "hasNext", booleanSchema()),
+                        "items", described(outputArraySchema(itemSchema), "Items in the current page."),
+                        "page", described(outputIntegerSchema(), "One-based current page number."),
+                        "size", described(outputIntegerSchema(), "Maximum number of items requested per page."),
+                        "total", described(outputIntegerSchema(), "Total number of matching items."),
+                        "totalPages", described(outputIntegerSchema(), "Total number of matching pages."),
+                        "hasNext", described(booleanSchema(), "Whether another page is available.")),
                 List.of("items", "page", "size", "total", "totalPages", "hasNext"));
+    }
+
+    static Map<String, Object> contentOutputSchema(Map<String, Object> itemSchema) {
+        return objectSchema(
+                map(
+                        "item", described(itemSchema, "Content item metadata and publication state."),
+                        "content", described(
+                                objectSchema(
+                                        map(
+                                                "snapshotName",
+                                                        described(
+                                                                nullableOutputStringSchema(),
+                                                                "Content snapshot metadata.name."),
+                                                "rawType",
+                                                        described(
+                                                                nullableOutputStringSchema(),
+                                                                "Format identifier of the raw content."),
+                                                "raw",
+                                                        described(
+                                                                nullableOutputStringSchema(),
+                                                                "Raw content when requested by format."),
+                                                "rendered",
+                                                        described(
+                                                                nullableOutputStringSchema(),
+                                                                "Rendered HTML content when requested by format.")),
+                                        List.of("snapshotName", "rawType")),
+                                "Content loaded from the selected snapshot."),
+                        "truncated",
+                                described(
+                                        booleanSchema(),
+                                        "Whether raw or rendered content was shortened to the response limit.")),
+                List.of("item", "content", "truncated"));
+    }
+
+    static Map<String, Object> described(Map<String, Object> schema, String description) {
+        var result = new LinkedHashMap<>(schema);
+        result.put("description", description);
+        return result;
+    }
+
+    static Map<String, Object> nullableOutputStringSchema() {
+        return Map.of("type", List.of("string", "null"));
+    }
+
+    static Map<String, Object> outputIntegerSchema() {
+        return Map.of("type", "integer");
+    }
+
+    static Map<String, Object> outputArraySchema(Map<String, Object> items) {
+        return map("type", "array", "items", items);
     }
 
     static Map<String, Object> stringSchema() {

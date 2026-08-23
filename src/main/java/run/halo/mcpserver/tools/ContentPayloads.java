@@ -12,11 +12,185 @@ import run.halo.app.core.extension.content.Post;
 import run.halo.app.core.extension.content.SinglePage;
 import run.halo.app.core.extension.content.Tag;
 import run.halo.app.extension.ListResult;
+import run.halo.app.extension.Metadata;
 import run.halo.app.extension.MetadataOperator;
+import run.halo.app.extension.Ref;
 
 final class ContentPayloads {
 
     private ContentPayloads() {}
+
+    static Map<String, Object> postSchema() {
+        return ToolSupport.objectSchema(
+                map(
+                        "name", halo(Metadata.class, "name"),
+                        "title", halo(Post.PostSpec.class, "title"),
+                        "slug", halo(Post.PostSpec.class, "slug"),
+                        "excerpt", halo(Post.PostStatus.class, "excerpt"),
+                        "published",
+                                ToolSupport.described(
+                                        ToolSupport.booleanSchema(), "Whether the post is currently published."),
+                        "publishRequested",
+                                describedHalo(
+                                        Post.PostSpec.class,
+                                        "publish",
+                                        "Whether publication is requested for the post."),
+                        "recycled",
+                                describedHalo(
+                                        Post.PostSpec.class,
+                                        "deleted",
+                                        "Whether the post is currently in the recycle bin."),
+                        "visible", halo(Post.PostSpec.class, "visible"),
+                        "owner", halo(Post.PostSpec.class, "owner"),
+                        "categories", halo(Post.PostSpec.class, "categories"),
+                        "tags", halo(Post.PostSpec.class, "tags"),
+                        "permalink", halo(Post.PostStatus.class, "permalink"),
+                        "headSnapshot", halo(Post.PostSpec.class, "headSnapshot"),
+                        "releaseSnapshot", halo(Post.PostSpec.class, "releaseSnapshot"),
+                        "baseSnapshot", halo(Post.PostSpec.class, "baseSnapshot"),
+                        "version", halo(Metadata.class, "version"),
+                        "creationTimestamp", halo(Metadata.class, "creationTimestamp"),
+                        "updateTimestamp",
+                                describedHalo(
+                                        Post.PostStatus.class,
+                                        "lastModifyTime",
+                                        "Last modification time of the released post content.")),
+                List.of("published", "publishRequested", "recycled", "categories", "tags"));
+    }
+
+    static Map<String, Object> singlePageSchema() {
+        return ToolSupport.objectSchema(
+                map(
+                        "name", halo(Metadata.class, "name"),
+                        "title", halo(SinglePage.SinglePageSpec.class, "title"),
+                        "slug", halo(SinglePage.SinglePageSpec.class, "slug"),
+                        "excerpt", halo(Post.PostStatus.class, "excerpt"),
+                        "published",
+                                ToolSupport.described(
+                                        ToolSupport.booleanSchema(),
+                                        "Whether the single page is currently published."),
+                        "publishRequested",
+                                describedHalo(
+                                        SinglePage.SinglePageSpec.class,
+                                        "publish",
+                                        "Whether publication is requested for the single page."),
+                        "recycled",
+                                describedHalo(
+                                        SinglePage.SinglePageSpec.class,
+                                        "deleted",
+                                        "Whether the single page is currently in the recycle bin."),
+                        "visible", halo(SinglePage.SinglePageSpec.class, "visible"),
+                        "owner", halo(SinglePage.SinglePageSpec.class, "owner"),
+                        "permalink", halo(Post.PostStatus.class, "permalink"),
+                        "headSnapshot", halo(SinglePage.SinglePageSpec.class, "headSnapshot"),
+                        "releaseSnapshot", halo(SinglePage.SinglePageSpec.class, "releaseSnapshot"),
+                        "baseSnapshot", halo(SinglePage.SinglePageSpec.class, "baseSnapshot"),
+                        "version", halo(Metadata.class, "version"),
+                        "creationTimestamp", halo(Metadata.class, "creationTimestamp"),
+                        "updateTimestamp",
+                                describedHalo(
+                                        Post.PostStatus.class,
+                                        "lastModifyTime",
+                                        "Last modification time of the released single page content.")),
+                List.of("published", "publishRequested", "recycled"));
+    }
+
+    static Map<String, Object> categorySchema() {
+        return ToolSupport.objectSchema(
+                map(
+                        "name", halo(Metadata.class, "name"),
+                        "displayName", halo(Category.CategorySpec.class, "displayName"),
+                        "slug", halo(Category.CategorySpec.class, "slug"),
+                        "description", halo(Category.CategorySpec.class, "description"),
+                        "parent", halo(Category.CategorySpec.class, "parent"),
+                        "priority", halo(Category.CategorySpec.class, "priority"),
+                        "hideFromList", halo(Category.CategorySpec.class, "hideFromList"),
+                        "permalink", halo(Category.CategoryStatus.class, "permalink"),
+                        "postCount", halo(Category.CategoryStatus.class, "postCount"),
+                        "visiblePostCount", halo(Category.CategoryStatus.class, "visiblePostCount"),
+                        "version", halo(Metadata.class, "version")),
+                List.of("hideFromList"));
+    }
+
+    static Map<String, Object> tagSchema() {
+        return ToolSupport.objectSchema(
+                map(
+                        "name", halo(Metadata.class, "name"),
+                        "displayName", halo(Tag.TagSpec.class, "displayName"),
+                        "slug", halo(Tag.TagSpec.class, "slug"),
+                        "description", halo(Tag.TagSpec.class, "description"),
+                        "color", halo(Tag.TagSpec.class, "color"),
+                        "permalink", halo(Tag.TagStatus.class, "permalink"),
+                        "postCount", halo(Tag.TagStatus.class, "postCount"),
+                        "visiblePostCount", halo(Tag.TagStatus.class, "visiblePostCount"),
+                        "version", halo(Metadata.class, "version")),
+                List.of());
+    }
+
+    static Map<String, Object> commentSchema() {
+        return ToolSupport.objectSchema(
+                map(
+                        "name", halo(Metadata.class, "name"),
+                        "raw", halo(Comment.BaseCommentSpec.class, "raw"),
+                        "content", halo(Comment.BaseCommentSpec.class, "content"),
+                        "approved", halo(Comment.BaseCommentSpec.class, "approved"),
+                        "approvedTime", halo(Comment.BaseCommentSpec.class, "approvedTime"),
+                        "hidden", halo(Comment.BaseCommentSpec.class, "hidden"),
+                        "top", halo(Comment.BaseCommentSpec.class, "top"),
+                        "ownerKind",
+                                describedHalo(
+                                        Comment.CommentOwner.class,
+                                        "kind",
+                                        "Identity kind of the comment owner. Built-in values are User and Email."),
+                        "ownerName",
+                                describedHalo(
+                                        Comment.CommentOwner.class,
+                                        "name",
+                                        "Comment owner identifier; User owners use User metadata.name."),
+                        "ownerDisplayName",
+                                describedHalo(
+                                        Comment.CommentOwner.class,
+                                        "displayName",
+                                        "Display name shown for the comment owner."),
+                        "subjectGroup",
+                                describedHalo(Ref.class, "group", "Extension group of the comment subject."),
+                        "subjectKind",
+                                describedHalo(Ref.class, "kind", "Extension kind of the comment subject."),
+                        "subjectName",
+                                describedHalo(Ref.class, "name", "Extension metadata.name of the comment subject."),
+                        "creationTime",
+                                describedHalo(
+                                        Comment.BaseCommentSpec.class,
+                                        "creationTime",
+                                        "Comment creation time, falling back to metadata.creationTimestamp."),
+                        "version", halo(Metadata.class, "version")),
+                List.of("approved", "hidden", "top"));
+    }
+
+    static Map<String, Object> attachmentSchema() {
+        return ToolSupport.objectSchema(
+                map(
+                        "name", halo(Metadata.class, "name"),
+                        "displayName", halo(Attachment.AttachmentSpec.class, "displayName"),
+                        "groupName", halo(Attachment.AttachmentSpec.class, "groupName"),
+                        "policyName", halo(Attachment.AttachmentSpec.class, "policyName"),
+                        "ownerName", halo(Attachment.AttachmentSpec.class, "ownerName"),
+                        "mediaType", halo(Attachment.AttachmentSpec.class, "mediaType"),
+                        "size", halo(Attachment.AttachmentSpec.class, "size"),
+                        "permalink", halo(Attachment.AttachmentStatus.class, "permalink"),
+                        "thumbnails", halo(Attachment.AttachmentStatus.class, "thumbnails"),
+                        "version", halo(Metadata.class, "version")),
+                List.of());
+    }
+
+    private static Map<String, Object> halo(Class<?> owner, String name) {
+        return HaloSchemaProperties.property(owner, name);
+    }
+
+    private static Map<String, Object> describedHalo(
+            Class<?> owner, String name, String description) {
+        return ToolSupport.described(halo(owner, name), description);
+    }
 
     static Map<String, Object> post(Post post) {
         var spec = post.getSpec();

@@ -120,7 +120,7 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                                 "page", integerSchema(1, null, 1),
                                 "size", integerSchema(1, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE)),
                         List.of()),
-                pageOutputSchema(),
+                pageOutputSchema(ContentPayloads.attachmentSchema()),
                 READ_ONLY,
                 this::list);
     }
@@ -134,7 +134,7 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                 "读取指定附件的文件信息、存储策略和访问地址。",
                 "ATTACHMENT",
                 objectSchema(Map.of("name", stringSchema()), List.of("name")),
-                permissiveObjectSchema(),
+                ContentPayloads.attachmentSchema(),
                 READ_ONLY,
                 this::get);
     }
@@ -155,7 +155,7 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                                 "mediaType", stringSchema(),
                                 "contentBase64", stringSchema()),
                         List.of("filename", "policyName", "contentBase64")),
-                permissiveObjectSchema(),
+                ContentPayloads.attachmentSchema(),
                 CREATE,
                 this::upload);
     }
@@ -171,7 +171,7 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                 objectSchema(
                         map("name", stringSchema(), "expectedVersion", integerSchema()),
                         List.of("name")),
-                permissiveObjectSchema(),
+                ContentPayloads.attachmentSchema(),
                 DESTRUCTIVE,
                 this::delete);
     }

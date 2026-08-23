@@ -44,7 +44,7 @@ class TagTools extends ToolSupport implements ToolGroup {
                                 "size", integerSchema(1, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE),
                                 "keyword", stringSchema()),
                         List.of()),
-                pageOutputSchema(),
+                pageOutputSchema(ContentPayloads.tagSchema()),
                 READ_ONLY,
                 this::list));
     }

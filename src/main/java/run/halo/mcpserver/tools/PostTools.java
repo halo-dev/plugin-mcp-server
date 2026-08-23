@@ -185,7 +185,7 @@ class PostTools extends ToolSupport implements ToolGroup {
                                 "published", booleanSchema(),
                                 "recycled", booleanSchema(false)),
                         List.of()),
-                pageOutputSchema(),
+                pageOutputSchema(ContentPayloads.postSchema()),
                 READ_ONLY,
                 this::list);
     }
@@ -204,7 +204,7 @@ class PostTools extends ToolSupport implements ToolGroup {
                                 "version", enumSchema(ContentVersion.class, ContentVersion.HEAD.name()),
                                 "format", enumSchema(ContentFormat.class, ContentFormat.RAW.name())),
                         List.of("name")),
-                permissiveObjectSchema(),
+                contentOutputSchema(ContentPayloads.postSchema()),
                 READ_ONLY,
                 this::get);
     }
@@ -231,7 +231,7 @@ class PostTools extends ToolSupport implements ToolGroup {
                                 "categories", arrayStringSchema(),
                                 "tags", arrayStringSchema()),
                         List.of("name", "title", "raw")),
-                permissiveObjectSchema(),
+                ContentPayloads.postSchema(),
                 CREATE,
                 this::create);
     }
@@ -257,7 +257,7 @@ class PostTools extends ToolSupport implements ToolGroup {
                                 "categories", arrayStringSchema(),
                                 "tags", arrayStringSchema()),
                         List.of("name", "raw")),
-                permissiveObjectSchema(),
+                ContentPayloads.postSchema(),
                 UPDATE,
                 this::update);
     }
@@ -280,7 +280,7 @@ class PostTools extends ToolSupport implements ToolGroup {
                 objectSchema(
                         map("name", stringSchema()),
                         List.of("name")),
-                permissiveObjectSchema(),
+                ContentPayloads.postSchema(),
                 destructive ? DESTRUCTIVE : UPDATE,
                 handler);
     }
