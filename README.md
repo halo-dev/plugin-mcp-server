@@ -60,24 +60,26 @@ normally omit that header.
 | `halo_search_content`                                                                  | Search posts and single pages.                                    |
 | `halo_list_posts` / `halo_get_post`                                                    | List posts or read HEAD/RELEASE content.                          |
 | `halo_create_post` / `halo_update_post`                                                | Create or update a post and its content snapshots.                |
-| `halo_publish_post` / `halo_unpublish_post` / `halo_recycle_post`                      | Change a post's publication or recycle state.                     |
+| `halo_set_post_publish_state` / `halo_recycle_post`                                   | Set a post's publication state or recycle it.                     |
 | `halo_list_single_pages` / `halo_get_single_page`                                      | List single pages or read HEAD/RELEASE content.                   |
 | `halo_create_single_page` / `halo_update_single_page`                                  | Create or update a single page and its content snapshots.         |
-| `halo_publish_single_page` / `halo_unpublish_single_page` / `halo_recycle_single_page` | Change a page's publication or recycle state.                     |
-| `halo_list_categories` / `halo_list_tags`                                              | List post categories or tags independently.                       |
-| `halo_list_comments`                                                                   | List comments with moderation and keyword filters.                |
-| `halo_approve_comment` / `halo_unapprove_comment` / `halo_delete_comment`              | Moderate or delete comments.                                      |
+| `halo_set_single_page_publish_state` / `halo_recycle_single_page`                     | Set a page's publication state or recycle it.                     |
+| `halo_list_categories` / `halo_create_category` / `halo_update_category`              | List, create, or update post categories.                          |
+| `halo_list_tags` / `halo_create_tag` / `halo_update_tag`                              | List, create, or update post tags.                                |
+| `halo_list_comments` / `halo_set_comment_approval` / `halo_delete_comment`            | List, moderate, or delete comments.                               |
+| `halo_list_comment_replies` / `halo_set_reply_approval` / `halo_delete_reply`         | List, moderate, or delete comment replies.                        |
 | `halo_list_attachments` / `halo_get_attachment`                                        | List or inspect attachments.                                      |
 | `halo_upload_attachment` / `halo_delete_attachment`                                    | Upload a Base64 attachment (up to 8 MiB) or delete an attachment. |
 
 Native and plugin-contributed tools are exposed directly in `tools/list`; there
 are no discovery or execution gateway tools. The response contains only the
-tools selected for the current key. Comment moderation and attachment deletion
-accept an optional `expectedVersion`; a stale version returns `CONFLICT` instead
-of overwriting a newer resource. Post and single-page writes instead re-read and
-retry the latest resource because Halo reconcilers may advance their metadata
-versions independently. Attachment uploads intentionally accept inline Base64
-only, avoiding server-side URL fetching and SSRF exposure.
+tools selected for the current key. Category and tag updates, comment and reply
+moderation, and attachment deletion accept an optional `expectedVersion`; a stale
+version returns `CONFLICT` instead of overwriting a newer resource. Post and
+single-page writes instead re-read and retry the latest resource because Halo
+reconcilers may advance their metadata versions independently. Attachment uploads
+intentionally accept inline Base64 only, avoiding server-side URL fetching and
+SSRF exposure.
 
 ## Plugin integration
 

@@ -49,7 +49,7 @@ class HaloMcpServer {
                 .jsonMapper(mcpJsonMapper)
                 .jsonSchemaValidator(new DefaultJsonSchemaValidator(jsonMapper))
                 .serverInfo("halo-mcp-server", pluginContext.getVersion())
-                .instructions("Manage posts, single pages, comments, and attachments, and read categories and tags from this Halo site.")
+                .instructions("Manage posts, single pages, categories, tags, comments, replies, and attachments on this Halo site.")
                 .capabilities(McpSchema.ServerCapabilities.builder()
                         .tools(false)
                         .build())

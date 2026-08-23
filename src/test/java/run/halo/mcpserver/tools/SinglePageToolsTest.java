@@ -38,8 +38,8 @@ class SinglePageToolsTest {
         when(client.update(latestPage)).thenReturn(Mono.just(latestPage));
         var tools = new SinglePageTools(client, new ContentSnapshots(client), authorization);
 
-        StepVerifier.create(tools.publish(Map.of("name", "about")))
-                .assertNext(payload -> assertThat(payload.summary()).isEqualTo("Published single page about"))
+        StepVerifier.create(tools.setPublishState(Map.of("name", "about", "publish", false)))
+                .assertNext(payload -> assertThat(payload.summary()).isEqualTo("Unpublished single page about"))
                 .verifyComplete();
 
         verify(client, times(2)).fetch(SinglePage.class, "about");
@@ -50,7 +50,7 @@ class SinglePageToolsTest {
     void doesNotAdvertiseReconcilerManagedVersionAsPagePrecondition() {
         var tools = new SinglePageTools(client, new ContentSnapshots(client), authorization);
         var publishTool = tools.tools().stream()
-                .filter(tool -> tool.specification().tool().name().equals(SinglePageTools.PUBLISH_PAGE))
+                .filter(tool -> tool.specification().tool().name().equals(SinglePageTools.SET_PUBLISH_STATE))
                 .findFirst()
                 .orElseThrow();
         var properties = (Map<?, ?>) publishTool.specification().tool().inputSchema().get("properties");

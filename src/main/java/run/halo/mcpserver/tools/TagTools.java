@@ -16,11 +16,14 @@ import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.PageRequestImpl;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.mcpserver.McpAuthorization;
+import run.halo.mcpserver.api.McpToolException;
 
 @Component
 class TagTools extends ToolSupport implements ToolGroup {
 
     static final String LIST = "halo_list_tags";
+    static final String CREATE = "halo_create_tag";
+    static final String UPDATE = "halo_update_tag";
 
     private final ReactiveExtensionClient client;
 
@@ -46,7 +49,7 @@ class TagTools extends ToolSupport implements ToolGroup {
                         List.of()),
                 pageOutputSchema(ContentPayloads.tagSchema()),
                 READ_ONLY,
-                this::list));
+                this::list), createTool(), updateTool());
     }
 
     Mono<ToolPayload> list(Map<String, Object> arguments) {
@@ -62,5 +65,93 @@ class TagTools extends ToolSupport implements ToolGroup {
         return client.listBy(Tag.class, builder.build(), pageable).map(result -> payload(
                 ContentPayloads.page(result, ContentPayloads::tag),
                 "Listed " + result.getItems().size() + " tags"));
+    }
+
+    Mono<ToolPayload> create(Map<String, Object> arguments) {
+        var name = resourceName(arguments, "name");
+        var tag = new Tag();
+        tag.setMetadata(metadata(name));
+        tag.setSpec(new Tag.TagSpec());
+        apply(tag.getSpec(), arguments, name, true);
+        return client.create(tag)
+                .map(created -> payload(ContentPayloads.tag(created), "Created tag " + name));
+    }
+
+    Mono<ToolPayload> update(Map<String, Object> arguments) {
+        var name = resourceName(arguments, "name");
+        var expectedVersion = optionalLong(arguments, "expectedVersion");
+        return client.fetch(Tag.class, name)
+                .switchIfEmpty(notFound("Tag", name))
+                .flatMap(tag -> checkVersion(tag.getMetadata().getVersion(), expectedVersion)
+                        .then(Mono.defer(() -> {
+                            apply(tag.getSpec(), arguments, name, false);
+                            return client.update(tag);
+                        })))
+                .map(updated -> payload(ContentPayloads.tag(updated), "Updated tag " + name));
+    }
+
+    private BuiltInTool createTool() {
+        return tool(
+                CREATE,
+                "Create Halo tag",
+                "Create a post tag with display and visual metadata.",
+                "创建标签",
+                "创建文章标签，可设置描述、颜色和封面。",
+                "TAG",
+                objectSchema(tagProperties(false), List.of("name", "displayName")),
+                ContentPayloads.tagSchema(),
+                ToolSupport.CREATE,
+                this::create);
+    }
+
+    private BuiltInTool updateTool() {
+        return tool(
+                UPDATE,
+                "Update Halo tag",
+                "Update tag display and visual metadata.",
+                "更新标签",
+                "更新文章标签的名称、别名、描述、颜色和封面。",
+                "TAG",
+                objectSchema(tagProperties(true), List.of("name")),
+                ContentPayloads.tagSchema(),
+                ToolSupport.UPDATE,
+                this::update);
+    }
+
+    private static Map<String, Object> tagProperties(boolean includeVersion) {
+        var properties = map(
+                "name", stringSchema(),
+                "displayName", stringSchema(),
+                "slug", stringSchema(),
+                "description", nullableStringSchema(),
+                "color", nullableStringSchema(),
+                "cover", nullableStringSchema());
+        if (includeVersion) {
+            properties.put("expectedVersion", integerSchema());
+        }
+        return properties;
+    }
+
+    private static void apply(Tag.TagSpec spec, Map<String, Object> arguments, String name, boolean create) {
+        if (create || arguments.containsKey("displayName")) {
+            spec.setDisplayName(requiredString(arguments, "displayName"));
+        }
+        if (create || arguments.containsKey("slug")) {
+            spec.setSlug(optionalString(arguments, "slug", name));
+        }
+        if (arguments.containsKey("description")) {
+            spec.setDescription(nullableString(arguments, "description"));
+        }
+        if (arguments.containsKey("color")) {
+            var color = nullableString(arguments, "color");
+            if (color != null && !color.matches("^#(?:[a-fA-F0-9]{3}|[a-fA-F0-9]{6})$")) {
+                throw new McpToolException(
+                        "INVALID_ARGUMENT", "color must be a 3- or 6-digit hex color");
+            }
+            spec.setColor(color);
+        }
+        if (arguments.containsKey("cover")) {
+            spec.setCover(nullableString(arguments, "cover"));
+        }
     }
 }
