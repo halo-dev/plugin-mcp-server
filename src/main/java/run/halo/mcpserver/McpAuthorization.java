@@ -45,6 +45,10 @@ public class McpAuthorization {
         return authentication().map(McpKeyAuthenticationToken::getName);
     }
 
+    public Mono<String> keyId() {
+        return authentication().map(McpKeyAuthenticationToken::keyId);
+    }
+
     Mono<Set<String>> allowedTools() {
         return authentication().map(McpKeyAuthenticationToken::allowedTools);
     }

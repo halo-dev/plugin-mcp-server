@@ -8,6 +8,7 @@ import static run.halo.app.extension.index.query.Queries.or;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -28,10 +29,15 @@ class CategoryTools extends ToolSupport implements ToolGroup {
     static final String UPDATE = "halo_update_category";
 
     private final ReactiveExtensionClient client;
+    private final CategoryParentMutationCoordinator parentMutationCoordinator;
 
-    CategoryTools(ReactiveExtensionClient client, McpAuthorization authorization) {
+    CategoryTools(
+            ReactiveExtensionClient client,
+            McpAuthorization authorization,
+            CategoryParentMutationCoordinator parentMutationCoordinator) {
         super(authorization);
         this.client = client;
+        this.parentMutationCoordinator = parentMutationCoordinator;
     }
 
     @Override
@@ -79,28 +85,35 @@ class CategoryTools extends ToolSupport implements ToolGroup {
     Mono<ToolPayload> create(Map<String, Object> arguments) {
         var name = resourceName(arguments, "name");
         var parent = parent(arguments);
-        return validateParent(name, parent).then(Mono.defer(() -> {
-            var category = new Category();
-            category.setMetadata(metadata(name));
-            category.setSpec(new Category.CategorySpec());
-            apply(category.getSpec(), arguments, name, true);
-            return client.create(category);
-        })).map(category -> payload(ContentPayloads.category(category), "Created category " + name));
+        Supplier<Mono<ToolPayload>> create = () -> validateParent(name, parent)
+                .then(Mono.defer(() -> {
+                    var category = new Category();
+                    category.setMetadata(metadata(name));
+                    category.setSpec(new Category.CategorySpec());
+                    apply(category.getSpec(), arguments, name, true);
+                    return client.create(category);
+                }))
+                .map(category -> payload(ContentPayloads.category(category), "Created category " + name));
+        return parent == null ? create.get() : parentMutationCoordinator.serialize(create);
     }
 
     Mono<ToolPayload> update(Map<String, Object> arguments) {
         var name = resourceName(arguments, "name");
         var expectedVersion = optionalLong(arguments, "expectedVersion");
         var parent = arguments.containsKey("parent") ? parent(arguments) : null;
-        var validation = arguments.containsKey("parent") ? validateParent(name, parent) : Mono.<Void>empty();
-        return validation.then(Mono.defer(() -> client.fetch(Category.class, name)
-                        .switchIfEmpty(notFound("Category", name))
-                        .flatMap(category -> checkVersion(category.getMetadata().getVersion(), expectedVersion)
-                                .then(Mono.defer(() -> {
-                                    apply(category.getSpec(), arguments, name, false);
-                                    return client.update(category);
-                                })))))
+        Supplier<Mono<ToolPayload>> update = () -> client.fetch(Category.class, name)
+                .switchIfEmpty(notFound("Category", name))
+                .flatMap(category -> checkVersion(category.getMetadata().getVersion(), expectedVersion)
+                        .then(Mono.defer(() -> {
+                            apply(category.getSpec(), arguments, name, false);
+                            return client.update(category);
+                        })))
                 .map(category -> payload(ContentPayloads.category(category), "Updated category " + name));
+        if (!arguments.containsKey("parent")) {
+            return update.get();
+        }
+        return parentMutationCoordinator.serialize(
+                () -> validateParent(name, parent).then(Mono.defer(update)));
     }
 
     private BuiltInTool createTool() {

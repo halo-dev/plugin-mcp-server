@@ -55,7 +55,10 @@ Requests carrying an MCP Bearer token are limited to 600 per minute per observed
 network source before key validation. This is an overall source-level ceiling and
 includes successful requests. Tool calls are additionally limited to 120 per
 minute for each access-key and tool pair. Limits are process-local and therefore
-apply independently to each Halo replica.
+apply independently to each Halo replica. Authenticated request processing has a
+30-second deadline and is limited to 8 concurrent requests per key and 64 per
+plugin instance. A timed-out request returns HTTP 504; a concurrency rejection
+returns HTTP 429 with `Retry-After: 1`.
 
 Use a dedicated, least-privilege key. Do not put keys in URLs, configuration
 files committed to source control, shell history, or logs.

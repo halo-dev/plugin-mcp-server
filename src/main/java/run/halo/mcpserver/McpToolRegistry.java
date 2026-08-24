@@ -54,8 +54,8 @@ class McpToolRegistry {
                         .filter(tool -> tool.definition().name().equals(name))
                         .findFirst())
                 .flatMap(tool -> tool
-                        .map(value -> gateway(() -> authorization.require(name)
-                                        .then(execute(value.definition(), arguments)))
+                        .map(value -> gateway(() -> authorization.authorize(
+                                        name, () -> execute(value.definition(), arguments)))
                                 .map(Optional::of))
                         .orElseGet(() -> Mono.just(Optional.empty())));
     }

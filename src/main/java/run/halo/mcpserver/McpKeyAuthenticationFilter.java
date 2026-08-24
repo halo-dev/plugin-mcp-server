@@ -4,6 +4,8 @@ import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.http.HttpHeaders.RETRY_AFTER;
 import static org.springframework.http.HttpHeaders.WWW_AUTHENTICATE;
 
+import java.time.Duration;
+import java.util.concurrent.TimeoutException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -20,19 +22,24 @@ import run.halo.app.security.BeforeSecurityWebFilter;
 class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
 
     static final String MCP_PATH = "/mcp";
+    static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
     private static final String BEARER_SCHEME = "Bearer ";
+    private static final String CONCURRENCY_RETRY_AFTER_SECONDS = "1";
 
     private final McpAccessKeyService accessKeyService;
     private final McpRequestRateLimiter rateLimiter;
+    private final McpRequestConcurrencyLimiter concurrencyLimiter;
     private final WebHandler mcpHandler;
     private final java.util.Set<String> protocolVersions;
 
     McpKeyAuthenticationFilter(
             McpAccessKeyService accessKeyService,
             McpRequestRateLimiter rateLimiter,
+            McpRequestConcurrencyLimiter concurrencyLimiter,
             HaloMcpServer mcpServer) {
         this.accessKeyService = accessKeyService;
         this.rateLimiter = rateLimiter;
+        this.concurrencyLimiter = concurrencyLimiter;
         this.mcpHandler = RouterFunctions.toWebHandler(mcpServer.routerFunction());
         this.protocolVersions = java.util.Set.copyOf(mcpServer.protocolVersions());
     }
@@ -56,16 +63,29 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
                     if (!hasSupportedProtocolVersion(exchange)) {
                         return badRequest(exchange).thenReturn(true);
                     }
-                    var request = exchange.getRequest().mutate()
-                            .headers(headers -> headers.remove(AUTHORIZATION))
-                            .build();
-                    return mcpHandler.handle(exchange.mutate().request(request).build())
-                            .contextWrite(org.springframework.security.core.context.ReactiveSecurityContextHolder
-                                    .withAuthentication(authentication))
+                    var permit = concurrencyLimiter.tryAcquire(authentication.keyId());
+                    if (permit.isEmpty()) {
+                        return atCapacity(exchange).thenReturn(true);
+                    }
+                    return Mono.using(
+                                    permit::orElseThrow,
+                                    ignored -> {
+                                        var request = exchange.getRequest().mutate()
+                                                .headers(headers -> headers.remove(AUTHORIZATION))
+                                                .build();
+                                        return mcpHandler.handle(
+                                                        exchange.mutate().request(request).build())
+                                                .contextWrite(org.springframework.security.core.context
+                                                        .ReactiveSecurityContextHolder
+                                                        .withAuthentication(authentication));
+                                    },
+                                    McpRequestConcurrencyLimiter.Permit::close)
                             .thenReturn(true);
                 })
                 .defaultIfEmpty(false)
-                .flatMap(handled -> handled ? Mono.empty() : unauthorized(exchange));
+                .flatMap(handled -> handled ? Mono.empty() : unauthorized(exchange))
+                .timeout(REQUEST_TIMEOUT)
+                .onErrorResume(TimeoutException.class, ignored -> requestTimedOut(exchange));
     }
 
     private static boolean isMcpPath(String path) {
@@ -102,6 +122,18 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
         exchange.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
         exchange.getResponse().getHeaders().set(
                 RETRY_AFTER, String.valueOf(McpRequestRateLimiter.RETRY_AFTER_SECONDS));
+        return exchange.getResponse().setComplete();
+    }
+
+    private static Mono<Void> atCapacity(ServerWebExchange exchange) {
+        exchange.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
+        exchange.getResponse().getHeaders().set(
+                RETRY_AFTER, CONCURRENCY_RETRY_AFTER_SECONDS);
+        return exchange.getResponse().setComplete();
+    }
+
+    private static Mono<Void> requestTimedOut(ServerWebExchange exchange) {
+        exchange.getResponse().setStatusCode(HttpStatus.GATEWAY_TIMEOUT);
         return exchange.getResponse().setComplete();
     }
 }

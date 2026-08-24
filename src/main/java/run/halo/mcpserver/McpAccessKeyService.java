@@ -4,6 +4,7 @@ import java.net.InetSocketAddress;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -123,18 +124,32 @@ class McpAccessKeyService {
         }
         return client.fetch(McpAccessKey.class, parsed.id())
                 .filter(this::active)
-                .flatMap(accessKey -> matches(parsed.secret(), accessKey.getSpec().getKeyHash())
-                        .filter(Boolean::booleanValue)
-                        .filter(ignored -> McpIpAllowlist.allows(
-                                accessKey.getSpec().getAllowedIpRanges(), remoteAddress))
-                        .flatMap(ignored -> touch(accessKey).thenReturn(new McpKeyAuthenticationToken(
-                                parsed.id(),
-                                accessKey.getSpec().getDisplayName(),
-                                accessKey.getSpec().getKeyPrefix(),
-                                accessKey.getSpec().getOwnerName(),
-                                accessKey.getSpec().getAllowedTools() == null
-                                        ? Set.of()
-                                        : accessKey.getSpec().getAllowedTools()))));
+                .flatMap(accessKey -> {
+                    var expected = AuthenticationState.from(accessKey);
+                    return matches(parsed.secret(), expected.keyHash())
+                            .filter(Boolean::booleanValue)
+                            .filter(ignored -> McpIpAllowlist.allows(
+                                    expected.allowedIpRanges(), remoteAddress))
+                            .flatMap(ignored -> touch(accessKey)
+                                    .then(revalidate(parsed.id(), expected, remoteAddress)))
+                            .map(current -> new McpKeyAuthenticationToken(
+                                    parsed.id(),
+                                    current.getSpec().getDisplayName(),
+                                    current.getSpec().getKeyPrefix(),
+                                    current.getSpec().getOwnerName(),
+                                    current.getSpec().getAllowedTools() == null
+                                            ? Set.of()
+                                            : current.getSpec().getAllowedTools()));
+                });
+    }
+
+    private Mono<McpAccessKey> revalidate(
+            String id, AuthenticationState expected, InetSocketAddress remoteAddress) {
+        return client.fetch(McpAccessKey.class, id)
+                .filter(this::active)
+                .filter(accessKey -> expected.equals(AuthenticationState.from(accessKey)))
+                .filter(accessKey -> McpIpAllowlist.allows(
+                        accessKey.getSpec().getAllowedIpRanges(), remoteAddress));
     }
 
     private Mono<McpAccessKey> get(String id) {
@@ -232,6 +247,32 @@ class McpAccessKeyService {
     }
 
     record CreatedKey(McpAccessKey accessKey, String token) {}
+
+    private record AuthenticationState(
+            String keyHash,
+            String ownerName,
+            boolean enabled,
+            Instant expiresAt,
+            Set<String> allowedTools,
+            Set<String> allowedIpRanges) {
+
+        private static AuthenticationState from(McpAccessKey accessKey) {
+            var spec = accessKey.getSpec();
+            return new AuthenticationState(
+                    spec.getKeyHash(),
+                    spec.getOwnerName(),
+                    spec.isEnabled(),
+                    spec.getExpiresAt(),
+                    immutableSet(spec.getAllowedTools()),
+                    immutableSet(spec.getAllowedIpRanges()));
+        }
+
+        private static Set<String> immutableSet(Set<String> values) {
+            return values == null
+                    ? Set.of()
+                    : Collections.unmodifiableSet(new LinkedHashSet<>(values));
+        }
+    }
 
     private record ParsedKey(String id, String secret) {}
 

@@ -3,14 +3,16 @@ package run.halo.mcpserver.tools;
 import static org.springframework.data.domain.Sort.Order.asc;
 import static org.springframework.data.domain.Sort.Order.desc;
 
+import java.io.InputStream;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.app.core.extension.attachment.Attachment;
 import run.halo.app.core.extension.service.AttachmentService;
@@ -30,17 +32,22 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
     static final String DELETE = "halo_delete_attachment";
 
     private static final int MAX_CONTENT_BYTES = 8 * 1024 * 1024;
+    private static final int MAX_ENCODED_CHARACTERS = 4 * ((MAX_CONTENT_BYTES + 2) / 3);
+    private static final int DECODE_BUFFER_BYTES = 64 * 1024;
 
     private final ReactiveExtensionClient client;
     private final AttachmentService attachmentService;
+    private final AttachmentUploadLimiter uploadLimiter;
 
     AttachmentTools(
             ReactiveExtensionClient client,
             AttachmentService attachmentService,
-            McpAuthorization authorization) {
+            McpAuthorization authorization,
+            AttachmentUploadLimiter uploadLimiter) {
         super(authorization);
         this.client = client;
         this.attachmentService = attachmentService;
+        this.uploadLimiter = uploadLimiter;
     }
 
     @Override
@@ -71,27 +78,43 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
         var policyName = requiredString(arguments, "policyName");
         var groupName = optionalString(arguments, "groupName", null);
         var encoded = requiredString(arguments, "contentBase64");
-        if (encoded.length() > 12_000_000) {
+        if (encoded.length() > MAX_ENCODED_CHARACTERS) {
             throw new McpToolException("INVALID_ARGUMENT", "contentBase64 exceeds the 8 MiB limit");
         }
-        final byte[] bytes;
-        try {
-            bytes = Base64.getDecoder().decode(encoded);
-        } catch (IllegalArgumentException error) {
-            throw new McpToolException("INVALID_ARGUMENT", "contentBase64 is not valid Base64", error);
-        }
-        if (bytes.length == 0 || bytes.length > MAX_CONTENT_BYTES) {
+        var contentBytes = decodedLength(encoded);
+        if (contentBytes == 0 || contentBytes > MAX_CONTENT_BYTES) {
             throw new McpToolException(
                     "INVALID_ARGUMENT", "Attachment content must be between 1 byte and 8 MiB");
         }
-        var buffer = DefaultDataBufferFactory.sharedInstance.wrap(bytes);
+        var contentType = mediaType(arguments.get("mediaType"));
+        return authorization.keyId().flatMap(keyId -> Mono.using(
+                () -> uploadLimiter
+                        .tryAcquire(keyId, policyName, contentBytes)
+                        .orElseThrow(() -> new McpToolException(
+                                "RATE_LIMITED",
+                                "Attachment upload capacity is exhausted; retry later")),
+                ignored -> uploadReserved(
+                        policyName, groupName, filename, encoded, contentType),
+                AttachmentUploadLimiter.Permit::close));
+    }
+
+    private Mono<ToolPayload> uploadReserved(
+            String policyName,
+            String groupName,
+            String filename,
+            String encoded,
+            MediaType contentType) {
+        var content = DataBufferUtils.readInputStream(
+                () -> Base64.getDecoder().wrap(new CharSequenceInputStream(encoded)),
+                DefaultDataBufferFactory.sharedInstance,
+                DECODE_BUFFER_BYTES);
         return attachmentService
                 .upload(
                         policyName,
                         groupName,
                         filename,
-                        Flux.just(buffer),
-                        mediaType(arguments.get("mediaType")))
+                        content,
+                        contentType)
                 .switchIfEmpty(Mono.error(new McpToolException(
                         "ATTACHMENT_UNAVAILABLE", "Halo did not create the attachment")))
                 .map(attachment -> payload(ContentPayloads.attachment(attachment), "Uploaded attachment " + filename));
@@ -154,8 +177,12 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                                 "groupName", stringSchema(),
                                 "mediaType", stringSchema(),
                                 "contentBase64",
-                                        stringSchema(
-                                                "Base64-encoded file bytes; do not include a data URL prefix.")),
+                                        map(
+                                                "type", "string",
+                                                "minLength", 1,
+                                                "maxLength", MAX_ENCODED_CHARACTERS,
+                                                "description",
+                                                        "Base64-encoded file bytes; do not include a data URL prefix.")),
                         List.of("filename", "policyName", "contentBase64")),
                 ContentPayloads.attachmentSchema(),
                 CREATE,
@@ -199,5 +226,77 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                     "INVALID_ARGUMENT", "filename contains an unsafe path or is too long");
         }
         return filename;
+    }
+
+    private static int decodedLength(String encoded) {
+        var length = encoded.length();
+        var padding = 0;
+        while (padding < 2
+                && padding < length
+                && encoded.charAt(length - padding - 1) == '=') {
+            padding++;
+        }
+        var dataLength = length - padding;
+        for (var index = 0; index < dataLength; index++) {
+            if (!isBase64Character(encoded.charAt(index))) {
+                throw invalidBase64();
+            }
+        }
+        for (var index = dataLength; index < length; index++) {
+            if (encoded.charAt(index) != '=') {
+                throw invalidBase64();
+            }
+        }
+        var remainder = dataLength % 4;
+        if (remainder == 1
+                || (padding > 0
+                        && (length % 4 != 0
+                                || padding != (remainder == 2 ? 2 : remainder == 3 ? 1 : 0)))) {
+            throw invalidBase64();
+        }
+        return (dataLength / 4) * 3 + (remainder == 2 ? 1 : remainder == 3 ? 2 : 0);
+    }
+
+    private static boolean isBase64Character(char character) {
+        return character >= 'A' && character <= 'Z'
+                || character >= 'a' && character <= 'z'
+                || character >= '0' && character <= '9'
+                || character == '+'
+                || character == '/';
+    }
+
+    private static McpToolException invalidBase64() {
+        return new McpToolException("INVALID_ARGUMENT", "contentBase64 is not valid Base64");
+    }
+
+    private static final class CharSequenceInputStream extends InputStream {
+
+        private final CharSequence source;
+        private int position;
+
+        private CharSequenceInputStream(CharSequence source) {
+            this.source = source;
+        }
+
+        @Override
+        public int read() {
+            return position == source.length() ? -1 : source.charAt(position++);
+        }
+
+        @Override
+        public int read(byte[] bytes, int offset, int length) {
+            Objects.checkFromIndexSize(offset, length, bytes.length);
+            if (length == 0) {
+                return 0;
+            }
+            if (position == source.length()) {
+                return -1;
+            }
+            var count = Math.min(length, source.length() - position);
+            for (var index = 0; index < count; index++) {
+                bytes[offset + index] = (byte) source.charAt(position++);
+            }
+            return count;
+        }
     }
 }

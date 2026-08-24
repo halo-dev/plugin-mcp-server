@@ -2,15 +2,28 @@ package run.halo.mcpserver.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Base64;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.http.MediaType;
+import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import run.halo.app.core.extension.attachment.Attachment;
@@ -33,7 +46,8 @@ class AttachmentToolsTest {
 
     @Test
     void validatesAttachmentBase64BeforeUpload() {
-        var tools = new AttachmentTools(client, attachmentService, authorization);
+        var tools = new AttachmentTools(
+                client, attachmentService, authorization, new AttachmentUploadLimiter());
 
         assertThatThrownBy(() -> tools.upload(Map.of(
                         "filename", "a.txt",
@@ -41,6 +55,177 @@ class AttachmentToolsTest {
                         "contentBase64", "not-base64")))
                 .isInstanceOf(McpToolException.class)
                 .hasMessageContaining("valid Base64");
+
+        assertThatThrownBy(() -> tools.upload(Map.of(
+                        "filename", "a.txt",
+                        "policyName", "local",
+                        "contentBase64", "A".repeat(11_184_813))))
+                .isInstanceOf(McpToolException.class)
+                .hasMessageContaining("8 MiB");
+
+        verify(attachmentService, never())
+                .upload(
+                        anyString(),
+                        nullable(String.class),
+                        anyString(),
+                        ArgumentMatchers.<Flux<DataBuffer>>any(),
+                        any(MediaType.class));
+    }
+
+    @Test
+    void limitsUploadsRetainedByAStalledAttachmentBackend() {
+        when(authorization.keyId()).thenReturn(Mono.just("key-one"));
+        when(attachmentService.upload(
+                        anyString(),
+                        nullable(String.class),
+                        anyString(),
+                        ArgumentMatchers.<Flux<DataBuffer>>any(),
+                        any(MediaType.class)))
+                .thenReturn(Mono.never());
+        var tools = new AttachmentTools(
+                client,
+                attachmentService,
+                authorization,
+                new AttachmentUploadLimiter());
+        var arguments = Map.<String, Object>of(
+                "filename", "a.txt",
+                "policyName", "local",
+                "contentBase64", "YQ==");
+
+        var subscriptions = java.util.stream.IntStream.range(0, 2)
+                .mapToObj(ignored -> tools.upload(arguments).subscribe())
+                .toList();
+        try {
+            StepVerifier.create(tools.upload(arguments))
+                    .expectErrorSatisfies(error -> assertThat(error)
+                            .isInstanceOf(McpToolException.class)
+                            .extracting(value -> ((McpToolException) value).code())
+                            .isEqualTo("RATE_LIMITED"))
+                    .verify();
+            verify(attachmentService, times(2))
+                    .upload(
+                            anyString(),
+                            nullable(String.class),
+                            anyString(),
+                            ArgumentMatchers.<Flux<DataBuffer>>any(),
+                            any(MediaType.class));
+        } finally {
+            subscriptions.forEach(Disposable::dispose);
+        }
+
+        var replacement = tools.upload(arguments).subscribe();
+        try {
+            verify(attachmentService, times(3))
+                    .upload(
+                            anyString(),
+                            nullable(String.class),
+                            anyString(),
+                            ArgumentMatchers.<Flux<DataBuffer>>any(),
+                            any(MediaType.class));
+        } finally {
+            replacement.dispose();
+        }
+    }
+
+    @Test
+    void streamsTheMaximumLegitimateUploadInBoundedBuffersAndReleasesCapacity() {
+        when(authorization.keyId()).thenReturn(Mono.just("key-one"));
+        var attachment = new Attachment();
+        attachment.setMetadata(ToolSupport.metadata("attachment-one"));
+        var receivedBytes = new AtomicLong();
+        var largestBuffer = new AtomicInteger();
+        when(attachmentService.upload(
+                        anyString(),
+                        nullable(String.class),
+                        anyString(),
+                        ArgumentMatchers.<Flux<DataBuffer>>any(),
+                        any(MediaType.class)))
+                .thenAnswer(invocation -> {
+                    Flux<DataBuffer> content = invocation.getArgument(3);
+                    return content.doOnNext(buffer -> {
+                                var readableBytes = buffer.readableByteCount();
+                                receivedBytes.addAndGet(readableBytes);
+                                largestBuffer.accumulateAndGet(readableBytes, Math::max);
+                                DataBufferUtils.release(buffer);
+                            })
+                            .then(Mono.just(attachment));
+                });
+        var tools = new AttachmentTools(
+                client,
+                attachmentService,
+                authorization,
+                new AttachmentUploadLimiter(8L * 1024 * 1024, 8L * 1024 * 1024, 1, 1, 1));
+        var bytes = new byte[8 * 1024 * 1024];
+        var arguments = Map.<String, Object>of(
+                "filename", "maximum.bin",
+                "policyName", "local",
+                "contentBase64", Base64.getEncoder().encodeToString(bytes));
+
+        StepVerifier.create(tools.upload(arguments))
+                .assertNext(payload -> assertThat(payload.summary()).contains("maximum.bin"))
+                .verifyComplete();
+        StepVerifier.create(tools.upload(Map.of(
+                        "filename", "small.bin",
+                        "policyName", "local",
+                        "contentBase64", "YQ==")))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        assertThat(receivedBytes).hasValue(8L * 1024 * 1024 + 1);
+        assertThat(largestBuffer).hasValueLessThanOrEqualTo(64 * 1024);
+    }
+
+    @Test
+    void rejectsDecodedContentOverEightMiBBeforeCallingTheBackend() {
+        var tools = new AttachmentTools(
+                client, attachmentService, authorization, new AttachmentUploadLimiter());
+        var bytes = new byte[8 * 1024 * 1024 + 1];
+
+        assertThatThrownBy(() -> tools.upload(Map.of(
+                        "filename", "too-large.bin",
+                        "policyName", "local",
+                        "contentBase64", Base64.getEncoder().encodeToString(bytes))))
+                .isInstanceOf(McpToolException.class)
+                .hasMessageContaining("8 MiB");
+
+        verify(attachmentService, never())
+                .upload(
+                        anyString(),
+                        nullable(String.class),
+                        anyString(),
+                        ArgumentMatchers.<Flux<DataBuffer>>any(),
+                        any(MediaType.class));
+    }
+
+    @Test
+    void releasesUploadCapacityWhenTheBackendFails() {
+        when(authorization.keyId()).thenReturn(Mono.just("key-one"));
+        var attachment = new Attachment();
+        attachment.setMetadata(ToolSupport.metadata("attachment-one"));
+        when(attachmentService.upload(
+                        anyString(),
+                        nullable(String.class),
+                        anyString(),
+                        ArgumentMatchers.<Flux<DataBuffer>>any(),
+                        any(MediaType.class)))
+                .thenReturn(Mono.error(new IllegalStateException("storage failed")))
+                .thenReturn(Mono.just(attachment));
+        var tools = new AttachmentTools(
+                client,
+                attachmentService,
+                authorization,
+                new AttachmentUploadLimiter(1, 1, 1, 1, 1));
+        var arguments = Map.<String, Object>of(
+                "filename", "a.txt",
+                "policyName", "local",
+                "contentBase64", "YQ==");
+
+        StepVerifier.create(tools.upload(arguments))
+                .expectErrorMessage("storage failed")
+                .verify();
+        StepVerifier.create(tools.upload(arguments))
+                .expectNextCount(1)
+                .verifyComplete();
     }
 
     @Test
@@ -50,7 +235,8 @@ class AttachmentToolsTest {
         attachment.getMetadata().setVersion(1L);
         when(client.fetch(Attachment.class, "attachment-one")).thenReturn(Mono.just(attachment));
         when(client.delete(attachment)).thenReturn(Mono.just(attachment));
-        var tools = new AttachmentTools(client, attachmentService, authorization);
+        var tools = new AttachmentTools(
+                client, attachmentService, authorization, new AttachmentUploadLimiter());
 
         StepVerifier.create(tools.delete(Map.of("name", "attachment-one")))
                 .assertNext(payload -> assertThat(payload.summary()).contains("attachment-one"))

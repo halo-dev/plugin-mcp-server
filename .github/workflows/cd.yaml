@@ -7,7 +7,7 @@ on:
 
 jobs:
   cd:
-    uses: halo-sigs/reusable-workflows/.github/workflows/plugin-cd.yaml@v4
+    uses: ./.github/workflows/plugin-cd.yaml
     permissions:
       contents: write
     with:

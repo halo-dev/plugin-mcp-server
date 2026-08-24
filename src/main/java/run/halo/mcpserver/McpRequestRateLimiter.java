@@ -31,10 +31,12 @@ class McpRequestRateLimiter {
     }
 
     boolean allowRequest(InetSocketAddress remoteAddress) {
-        var source = remoteAddress == null || remoteAddress.getAddress() == null
-                ? "unknown"
-                : remoteAddress.getAddress().getHostAddress();
-        return allow(currentWindow().requestCounts, source, REQUESTS_PER_MINUTE);
+        try {
+            var source = McpIpAllowlist.resolve(remoteAddress).getHostAddress();
+            return allow(currentWindow().requestCounts, source, REQUESTS_PER_MINUTE);
+        } catch (IllegalArgumentException error) {
+            return false;
+        }
     }
 
     boolean allowTool(String keyId, String toolName) {

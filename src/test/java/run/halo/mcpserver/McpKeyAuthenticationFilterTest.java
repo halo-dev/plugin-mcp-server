@@ -7,12 +7,14 @@ import static org.mockito.Mockito.when;
 
 import java.net.InetSocketAddress;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -21,10 +23,15 @@ import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
 @ExtendWith(MockitoExtension.class)
 class McpKeyAuthenticationFilterTest {
+
+    private static final InetSocketAddress REMOTE_ADDRESS =
+            new InetSocketAddress("203.0.113.8", 41321);
 
     @Mock
     McpAccessKeyService accessKeyService;
@@ -34,6 +41,7 @@ class McpKeyAuthenticationFilterTest {
 
     McpKeyAuthenticationFilter filter;
     McpRequestRateLimiter rateLimiter;
+    McpRequestConcurrencyLimiter concurrencyLimiter;
     AtomicReference<String> handledPath;
     AtomicReference<String> handledAuthorization;
     AtomicReference<Object> currentAuthentication;
@@ -56,7 +64,9 @@ class McpKeyAuthenticationFilterTest {
                 .build());
         when(mcpServer.protocolVersions()).thenReturn(java.util.List.of("2025-11-25"));
         rateLimiter = new McpRequestRateLimiter();
-        filter = new McpKeyAuthenticationFilter(accessKeyService, rateLimiter, mcpServer);
+        concurrencyLimiter = new McpRequestConcurrencyLimiter();
+        filter = new McpKeyAuthenticationFilter(
+                accessKeyService, rateLimiter, concurrencyLimiter, mcpServer);
     }
 
     @Test
@@ -87,8 +97,9 @@ class McpKeyAuthenticationFilterTest {
     @Test
     void rejectsAnInvalidMcpKey() {
         var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_invalid";
-        when(accessKeyService.authenticate(rawToken, null)).thenReturn(Mono.empty());
+        when(accessKeyService.authenticate(rawToken, REMOTE_ADDRESS)).thenReturn(Mono.empty());
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
+                .remoteAddress(REMOTE_ADDRESS)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
 
         filter.filter(exchange, ignored -> Mono.error(new AssertionError("Request must not continue")))
@@ -139,14 +150,16 @@ class McpKeyAuthenticationFilterTest {
                 "hmcp_00000000",
                 "admin",
                 Set.of());
-        when(accessKeyService.authenticate(rawToken, null)).thenReturn(Mono.just(authentication));
+        when(accessKeyService.authenticate(rawToken, REMOTE_ADDRESS))
+                .thenReturn(Mono.just(authentication));
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/mcp/")
+                .remoteAddress(REMOTE_ADDRESS)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
 
         filter.filter(exchange, ignored -> Mono.error(new AssertionError("Halo chain must not continue")))
                 .block();
 
-        verify(accessKeyService).authenticate(rawToken, null);
+        verify(accessKeyService).authenticate(rawToken, REMOTE_ADDRESS);
         assertThat(handledPath.get()).isEqualTo("/mcp/");
     }
 
@@ -159,8 +172,10 @@ class McpKeyAuthenticationFilterTest {
                 "hmcp_00000000",
                 "admin",
                 Set.of("halo_search_content"));
-        when(accessKeyService.authenticate(rawToken, null)).thenReturn(Mono.just(authentication));
+        when(accessKeyService.authenticate(rawToken, REMOTE_ADDRESS))
+                .thenReturn(Mono.just(authentication));
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
+                .remoteAddress(REMOTE_ADDRESS)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken)
                 .header(io.modelcontextprotocol.spec.HttpHeaders.PROTOCOL_VERSION, "2099-01-01"));
 
@@ -173,10 +188,11 @@ class McpKeyAuthenticationFilterTest {
     @Test
     void rateLimitsRequestsBeforeAccessKeyLookup() {
         for (var i = 0; i < McpRequestRateLimiter.REQUESTS_PER_MINUTE; i++) {
-            assertThat(rateLimiter.allowRequest(null)).isTrue();
+            assertThat(rateLimiter.allowRequest(REMOTE_ADDRESS)).isTrue();
         }
         var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
+                .remoteAddress(REMOTE_ADDRESS)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
 
         filter.filter(exchange, ignored -> Mono.error(new AssertionError("Request must not continue")))
@@ -185,6 +201,95 @@ class McpKeyAuthenticationFilterTest {
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
         assertThat(exchange.getResponse().getHeaders().getFirst(HttpHeaders.RETRY_AFTER))
                 .isEqualTo("60");
-        verify(accessKeyService, never()).authenticate(rawToken, null);
+        verify(accessKeyService, never()).authenticate(rawToken, REMOTE_ADDRESS);
+    }
+
+    @Test
+    void timesOutAndCancelsAnIncompleteBodyAndReleasesItsPermit() {
+        var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
+        var authentication = new McpKeyAuthenticationToken(
+                "key-id", "Automation", "hmcp_00000000", "admin", Set.of());
+        when(accessKeyService.authenticate(rawToken, REMOTE_ADDRESS))
+                .thenReturn(Mono.just(authentication));
+        var bodyCancelled = new AtomicBoolean();
+        org.springframework.web.reactive.function.server.HandlerFunction<ServerResponse> handler =
+                request -> request.bodyToMono(String.class)
+                        .then(ServerResponse.noContent().build());
+        when(mcpServer.routerFunction()).thenReturn(RouterFunctions.route()
+                .POST("/mcp", handler)
+                .build());
+        concurrencyLimiter = new McpRequestConcurrencyLimiter(1, 1);
+        filter = new McpKeyAuthenticationFilter(
+                accessKeyService, rateLimiter, concurrencyLimiter, mcpServer);
+        var stalledExchange = MockServerWebExchange.from(MockServerHttpRequest.post(
+                        McpKeyAuthenticationFilter.MCP_PATH)
+                .remoteAddress(REMOTE_ADDRESS)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken)
+                .body(Flux.<DataBuffer>never()
+                        .doOnCancel(() -> bodyCancelled.set(true))));
+
+        StepVerifier.withVirtualTime(() -> filter.filter(
+                        stalledExchange,
+                        ignored -> Mono.error(new AssertionError("Halo chain must not continue"))))
+                .thenAwait(McpKeyAuthenticationFilter.REQUEST_TIMEOUT.plusMillis(1))
+                .verifyComplete();
+
+        assertThat(stalledExchange.getResponse().getStatusCode())
+                .isEqualTo(HttpStatus.GATEWAY_TIMEOUT);
+        assertThat(bodyCancelled).isTrue();
+
+        var completedExchange = MockServerWebExchange.from(MockServerHttpRequest.post(
+                        McpKeyAuthenticationFilter.MCP_PATH)
+                .remoteAddress(REMOTE_ADDRESS)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken)
+                .body("complete"));
+        filter.filter(
+                        completedExchange,
+                        ignored -> Mono.error(new AssertionError("Halo chain must not continue")))
+                .block();
+
+        assertThat(completedExchange.getResponse().getStatusCode())
+                .isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void rejectsPerKeyConcurrencyBeforeInvokingTheHandler() {
+        assertCapacityRejection(new McpRequestConcurrencyLimiter(2, 1), "key-id");
+    }
+
+    @Test
+    void rejectsGlobalConcurrencyBeforeInvokingTheHandler() {
+        assertCapacityRejection(new McpRequestConcurrencyLimiter(1, 1), "other-key-id");
+    }
+
+    private void assertCapacityRejection(
+            McpRequestConcurrencyLimiter limiter, String occupiedKeyId) {
+        var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
+        var authentication = new McpKeyAuthenticationToken(
+                "key-id", "Automation", "hmcp_00000000", "admin", Set.of());
+        when(accessKeyService.authenticate(rawToken, REMOTE_ADDRESS))
+                .thenReturn(Mono.just(authentication));
+        concurrencyLimiter = limiter;
+        filter = new McpKeyAuthenticationFilter(
+                accessKeyService, rateLimiter, concurrencyLimiter, mcpServer);
+        var occupied = concurrencyLimiter.tryAcquire(occupiedKeyId).orElseThrow();
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(
+                        McpKeyAuthenticationFilter.MCP_PATH)
+                .remoteAddress(REMOTE_ADDRESS)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
+        try {
+            filter.filter(
+                            exchange,
+                            ignored -> Mono.error(new AssertionError("Halo chain must not continue")))
+                    .block();
+        } finally {
+            occupied.close();
+        }
+
+        assertThat(exchange.getResponse().getStatusCode())
+                .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(exchange.getResponse().getHeaders().getFirst(HttpHeaders.RETRY_AFTER))
+                .isEqualTo("1");
+        assertThat(handledPath).hasNullValue();
     }
 }

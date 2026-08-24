@@ -37,13 +37,8 @@ final class McpIpAllowlist {
         if (ranges == null || ranges.isEmpty()) {
             return true;
         }
-        if (remoteAddress == null) {
-            return false;
-        }
         try {
-            var address = remoteAddress.getAddress() == null
-                    ? parseNumericAddress(remoteAddress.getHostString())
-                    : remoteAddress.getAddress();
+            var address = resolve(remoteAddress);
             var matchers = ranges.stream()
                     .map(McpIpAllowlist::compile)
                     .toList();
@@ -56,6 +51,46 @@ final class McpIpAllowlist {
             return false;
         }
         return false;
+    }
+
+    static InetAddress resolve(InetSocketAddress remoteAddress) {
+        if (remoteAddress == null) {
+            throw new IllegalArgumentException("Remote address is unavailable");
+        }
+        return remoteAddress.getAddress() == null
+                ? parseForwardedAddress(remoteAddress.getHostString())
+                : remoteAddress.getAddress();
+    }
+
+    private static InetAddress parseForwardedAddress(String address) {
+        try {
+            return parseNumericAddress(address);
+        } catch (IllegalArgumentException directError) {
+            var value = address.startsWith("[") && address.endsWith("]")
+                    ? address.substring(1, address.length() - 1)
+                    : address;
+            String host;
+            String port;
+            if (value.startsWith("[")) {
+                var closingBracket = value.indexOf(']');
+                if (closingBracket < 0
+                        || closingBracket + 1 >= value.length()
+                        || value.charAt(closingBracket + 1) != ':') {
+                    throw directError;
+                }
+                host = value.substring(1, closingBracket);
+                port = value.substring(closingBracket + 2);
+            } else {
+                var portSeparator = value.lastIndexOf(':');
+                if (portSeparator < 0) {
+                    throw directError;
+                }
+                host = value.substring(0, portSeparator);
+                port = value.substring(portSeparator + 1);
+            }
+            validatePort(port);
+            return parseNumericAddress(host);
+        }
     }
 
     private static CompiledRange compile(String range) {
@@ -91,6 +126,19 @@ final class McpIpAllowlist {
             }
         } catch (NumberFormatException error) {
             throw new IllegalArgumentException("Invalid CIDR mask", error);
+        }
+    }
+
+    private static void validatePort(String port) {
+        if (!port.matches("[0-9]+")) {
+            throw new IllegalArgumentException("Invalid port");
+        }
+        try {
+            if (Integer.parseInt(port) > 65_535) {
+                throw new IllegalArgumentException("Invalid port");
+            }
+        } catch (NumberFormatException error) {
+            throw new IllegalArgumentException("Invalid port", error);
         }
     }
 

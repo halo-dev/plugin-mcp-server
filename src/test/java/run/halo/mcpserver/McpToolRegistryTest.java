@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -168,6 +169,47 @@ class McpToolRegistryTest {
                 .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
                         .contains("FORBIDDEN"))
                 .verifyComplete();
+    }
+
+    @Test
+    void invokesProviderCallbacksOnlyAfterKeyAllowlistSucceeds() {
+        var permissionConstructed = new AtomicInteger();
+        var permissionSubscribed = new AtomicInteger();
+        var handlerConstructed = new AtomicInteger();
+        var tool = McpToolDefinition.builder()
+                .name("demo/secret")
+                .inputSchema(objectSchema(Map.of(), List.of()))
+                .permission(invocation -> {
+                    permissionConstructed.incrementAndGet();
+                    return Mono.fromSupplier(() -> {
+                        permissionSubscribed.incrementAndGet();
+                        return true;
+                    });
+                })
+                .handler(invocation -> {
+                    handlerConstructed.incrementAndGet();
+                    return Mono.just(McpToolResult.success(Map.of("ok", true)));
+                })
+                .build();
+        providerTools(provider, "demo", tool);
+
+        StepVerifier.create(registry.executeIfContributed("demo/secret", Map.of())
+                        .contextWrite(context("demo/other")))
+                .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
+                        .contains("FORBIDDEN"))
+                .verifyComplete();
+        assertThat(permissionConstructed).hasValue(0);
+        assertThat(permissionSubscribed).hasValue(0);
+        assertThat(handlerConstructed).hasValue(0);
+
+        StepVerifier.create(registry.executeIfContributed("demo/secret", Map.of())
+                        .contextWrite(context("demo/secret")))
+                .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
+                        .contains("ok=true"))
+                .verifyComplete();
+        assertThat(permissionConstructed).hasValue(1);
+        assertThat(permissionSubscribed).hasValue(1);
+        assertThat(handlerConstructed).hasValue(1);
     }
 
     @Test

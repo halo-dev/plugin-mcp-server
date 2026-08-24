@@ -40,6 +40,7 @@ public class McpServerPlugin extends BasePlugin {
     @Override
     public void start() {
         schemeManager.register(McpAccessKey.class);
+        schemeManager.register(CategoryParentMutationLock.class);
         log.info("Halo MCP server started");
     }
 
@@ -47,6 +48,7 @@ public class McpServerPlugin extends BasePlugin {
     public void stop() {
         mcpServer.closeGracefully().block(Duration.ofSeconds(5));
         rateLimiter.clear();
+        schemeManager.unregister(Scheme.buildFromType(CategoryParentMutationLock.class));
         schemeManager.unregister(Scheme.buildFromType(McpAccessKey.class));
         log.info("Halo MCP server stopped");
     }

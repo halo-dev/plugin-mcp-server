@@ -7,9 +7,7 @@ import OpenaiIcon from '~icons/simple-icons/openai'
 import CursorIcon from '~icons/simple-icons/cursor'
 import VSCodeIcon from '~icons/logos/visual-studio-code'
 
-const props = defineProps<{
-  token?: string
-}>()
+defineOptions({ inheritAttrs: false })
 
 const icons: Record<McpClientId, Component> = {
   'claude-code': ClaudeIcon,
@@ -18,9 +16,9 @@ const icons: Record<McpClientId, Component> = {
   vscode: VSCodeIcon,
 }
 
-const guides = computed(() => mcpClientGuides(props.token))
+const guides = mcpClientGuides()
 const active = shallowRef<McpClientId>('claude-code')
-const current = computed(() => guides.value.find((guide) => guide.id === active.value)!)
+const current = computed(() => guides.find((guide) => guide.id === active.value)!)
 
 async function copy(value: string) {
   try {
@@ -57,7 +55,7 @@ async function copy(value: string) {
           :href="current.installUrl"
           class=":uno: inline-flex items-center rounded-md bg-white px-2 py-1 text-xs text-gray-900 font-medium hover:bg-gray-200"
         >
-          安装
+          添加端点
         </a>
         <button
           type="button"
@@ -68,9 +66,9 @@ async function copy(value: string) {
         </button>
       </div>
     </div>
-    <p v-if="!token" class=":uno: mt-2 text-xs text-gray-400">
-      将配置中的 $HALO_MCP_TOKEN 替换为创建密钥时获得的完整密钥；创建或轮换密钥后可一键安装到 Cursor
-      / VS Code。
+    <p class=":uno: mt-2 text-xs text-gray-400">
+      Claude Code、Codex 和 Cursor 从 HALO_MCP_TOKEN 环境变量读取密钥；复制上方 VS Code
+      完整配置后，首次连接时会安全提示输入。“添加端点”不包含认证信息，之后仍需按上方配置补充密钥引用。
     </p>
   </div>
 </template>

@@ -24,10 +24,15 @@ class BuiltInToolsTest {
                 new ContentSearchTools(mock(SearchService.class), authorization),
                 new PostTools(client, mock(PostContentService.class), snapshots, authorization),
                 new SinglePageTools(client, snapshots, authorization),
-                new CategoryTools(client, authorization),
+                new CategoryTools(
+                        client, authorization, new CategoryParentMutationCoordinator(client)),
                 new TagTools(client, authorization),
                 new CommentTools(client, authorization),
-                new AttachmentTools(client, mock(AttachmentService.class), authorization));
+                new AttachmentTools(
+                        client,
+                        mock(AttachmentService.class),
+                        authorization,
+                        new AttachmentUploadLimiter()));
 
         var names = tools.names().toList();
         assertThat(tools.tools()).hasSize(29);
@@ -67,10 +72,15 @@ class BuiltInToolsTest {
                 new ContentSearchTools(mock(SearchService.class), authorization),
                 new PostTools(client, mock(PostContentService.class), snapshots, authorization),
                 new SinglePageTools(client, snapshots, authorization),
-                new CategoryTools(client, authorization),
+                new CategoryTools(
+                        client, authorization, new CategoryParentMutationCoordinator(client)),
                 new TagTools(client, authorization),
                 new CommentTools(client, authorization),
-                new AttachmentTools(client, mock(AttachmentService.class), authorization));
+                new AttachmentTools(
+                        client,
+                        mock(AttachmentService.class),
+                        authorization,
+                        new AttachmentUploadLimiter()));
 
         var destructive = tools.tools().stream()
                 .filter(tool -> Boolean.TRUE.equals(tool.protocolTool().annotations().destructiveHint()))
@@ -95,10 +105,15 @@ class BuiltInToolsTest {
                 new ContentSearchTools(mock(SearchService.class), authorization),
                 new PostTools(client, mock(PostContentService.class), snapshots, authorization),
                 new SinglePageTools(client, snapshots, authorization),
-                new CategoryTools(client, authorization),
+                new CategoryTools(
+                        client, authorization, new CategoryParentMutationCoordinator(client)),
                 new TagTools(client, authorization),
                 new CommentTools(client, authorization),
-                new AttachmentTools(client, mock(AttachmentService.class), authorization));
+                new AttachmentTools(
+                        client,
+                        mock(AttachmentService.class),
+                        authorization,
+                        new AttachmentUploadLimiter()));
         var schemaValidator = new DefaultJsonSchemaValidator();
 
         assertThat(tools.tools()).allSatisfy(tool -> {

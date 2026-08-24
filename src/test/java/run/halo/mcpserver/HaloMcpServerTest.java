@@ -3,7 +3,9 @@ package run.halo.mcpserver;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+import java.net.InetSocketAddress;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,10 +13,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
+import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 import run.halo.app.plugin.extensionpoint.ExtensionGetter;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.plugin.PluginContext;
@@ -41,6 +47,9 @@ class HaloMcpServerTest {
 
     @Mock
     BuiltInTools builtInTools;
+
+    @Mock
+    McpAccessKeyService accessKeyService;
 
     HaloMcpServer server;
     McpRecentCallHistory recentCallHistory;
@@ -344,6 +353,99 @@ class HaloMcpServerTest {
                 .jsonPath("$.result.tools[1].name").isEqualTo("halo_get_post")
                 .jsonPath("$").value(body -> org.assertj.core.api.Assertions
                         .assertThat(body.toString()).doesNotContain("storage password"));
+    }
+
+    @Test
+    void timesOutAndCancelsAStalledProviderAndReleasesItsPermit() {
+        var providerCancelled = new AtomicBoolean();
+        var definition = McpToolDefinition.builder()
+                .name("demo/stall")
+                .title("Stall")
+                .description("Test timeout cancellation")
+                .inputSchema(java.util.Map.of("type", "object", "properties", java.util.Map.of()))
+                .permission(invocation -> Mono.just(true))
+                .handler(invocation -> Mono.<McpToolResult>never()
+                        .doOnCancel(() -> providerCancelled.set(true)))
+                .build();
+        when(extensionGetter.getEnabledExtensions(McpToolProvider.class))
+                .thenReturn(Flux.just(provider));
+        when(provider.tools()).thenReturn(Flux.just(definition));
+        var plugin = new run.halo.app.core.extension.Plugin();
+        var metadata = new run.halo.app.extension.Metadata();
+        metadata.setName("demo");
+        plugin.setMetadata(metadata);
+        var pluginStatus = new run.halo.app.core.extension.Plugin.PluginStatus();
+        try {
+            pluginStatus.setLoadLocation(provider.getClass()
+                    .getProtectionDomain()
+                    .getCodeSource()
+                    .getLocation()
+                    .toURI()
+                    .normalize());
+        } catch (java.net.URISyntaxException error) {
+            throw new AssertionError(error);
+        }
+        plugin.setStatus(pluginStatus);
+        when(extensionClient.fetch(run.halo.app.core.extension.Plugin.class, "demo"))
+                .thenReturn(Mono.just(plugin));
+
+        var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
+        var remoteAddress = new InetSocketAddress("203.0.113.8", 41321);
+        var authentication = new McpKeyAuthenticationToken(
+                "key-id",
+                "Automation",
+                "hmcp_key",
+                "admin",
+                java.util.Set.of("demo/stall"));
+        when(accessKeyService.authenticate(rawToken, remoteAddress))
+                .thenReturn(Mono.just(authentication));
+        var concurrencyLimiter = new McpRequestConcurrencyLimiter(1, 1);
+        var filter = new McpKeyAuthenticationFilter(
+                accessKeyService, rateLimiter, concurrencyLimiter, server);
+        var stalledExchange = MockServerWebExchange.from(MockServerHttpRequest.post("/mcp")
+                .remoteAddress(remoteAddress)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken)
+                .body("""
+                        {
+                          "jsonrpc":"2.0",
+                          "id":11,
+                          "method":"tools/call",
+                          "params":{"name":"demo/stall","arguments":{}}
+                        }
+                        """));
+
+        StepVerifier.withVirtualTime(() -> filter.filter(
+                        stalledExchange,
+                        ignored -> Mono.error(new AssertionError("Halo chain must not continue"))))
+                .thenAwait(McpKeyAuthenticationFilter.REQUEST_TIMEOUT.plusMillis(1))
+                .verifyComplete();
+
+        org.assertj.core.api.Assertions.assertThat(stalledExchange.getResponse().getStatusCode())
+                .isEqualTo(HttpStatus.GATEWAY_TIMEOUT);
+        org.assertj.core.api.Assertions.assertThat(providerCancelled).isTrue();
+        var cancelledCall = recentCallHistory.list(
+                new McpRecentCallQuery(1, 20, "key-id", "demo/stall", null));
+        org.assertj.core.api.Assertions.assertThat(cancelledCall.total()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(cancelledCall.items().getFirst().outcome())
+                .isEqualTo(McpCallOutcome.CANCELLED);
+
+        var pingExchange = MockServerWebExchange.from(MockServerHttpRequest.post("/mcp")
+                .remoteAddress(remoteAddress)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken)
+                .body("""
+                        {"jsonrpc":"2.0","id":12,"method":"ping","params":{}}
+                        """));
+        filter.filter(
+                        pingExchange,
+                        ignored -> Mono.error(new AssertionError("Halo chain must not continue")))
+                .block();
+
+        org.assertj.core.api.Assertions.assertThat(pingExchange.getResponse().getStatusCode())
+                .isEqualTo(HttpStatus.OK);
     }
 
     private static BuiltInTool builtInTool(String name, String title) {

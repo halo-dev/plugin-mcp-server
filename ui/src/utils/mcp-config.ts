@@ -3,9 +3,11 @@ export function mcpEndpoint() {
 }
 
 const SERVER_NAME = 'halo'
-const TOKEN_PLACEHOLDER = '$HALO_MCP_TOKEN'
+const CLAUDE_TOKEN_REFERENCE = '${HALO_MCP_TOKEN}'
+const CURSOR_TOKEN_REFERENCE = '${env:HALO_MCP_TOKEN}'
+const VSCODE_TOKEN_INPUT_ID = 'halo-mcp-token'
 
-export function mcpHttpConfig(token = TOKEN_PLACEHOLDER) {
+export function mcpHttpConfig() {
   return JSON.stringify(
     {
       mcpServers: {
@@ -13,7 +15,7 @@ export function mcpHttpConfig(token = TOKEN_PLACEHOLDER) {
           type: 'http',
           url: mcpEndpoint(),
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${CURSOR_TOKEN_REFERENCE}`,
           },
         },
       },
@@ -32,20 +34,30 @@ export interface McpClientGuide {
   installUrl?: string
 }
 
-export function mcpClientGuides(token?: string): McpClientGuide[] {
+export function mcpClientGuides(): McpClientGuide[] {
   const endpoint = mcpEndpoint()
-  const bearer = `Bearer ${token ?? TOKEN_PLACEHOLDER}`
-  const serverConfig = {
+  const installConfig = {
     type: 'http',
     url: endpoint,
-    headers: { Authorization: bearer },
   }
 
   const guides: McpClientGuide[] = [
     {
       id: 'claude-code',
       label: 'Claude Code',
-      content: `claude mcp add --transport http ${SERVER_NAME} ${endpoint} --header "Authorization: ${bearer}"`,
+      content: JSON.stringify(
+        {
+          mcpServers: {
+            [SERVER_NAME]: {
+              type: 'http',
+              url: endpoint,
+              headers: { Authorization: `Bearer ${CLAUDE_TOKEN_REFERENCE}` },
+            },
+          },
+        },
+        null,
+        2,
+      ),
     },
     {
       id: 'codex',
@@ -53,32 +65,46 @@ export function mcpClientGuides(token?: string): McpClientGuide[] {
       content: `# ~/.codex/config.toml
 [mcp_servers.${SERVER_NAME}]
 url = "${endpoint}"
-http_headers = { Authorization = "${bearer}" }`,
+bearer_token_env_var = "HALO_MCP_TOKEN"`,
     },
     {
       id: 'cursor',
       label: 'Cursor',
-      content: mcpHttpConfig(token),
+      content: mcpHttpConfig(),
+      installUrl: `cursor://anysphere.cursor-deeplink/mcp/install?name=${SERVER_NAME}&config=${window.btoa(
+        JSON.stringify(installConfig),
+      )}`,
     },
     {
       id: 'vscode',
       label: 'VS Code',
-      content: JSON.stringify({ servers: { [SERVER_NAME]: serverConfig } }, null, 2),
+      content: JSON.stringify(
+        {
+          inputs: [
+            {
+              type: 'promptString',
+              id: VSCODE_TOKEN_INPUT_ID,
+              description: 'Halo MCP access key',
+              password: true,
+            },
+          ],
+          servers: {
+            [SERVER_NAME]: {
+              ...installConfig,
+              headers: {
+                Authorization: `Bearer \${input:${VSCODE_TOKEN_INPUT_ID}}`,
+              },
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      installUrl: `vscode:mcp/install?${encodeURIComponent(
+        JSON.stringify({ name: SERVER_NAME, ...installConfig }),
+      )}`,
     },
   ]
-
-  if (token) {
-    for (const guide of guides) {
-      if (guide.id === 'cursor') {
-        const config = window.btoa(JSON.stringify(serverConfig))
-        guide.installUrl = `cursor://anysphere.cursor-deeplink/mcp/install?name=${SERVER_NAME}&config=${config}`
-      }
-      if (guide.id === 'vscode') {
-        const config = encodeURIComponent(JSON.stringify({ name: SERVER_NAME, ...serverConfig }))
-        guide.installUrl = `vscode:mcp/install?${config}`
-      }
-    }
-  }
 
   return guides
 }
