@@ -7,6 +7,8 @@ import java.net.InetSocketAddress;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
+import org.springframework.web.server.adapter.ForwardedHeaderTransformer;
 
 class McpIpAllowlistTest {
 
@@ -84,6 +86,18 @@ class McpIpAllowlistTest {
     }
 
     @Test
+    void allowsNumericAddressesFromForwardedHeaders() {
+        var forwardedIpv4 = transformedRemoteAddress("X-Forwarded-For", "203.0.113.42");
+        assertThat(forwardedIpv4.isUnresolved()).isTrue();
+        assertThat(McpIpAllowlist.allows(Set.of("203.0.113.0/24"), forwardedIpv4)).isTrue();
+
+        var forwardedIpv6 = transformedRemoteAddress(
+                "Forwarded", "for=\"[2001:db8::42]\"");
+        assertThat(forwardedIpv6.isUnresolved()).isTrue();
+        assertThat(McpIpAllowlist.allows(Set.of("2001:db8::/32"), forwardedIpv6)).isTrue();
+    }
+
+    @Test
     void allowsUnknownAddressesWhenNotConfigured() {
         assertThat(McpIpAllowlist.allows(Set.of(), null)).isTrue();
     }
@@ -95,5 +109,13 @@ class McpIpAllowlistTest {
         assertThat(McpIpAllowlist.allows(
                         ranges, new InetSocketAddress("203.0.113.10", 443)))
                 .isFalse();
+    }
+
+    private static InetSocketAddress transformedRemoteAddress(String header, String value) {
+        var request = MockServerHttpRequest.get("http://localhost/mcp")
+                .remoteAddress(new InetSocketAddress("192.0.2.10", 443))
+                .header(header, value)
+                .build();
+        return new ForwardedHeaderTransformer().apply(request).getRemoteAddress();
     }
 }

@@ -37,15 +37,18 @@ final class McpIpAllowlist {
         if (ranges == null || ranges.isEmpty()) {
             return true;
         }
-        if (remoteAddress == null || remoteAddress.getAddress() == null) {
+        if (remoteAddress == null) {
             return false;
         }
         try {
+            var address = remoteAddress.getAddress() == null
+                    ? parseNumericAddress(remoteAddress.getHostString())
+                    : remoteAddress.getAddress();
             var matchers = ranges.stream()
                     .map(McpIpAllowlist::compile)
                     .toList();
             for (var matcher : matchers) {
-                if (matcher.matches(remoteAddress.getAddress())) {
+                if (matcher.matches(address)) {
                     return true;
                 }
             }
@@ -59,12 +62,20 @@ final class McpIpAllowlist {
         var matcher = InetAddressMatchers.fromIpAddress(range);
         var slashIndex = range.indexOf('/');
         var address = slashIndex < 0 ? range : range.substring(0, slashIndex);
+        var addressLength = parseNumericAddress(address).getAddress().length;
+        if (slashIndex >= 0) {
+            validateMask(range.substring(slashIndex + 1), addressLength * Byte.SIZE);
+        }
+        return new CompiledRange(addressLength, matcher);
+    }
+
+    private static InetAddress parseNumericAddress(String address) {
+        var value = address.startsWith("[") && address.endsWith("]")
+                ? address.substring(1, address.length() - 1)
+                : address;
+        InetAddressMatchers.fromIpAddress(value);
         try {
-            var addressLength = InetAddress.getByName(address).getAddress().length;
-            if (slashIndex >= 0) {
-                validateMask(range.substring(slashIndex + 1), addressLength * Byte.SIZE);
-            }
-            return new CompiledRange(addressLength, matcher);
+            return InetAddress.getByName(value);
         } catch (UnknownHostException error) {
             throw new IllegalArgumentException(error);
         }
