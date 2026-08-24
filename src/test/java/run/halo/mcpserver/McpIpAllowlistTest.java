@@ -27,6 +27,15 @@ class McpIpAllowlistTest {
         assertThatThrownBy(() -> McpIpAllowlist.normalize(Set.of("203.0.113.0/33")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Invalid IP address or CIDR: 203.0.113.0/33");
+        assertThatThrownBy(() -> McpIpAllowlist.normalize(Set.of("203.0.113.0/-1")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid IP address or CIDR: 203.0.113.0/-1");
+        assertThatThrownBy(() -> McpIpAllowlist.normalize(Set.of("203.0.113.0/-0")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid IP address or CIDR: 203.0.113.0/-0");
+        assertThatThrownBy(() -> McpIpAllowlist.normalize(Set.of("203.0.113.0/+1")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid IP address or CIDR: 203.0.113.0/+1");
     }
 
     @Test
@@ -52,6 +61,25 @@ class McpIpAllowlistTest {
         assertThat(McpIpAllowlist.allows(
                         Set.of("203.0.113.0/24"),
                         InetSocketAddress.createUnresolved("client.example.com", 443)))
+                .isFalse();
+    }
+
+    @Test
+    void rejectsAddressesFromAnotherAddressFamily() {
+        assertThat(McpIpAllowlist.allows(
+                        Set.of("0.0.0.0/0"), new InetSocketAddress("203.0.113.10", 443)))
+                .isTrue();
+        assertThat(McpIpAllowlist.allows(
+                        Set.of("::/0"), new InetSocketAddress("2001:db8::10", 443)))
+                .isTrue();
+        assertThat(McpIpAllowlist.allows(
+                        Set.of("cb00:710a::/32"), new InetSocketAddress("203.0.113.10", 443)))
+                .isFalse();
+        assertThat(McpIpAllowlist.allows(
+                        Set.of("::/0"), new InetSocketAddress("203.0.113.10", 443)))
+                .isFalse();
+        assertThat(McpIpAllowlist.allows(
+                        Set.of("0.0.0.0/0"), new InetSocketAddress("2001:db8::10", 443)))
                 .isFalse();
     }
 
