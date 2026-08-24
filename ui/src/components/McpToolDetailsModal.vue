@@ -23,6 +23,7 @@ const modal = useTemplateRef<InstanceType<typeof VModal>>('modal')
     :width="900"
     mount-to-body
     layer-closable
+    :centered="false"
     @close="emit('close')"
   >
     <div class=":uno: flex flex-col gap-6">
