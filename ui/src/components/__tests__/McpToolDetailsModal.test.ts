@@ -8,6 +8,11 @@ const ContainerStub = defineComponent({
   template: '<div><h1>{{ title }}</h1><slot /><slot name="footer" /></div>',
 })
 
+const CodeMirrorStub = defineComponent({
+  props: ['modelValue'],
+  template: '<pre>{{ modelValue }}</pre>',
+})
+
 function mountModal(outputSchema?: Record<string, unknown>) {
   return mount(McpToolDetailsModal, {
     props: {
@@ -39,6 +44,7 @@ function mountModal(outputSchema?: Record<string, unknown>) {
         VSpace: ContainerStub,
         Button: ContainerStub,
         VButton: ContainerStub,
+        VCodemirror: CodeMirrorStub,
       },
     },
   })
@@ -53,6 +59,7 @@ describe('McpToolDetailsModal', () => {
     expect(wrapper.text()).toContain('分页查询文章。')
     expect(wrapper.text()).toContain('MCP Server')
     expect(wrapper.text()).toContain('v1.0.0')
+    expect(wrapper.text()).toContain('文章管理')
     expect(wrapper.text()).toContain('Input Schema')
     expect(wrapper.text()).toContain('"page":')
     expect(wrapper.text()).toContain('Output Schema')
