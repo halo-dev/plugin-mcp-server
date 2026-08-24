@@ -4,6 +4,8 @@ import static org.springframework.data.domain.Sort.Order.asc;
 import static org.springframework.data.domain.Sort.Order.desc;
 import static run.halo.app.extension.index.query.Queries.equal;
 
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,8 +29,7 @@ class PostTools extends ToolSupport implements ToolGroup {
     static final String GET = "halo_get_post";
     static final String CREATE_POST = "halo_create_post";
     static final String UPDATE_POST = "halo_update_post";
-    static final String PUBLISH_POST = "halo_publish_post";
-    static final String UNPUBLISH_POST = "halo_unpublish_post";
+    static final String SET_PUBLISH_STATE = "halo_set_post_publish_state";
     static final String RECYCLE_POST = "halo_recycle_post";
 
     private static final int MAX_CONTENT_CHARS = 65_536;
@@ -56,12 +57,8 @@ class PostTools extends ToolSupport implements ToolGroup {
                 getTool(),
                 createTool(),
                 updateTool(),
-                stateTool(PUBLISH_POST, "Publish Halo post", "Publish the current post head snapshot.",
-                        "发布文章", "发布文章当前的编辑版本。", false, this::publish),
-                stateTool(UNPUBLISH_POST, "Unpublish Halo post", "Move a post back to draft state.",
-                        "取消发布文章", "将已发布文章恢复为草稿状态。", false, this::unpublish),
-                stateTool(RECYCLE_POST, "Recycle Halo post", "Move a post to the recycle bin.",
-                        "回收文章", "将文章移入回收站。", true, this::recycle));
+                publishStateTool(),
+                recycleTool());
     }
 
     Mono<ToolPayload> list(Map<String, Object> arguments) {
@@ -121,6 +118,14 @@ class PostTools extends ToolSupport implements ToolGroup {
 
     Mono<ToolPayload> update(Map<String, Object> arguments) {
         var name = resourceName(arguments, "name");
+        if (!arguments.containsKey("raw")) {
+            if (arguments.containsKey("content") || arguments.containsKey("rawType")) {
+                throw new McpToolException(
+                        "INVALID_ARGUMENT", "raw is required when content or rawType is provided");
+            }
+            return updateLatest(client, Post.class, name, "Post", post -> applyMetadata(post, arguments))
+                    .map(updated -> payload(ContentPayloads.post(updated), "Updated post " + name));
+        }
         var content = content(arguments);
         return authorization.username().flatMap(username -> client.fetch(Post.class, name)
                 .switchIfEmpty(notFound("Post", name))
@@ -138,12 +143,10 @@ class PostTools extends ToolSupport implements ToolGroup {
                 .map(updated -> payload(ContentPayloads.post(updated), "Updated post " + name)));
     }
 
-    Mono<ToolPayload> publish(Map<String, Object> arguments) {
-        return updateState(arguments, true, false, "Published post ");
-    }
-
-    Mono<ToolPayload> unpublish(Map<String, Object> arguments) {
-        return updateState(arguments, false, false, "Unpublished post ");
+    Mono<ToolPayload> setPublishState(Map<String, Object> arguments) {
+        var publish = requiredBoolean(arguments, "publish");
+        return updateState(
+                arguments, publish, false, (publish ? "Published post " : "Unpublished post "));
     }
 
     Mono<ToolPayload> recycle(Map<String, Object> arguments) {
@@ -228,6 +231,13 @@ class PostTools extends ToolSupport implements ToolGroup {
                                 "publish", booleanSchema(false),
                                 "visible", enumSchema(Post.VisibleEnum.class, Post.VisibleEnum.PUBLIC.name()),
                                 "allowComment", booleanSchema(true),
+                                "cover", nullableStringSchema(),
+                                "template", nullableStringSchema(),
+                                "excerpt", nullableStringSchema(),
+                                "autoGenerateExcerpt", booleanSchema(),
+                                "pinned", booleanSchema(false),
+                                "priority", nonNegativeIntegerSchema(0),
+                                "publishTime", nullableInstantSchema(),
                                 "categories", arrayStringSchema(),
                                 "tags", arrayStringSchema()),
                         List.of("name", "title", "raw")),
@@ -240,9 +250,9 @@ class PostTools extends ToolSupport implements ToolGroup {
         return tool(
                 UPDATE_POST,
                 "Update Halo post",
-                "Update post metadata and its editable content snapshot.",
+                "Update post metadata and, when raw is provided, its editable content snapshot.",
                 "更新文章",
-                "更新文章标题、别名、分类、标签、可见性、评论设置和编辑内容。",
+                "更新文章元数据；传入 raw 时同时更新编辑内容，否则不会创建新快照。",
                 "POST",
                 objectSchema(
                         map(
@@ -254,35 +264,51 @@ class PostTools extends ToolSupport implements ToolGroup {
                                 "rawType", stringSchemaWithDefault(DEFAULT_RAW_TYPE),
                                 "visible", enumSchema(Post.VisibleEnum.class),
                                 "allowComment", booleanSchema(),
+                                "cover", nullableStringSchema(),
+                                "template", nullableStringSchema(),
+                                "excerpt", nullableStringSchema(),
+                                "autoGenerateExcerpt", booleanSchema(),
+                                "pinned", booleanSchema(),
+                                "priority", nonNegativeIntegerSchema(),
+                                "publishTime", nullableInstantSchema(),
                                 "categories", arrayStringSchema(),
                                 "tags", arrayStringSchema()),
-                        List.of("name", "raw")),
+                        List.of("name")),
                 ContentPayloads.postSchema(),
                 UPDATE,
                 this::update);
     }
 
-    private BuiltInTool stateTool(
-            String name,
-            String title,
-            String description,
-            String displayTitle,
-            String displayDescription,
-            boolean destructive,
-            java.util.function.Function<Map<String, Object>, Mono<ToolPayload>> handler) {
+    private BuiltInTool recycleTool() {
         return tool(
-                name,
-                title,
-                description,
-                displayTitle,
-                displayDescription,
+                RECYCLE_POST,
+                "Recycle Halo post",
+                "Move a post to the recycle bin.",
+                "回收文章",
+                "将文章移入回收站。",
                 "POST",
                 objectSchema(
                         map("name", stringSchema()),
                         List.of("name")),
                 ContentPayloads.postSchema(),
-                destructive ? DESTRUCTIVE : UPDATE,
-                handler);
+                DESTRUCTIVE,
+                this::recycle);
+    }
+
+    private BuiltInTool publishStateTool() {
+        return tool(
+                SET_PUBLISH_STATE,
+                "Set Halo post publish state",
+                "Publish the current post head snapshot or move the post back to draft state.",
+                "修改文章发布状态",
+                "设置文章为发布或草稿状态；发布时使用当前编辑版本。",
+                "POST",
+                objectSchema(
+                        map("name", stringSchema(), "publish", booleanSchema()),
+                        List.of("name", "publish")),
+                ContentPayloads.postSchema(),
+                UPDATE,
+                this::setPublishState);
     }
 
     private static ListOptions contentOptions(Boolean published, boolean recycled) {
@@ -307,11 +333,12 @@ class PostTools extends ToolSupport implements ToolGroup {
         spec.setPublish(optionalBoolean(arguments, "publish", false));
         spec.setVisible(optionalEnum(arguments, "visible", Post.VisibleEnum.class, Post.VisibleEnum.PUBLIC));
         spec.setAllowComment(optionalBoolean(arguments, "allowComment", true));
-        spec.setPinned(false);
-        spec.setPriority(0);
-        var excerpt = new Post.Excerpt();
-        excerpt.setAutoGenerate(true);
-        spec.setExcerpt(excerpt);
+        spec.setCover(nullableString(arguments, "cover"));
+        spec.setTemplate(nullableString(arguments, "template"));
+        spec.setPinned(optionalBoolean(arguments, "pinned", false));
+        spec.setPriority(optionalNonNegativeInt(arguments, "priority", 0));
+        spec.setPublishTime(optionalInstant(arguments, "publishTime"));
+        spec.setExcerpt(excerpt(arguments, null));
         spec.setCategories(stringList(arguments, "categories"));
         spec.setTags(stringList(arguments, "tags"));
         return spec;
@@ -331,6 +358,24 @@ class PostTools extends ToolSupport implements ToolGroup {
         if (arguments.containsKey("allowComment")) {
             spec.setAllowComment(optionalBoolean(arguments, "allowComment", true));
         }
+        if (arguments.containsKey("cover")) {
+            spec.setCover(nullableString(arguments, "cover"));
+        }
+        if (arguments.containsKey("template")) {
+            spec.setTemplate(nullableString(arguments, "template"));
+        }
+        if (arguments.containsKey("excerpt") || arguments.containsKey("autoGenerateExcerpt")) {
+            spec.setExcerpt(excerpt(arguments, spec.getExcerpt()));
+        }
+        if (arguments.containsKey("pinned")) {
+            spec.setPinned(optionalBoolean(arguments, "pinned", false));
+        }
+        if (arguments.containsKey("priority")) {
+            spec.setPriority(optionalNonNegativeInt(arguments, "priority", 0));
+        }
+        if (arguments.containsKey("publishTime")) {
+            spec.setPublishTime(optionalInstant(arguments, "publishTime"));
+        }
         if (arguments.containsKey("categories")) {
             spec.setCategories(stringList(arguments, "categories"));
         }
@@ -345,6 +390,41 @@ class PostTools extends ToolSupport implements ToolGroup {
                 raw,
                 optionalString(arguments, "content", raw),
                 optionalString(arguments, "rawType", DEFAULT_RAW_TYPE));
+    }
+
+    private static Post.Excerpt excerpt(Map<String, Object> arguments, Post.Excerpt current) {
+        var excerpt = current == null ? new Post.Excerpt() : current;
+        if (arguments.containsKey("excerpt")) {
+            excerpt.setRaw(nullableString(arguments, "excerpt"));
+        }
+        final boolean autoGenerate;
+        if (arguments.containsKey("autoGenerateExcerpt")) {
+            autoGenerate = optionalBoolean(arguments, "autoGenerateExcerpt", true);
+        } else if (arguments.containsKey("excerpt")) {
+            autoGenerate = false;
+        } else {
+            autoGenerate = current == null || Boolean.TRUE.equals(current.getAutoGenerate());
+        }
+        excerpt.setAutoGenerate(autoGenerate);
+        return excerpt;
+    }
+
+    private static Instant optionalInstant(Map<String, Object> arguments, String name) {
+        var value = nullableString(arguments, name);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException error) {
+            throw new McpToolException("INVALID_ARGUMENT", name + " must be an ISO-8601 instant", error);
+        }
+    }
+
+    private static Map<String, Object> nullableInstantSchema() {
+        var schema = new LinkedHashMap<>(HaloSchemaProperties.property(Post.PostSpec.class, "publishTime"));
+        schema.put("type", List.of("string", "null"));
+        return schema;
     }
 
     private static ToolPayload contentPayload(Post post, ContentWrapper wrapper, ContentFormat format) {

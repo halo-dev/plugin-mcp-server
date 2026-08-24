@@ -27,8 +27,7 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
     static final String GET = "halo_get_single_page";
     static final String CREATE_PAGE = "halo_create_single_page";
     static final String UPDATE_PAGE = "halo_update_single_page";
-    static final String PUBLISH_PAGE = "halo_publish_single_page";
-    static final String UNPUBLISH_PAGE = "halo_unpublish_single_page";
+    static final String SET_PUBLISH_STATE = "halo_set_single_page_publish_state";
     static final String RECYCLE_PAGE = "halo_recycle_single_page";
 
     private static final int MAX_CONTENT_CHARS = 65_536;
@@ -51,12 +50,8 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                 getTool(),
                 createTool(),
                 updateTool(),
-                stateTool(PUBLISH_PAGE, "Publish Halo single page", "Publish the current page head snapshot.",
-                        "发布页面", "发布独立页面当前的编辑版本。", false, this::publish),
-                stateTool(UNPUBLISH_PAGE, "Unpublish Halo single page", "Move a single page back to draft state.",
-                        "取消发布页面", "将已发布独立页面恢复为草稿状态。", false, this::unpublish),
-                stateTool(RECYCLE_PAGE, "Recycle Halo single page", "Move a single page to the recycle bin.",
-                        "回收页面", "将独立页面移入回收站。", true, this::recycle));
+                publishStateTool(),
+                recycleTool());
     }
 
     Mono<ToolPayload> list(Map<String, Object> arguments) {
@@ -137,12 +132,13 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                 .map(updated -> payload(ContentPayloads.singlePage(updated), "Updated single page " + name)));
     }
 
-    Mono<ToolPayload> publish(Map<String, Object> arguments) {
-        return updateState(arguments, true, false, "Published single page ");
-    }
-
-    Mono<ToolPayload> unpublish(Map<String, Object> arguments) {
-        return updateState(arguments, false, false, "Unpublished single page ");
+    Mono<ToolPayload> setPublishState(Map<String, Object> arguments) {
+        var publish = requiredBoolean(arguments, "publish");
+        return updateState(
+                arguments,
+                publish,
+                false,
+                publish ? "Published single page " : "Unpublished single page ");
     }
 
     Mono<ToolPayload> recycle(Map<String, Object> arguments) {
@@ -257,27 +253,36 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                 this::update);
     }
 
-    private BuiltInTool stateTool(
-            String name,
-            String title,
-            String description,
-            String displayTitle,
-            String displayDescription,
-            boolean destructive,
-            java.util.function.Function<Map<String, Object>, Mono<ToolPayload>> handler) {
+    private BuiltInTool recycleTool() {
         return tool(
-                name,
-                title,
-                description,
-                displayTitle,
-                displayDescription,
+                RECYCLE_PAGE,
+                "Recycle Halo single page",
+                "Move a single page to the recycle bin.",
+                "回收页面",
+                "将独立页面移入回收站。",
                 "PAGE",
                 objectSchema(
                         map("name", stringSchema()),
                         List.of("name")),
                 ContentPayloads.singlePageSchema(),
-                destructive ? DESTRUCTIVE : UPDATE,
-                handler);
+                DESTRUCTIVE,
+                this::recycle);
+    }
+
+    private BuiltInTool publishStateTool() {
+        return tool(
+                SET_PUBLISH_STATE,
+                "Set Halo single page publish state",
+                "Publish the current page head snapshot or move the page back to draft state.",
+                "修改页面发布状态",
+                "设置独立页面为发布或草稿状态；发布时使用当前编辑版本。",
+                "PAGE",
+                objectSchema(
+                        map("name", stringSchema(), "publish", booleanSchema()),
+                        List.of("name", "publish")),
+                ContentPayloads.singlePageSchema(),
+                UPDATE,
+                this::setPublishState);
     }
 
     private static ListOptions contentOptions(Boolean published, boolean recycled) {

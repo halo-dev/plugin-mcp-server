@@ -6,6 +6,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,44 @@ class PostToolsTest {
     }
 
     @Test
+    void createsPostWithEditorialMetadata() {
+        var storedPost = new AtomicReference<Post>();
+        when(authorization.username()).thenReturn(Mono.just("admin"));
+        when(client.create(any(Post.class))).thenAnswer(invocation -> {
+            var post = invocation.<Post>getArgument(0);
+            storedPost.set(post);
+            return Mono.just(post);
+        });
+        when(client.create(any(Snapshot.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(client.fetch(Post.class, "featured-post"))
+                .thenAnswer(invocation -> Mono.just(storedPost.get()));
+        when(client.update(any(Post.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
+
+        StepVerifier.create(tools.create(ToolSupport.map(
+                        "name", "featured-post",
+                        "title", "Featured post",
+                        "raw", "Body",
+                        "cover", "/upload/cover.jpg",
+                        "template", "post-featured",
+                        "excerpt", "Manual summary",
+                        "pinned", true,
+                        "priority", 20,
+                        "publishTime", "2026-08-24T00:00:00Z")))
+                .assertNext(payload -> {
+                    var spec = storedPost.get().getSpec();
+                    assertThat(spec.getCover()).isEqualTo("/upload/cover.jpg");
+                    assertThat(spec.getTemplate()).isEqualTo("post-featured");
+                    assertThat(spec.getExcerpt().getRaw()).isEqualTo("Manual summary");
+                    assertThat(spec.getExcerpt().getAutoGenerate()).isFalse();
+                    assertThat(spec.getPinned()).isTrue();
+                    assertThat(spec.getPriority()).isEqualTo(20);
+                    assertThat(spec.getPublishTime()).isEqualTo(Instant.parse("2026-08-24T00:00:00Z"));
+                })
+                .verifyComplete();
+    }
+
+    @Test
     void retriesPostStateChangeAfterReconcilerVersionConflict() {
         var stalePost = post(3L);
         var latestPost = post(4L);
@@ -69,7 +108,7 @@ class PostToolsTest {
         when(client.update(latestPost)).thenReturn(Mono.just(latestPost));
         var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
 
-        StepVerifier.create(tools.publish(Map.of("name", "hello-world")))
+        StepVerifier.create(tools.setPublishState(Map.of("name", "hello-world", "publish", true)))
                 .assertNext(payload -> assertThat(payload.summary()).isEqualTo("Published post hello-world"))
                 .verifyComplete();
 
@@ -78,10 +117,33 @@ class PostToolsTest {
     }
 
     @Test
+    void updatesEditorialMetadataWithoutCreatingSnapshot() {
+        var post = post(3L);
+        post.getSpec().setCover("old.jpg");
+        when(client.fetch(Post.class, "hello-world")).thenReturn(Mono.just(post));
+        when(client.update(post)).thenReturn(Mono.just(post));
+        var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
+
+        StepVerifier.create(tools.update(Map.of(
+                        "name", "hello-world",
+                        "cover", "new.jpg",
+                        "excerpt", "Short summary")))
+                .assertNext(payload -> {
+                    assertThat(post.getSpec().getCover()).isEqualTo("new.jpg");
+                    assertThat(post.getSpec().getExcerpt().getRaw()).isEqualTo("Short summary");
+                    assertThat(post.getSpec().getExcerpt().getAutoGenerate()).isFalse();
+                })
+                .verifyComplete();
+
+        verify(client, times(1)).update(any(Post.class));
+        verify(client, times(0)).create(any(Snapshot.class));
+    }
+
+    @Test
     void doesNotAdvertiseReconcilerManagedVersionAsPostPrecondition() {
         var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
         var publishTool = tools.tools().stream()
-                .filter(tool -> tool.specification().tool().name().equals(PostTools.PUBLISH_POST))
+                .filter(tool -> tool.specification().tool().name().equals(PostTools.SET_PUBLISH_STATE))
                 .findFirst()
                 .orElseThrow();
         var properties = (Map<?, ?>) publishTool.specification().tool().inputSchema().get("properties");

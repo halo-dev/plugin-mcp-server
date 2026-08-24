@@ -210,6 +210,10 @@ abstract class ToolSupport {
         return map("type", "string", "minLength", 1, "default", defaultValue);
     }
 
+    static Map<String, Object> nullableStringSchema() {
+        return Map.of("type", List.of("string", "null"));
+    }
+
     static Map<String, Object> booleanSchema() {
         return Map.of("type", "boolean");
     }
@@ -228,6 +232,14 @@ abstract class ToolSupport {
             schema.put("maximum", maximum);
         }
         return schema;
+    }
+
+    static Map<String, Object> nonNegativeIntegerSchema(int defaultValue) {
+        return Map.of("type", "integer", "minimum", 0, "default", defaultValue);
+    }
+
+    static Map<String, Object> nonNegativeIntegerSchema() {
+        return Map.of("type", "integer", "minimum", 0);
     }
 
     static Map<String, Object> arrayStringSchema() {
@@ -279,6 +291,17 @@ abstract class ToolSupport {
         return text;
     }
 
+    static String nullableString(Map<String, Object> arguments, String name) {
+        var value = arguments.get(name);
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof String text)) {
+            throw new McpToolException("INVALID_ARGUMENT", name + " must be a string or null");
+        }
+        return text;
+    }
+
     static boolean optionalBoolean(Map<String, Object> arguments, String name, boolean defaultValue) {
         var value = arguments.get(name);
         if (value == null) {
@@ -288,6 +311,13 @@ abstract class ToolSupport {
             throw new McpToolException("INVALID_ARGUMENT", name + " must be a boolean");
         }
         return booleanValue;
+    }
+
+    static boolean requiredBoolean(Map<String, Object> arguments, String name) {
+        if (!arguments.containsKey(name)) {
+            throw new McpToolException("INVALID_ARGUMENT", name + " must be a boolean");
+        }
+        return optionalBoolean(arguments, name, false);
     }
 
     static Boolean optionalBoolean(Map<String, Object> arguments, String name) {
@@ -313,6 +343,17 @@ abstract class ToolSupport {
         if (!(value instanceof Number number) || number.intValue() < min || number.intValue() > max) {
             throw new McpToolException(
                     "INVALID_ARGUMENT", name + " must be between " + min + " and " + max);
+        }
+        return number.intValue();
+    }
+
+    static int optionalNonNegativeInt(Map<String, Object> arguments, String name, int defaultValue) {
+        var value = arguments.get(name);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (!(value instanceof Number number) || number.intValue() < 0) {
+            throw new McpToolException("INVALID_ARGUMENT", name + " must be a non-negative integer");
         }
         return number.intValue();
     }

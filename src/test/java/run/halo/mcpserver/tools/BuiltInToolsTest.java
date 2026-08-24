@@ -29,8 +29,24 @@ class BuiltInToolsTest {
                 new CommentTools(client, authorization),
                 new AttachmentTools(client, mock(AttachmentService.class), authorization));
 
-        assertThat(tools.tools()).hasSize(25);
-        assertThat(tools.names()).doesNotHaveDuplicates();
+        var names = tools.names().toList();
+        assertThat(tools.tools()).hasSize(29);
+        assertThat(names)
+                .doesNotHaveDuplicates()
+                .contains(
+                        PostTools.SET_PUBLISH_STATE,
+                        SinglePageTools.SET_PUBLISH_STATE,
+                        CommentTools.SET_APPROVAL,
+                        CommentTools.SET_REPLY_APPROVAL)
+                .doesNotContain(
+                        "halo_publish_post",
+                        "halo_unpublish_post",
+                        "halo_publish_single_page",
+                        "halo_unpublish_single_page",
+                        "halo_approve_comment",
+                        "halo_unapprove_comment",
+                        "halo_approve_reply",
+                        "halo_unapprove_reply");
         assertThat(tools.tools())
                 .extracting(BuiltInTool::category)
                 .contains("CONTENT_SEARCH", "POST", "PAGE", "CATEGORY", "TAG", "COMMENT", "ATTACHMENT");
@@ -65,8 +81,9 @@ class BuiltInToolsTest {
                 PostTools.RECYCLE_POST,
                 SinglePageTools.RECYCLE_PAGE,
                 CommentTools.DELETE,
+                CommentTools.DELETE_REPLY,
                 AttachmentTools.DELETE);
-        assertThat(destructive).doesNotContain(PostTools.UPDATE_POST, PostTools.PUBLISH_POST);
+        assertThat(destructive).doesNotContain(PostTools.UPDATE_POST, PostTools.SET_PUBLISH_STATE);
     }
 
     @Test

@@ -9,6 +9,7 @@ import run.halo.app.core.extension.attachment.Attachment;
 import run.halo.app.core.extension.content.Category;
 import run.halo.app.core.extension.content.Comment;
 import run.halo.app.core.extension.content.Post;
+import run.halo.app.core.extension.content.Reply;
 import run.halo.app.core.extension.content.SinglePage;
 import run.halo.app.core.extension.content.Tag;
 import run.halo.app.extension.ListResult;
@@ -27,6 +28,14 @@ final class ContentPayloads {
                         "title", halo(Post.PostSpec.class, "title"),
                         "slug", halo(Post.PostSpec.class, "slug"),
                         "excerpt", halo(Post.PostStatus.class, "excerpt"),
+                        "excerptRaw", halo(Post.Excerpt.class, "raw"),
+                        "autoGenerateExcerpt", halo(Post.Excerpt.class, "autoGenerate"),
+                        "cover", halo(Post.PostSpec.class, "cover"),
+                        "template", halo(Post.PostSpec.class, "template"),
+                        "pinned", halo(Post.PostSpec.class, "pinned"),
+                        "priority", halo(Post.PostSpec.class, "priority"),
+                        "publishTime", halo(Post.PostSpec.class, "publishTime"),
+                        "allowComment", halo(Post.PostSpec.class, "allowComment"),
                         "published",
                                 ToolSupport.described(
                                         ToolSupport.booleanSchema(), "Whether the post is currently published."),
@@ -102,9 +111,14 @@ final class ContentPayloads {
                         "displayName", halo(Category.CategorySpec.class, "displayName"),
                         "slug", halo(Category.CategorySpec.class, "slug"),
                         "description", halo(Category.CategorySpec.class, "description"),
+                        "cover", halo(Category.CategorySpec.class, "cover"),
+                        "template", halo(Category.CategorySpec.class, "template"),
+                        "postTemplate", halo(Category.CategorySpec.class, "postTemplate"),
                         "parent", halo(Category.CategorySpec.class, "parent"),
                         "priority", halo(Category.CategorySpec.class, "priority"),
                         "hideFromList", halo(Category.CategorySpec.class, "hideFromList"),
+                        "preventParentPostCascadeQuery",
+                                halo(Category.CategorySpec.class, "preventParentPostCascadeQuery"),
                         "permalink", halo(Category.CategoryStatus.class, "permalink"),
                         "postCount", halo(Category.CategoryStatus.class, "postCount"),
                         "visiblePostCount", halo(Category.CategoryStatus.class, "visiblePostCount"),
@@ -120,6 +134,7 @@ final class ContentPayloads {
                         "slug", halo(Tag.TagSpec.class, "slug"),
                         "description", halo(Tag.TagSpec.class, "description"),
                         "color", halo(Tag.TagSpec.class, "color"),
+                        "cover", halo(Tag.TagSpec.class, "cover"),
                         "permalink", halo(Tag.TagStatus.class, "permalink"),
                         "postCount", halo(Tag.TagStatus.class, "postCount"),
                         "visiblePostCount", halo(Tag.TagStatus.class, "visiblePostCount"),
@@ -167,6 +182,45 @@ final class ContentPayloads {
                 List.of("approved", "hidden", "top"));
     }
 
+    static Map<String, Object> replySchema() {
+        var properties = new java.util.LinkedHashMap<String, Object>();
+        properties.put("name", halo(Metadata.class, "name"));
+        properties.put("raw", halo(Comment.BaseCommentSpec.class, "raw"));
+        properties.put("content", halo(Comment.BaseCommentSpec.class, "content"));
+        properties.put("approved", halo(Comment.BaseCommentSpec.class, "approved"));
+        properties.put("approvedTime", halo(Comment.BaseCommentSpec.class, "approvedTime"));
+        properties.put("hidden", halo(Comment.BaseCommentSpec.class, "hidden"));
+        properties.put("top", halo(Comment.BaseCommentSpec.class, "top"));
+        properties.put(
+                "ownerKind",
+                describedHalo(
+                        Comment.CommentOwner.class,
+                        "kind",
+                        "Identity kind of the reply owner. Built-in values are User and Email."));
+        properties.put(
+                "ownerName",
+                describedHalo(
+                        Comment.CommentOwner.class,
+                        "name",
+                        "Reply owner identifier; User owners use User metadata.name."));
+        properties.put(
+                "ownerDisplayName",
+                describedHalo(
+                        Comment.CommentOwner.class,
+                        "displayName",
+                        "Display name shown for the reply owner."));
+        properties.put(
+                "creationTime",
+                describedHalo(
+                        Comment.BaseCommentSpec.class,
+                        "creationTime",
+                        "Reply creation time, falling back to metadata.creationTimestamp."));
+        properties.put("version", halo(Metadata.class, "version"));
+        properties.put("commentName", halo(Reply.ReplySpec.class, "commentName"));
+        properties.put("quoteReply", halo(Reply.ReplySpec.class, "quoteReply"));
+        return ToolSupport.objectSchema(properties, List.of("approved", "hidden", "top"));
+    }
+
     static Map<String, Object> attachmentSchema() {
         return ToolSupport.objectSchema(
                 map(
@@ -200,6 +254,18 @@ final class ContentPayloads {
                 "title", spec == null ? null : spec.getTitle(),
                 "slug", spec == null ? null : spec.getSlug(),
                 "excerpt", status == null ? null : status.getExcerpt(),
+                "excerptRaw", spec == null || spec.getExcerpt() == null
+                        ? null
+                        : spec.getExcerpt().getRaw(),
+                "autoGenerateExcerpt", spec == null
+                        || spec.getExcerpt() == null
+                        || Boolean.TRUE.equals(spec.getExcerpt().getAutoGenerate()),
+                "cover", spec == null ? null : spec.getCover(),
+                "template", spec == null ? null : spec.getTemplate(),
+                "pinned", spec != null && Boolean.TRUE.equals(spec.getPinned()),
+                "priority", spec == null ? null : spec.getPriority(),
+                "publishTime", spec == null ? null : instant(spec.getPublishTime()),
+                "allowComment", spec != null && Boolean.TRUE.equals(spec.getAllowComment()),
                 "published", published(post.getMetadata(), Post.PUBLISHED_LABEL),
                 "publishRequested", spec != null && Boolean.TRUE.equals(spec.getPublish()),
                 "recycled", spec != null && Boolean.TRUE.equals(spec.getDeleted()),
@@ -250,9 +316,14 @@ final class ContentPayloads {
                 "displayName", spec == null ? null : spec.getDisplayName(),
                 "slug", spec == null ? null : spec.getSlug(),
                 "description", spec == null ? null : spec.getDescription(),
+                "cover", spec == null ? null : spec.getCover(),
+                "template", spec == null ? null : spec.getTemplate(),
+                "postTemplate", spec == null ? null : spec.getPostTemplate(),
                 "parent", spec == null ? null : spec.getParent(),
                 "priority", spec == null ? null : spec.getPriority(),
                 "hideFromList", spec != null && spec.isHideFromList(),
+                "preventParentPostCascadeQuery",
+                        spec != null && spec.isPreventParentPostCascadeQuery(),
                 "permalink", status == null ? null : status.getPermalink(),
                 "postCount", status == null ? null : status.getPostCount(),
                 "visiblePostCount", status == null ? null : status.getVisiblePostCount(),
@@ -268,6 +339,7 @@ final class ContentPayloads {
                 "slug", spec == null ? null : spec.getSlug(),
                 "description", spec == null ? null : spec.getDescription(),
                 "color", spec == null ? null : spec.getColor(),
+                "cover", spec == null ? null : spec.getCover(),
                 "permalink", status == null ? null : status.getPermalink(),
                 "postCount", status == null ? null : status.getPostCount(),
                 "visiblePostCount", status == null ? null : status.getVisiblePostCount(),
@@ -298,6 +370,30 @@ final class ContentPayloads {
                                 : comment.getMetadata().getCreationTimestamp())
                         : instant(spec.getCreationTime()),
                 "version", comment.getMetadata() == null ? null : comment.getMetadata().getVersion());
+    }
+
+    static Map<String, Object> reply(Reply reply) {
+        var spec = reply.getSpec();
+        var owner = spec == null ? null : spec.getOwner();
+        return map(
+                "name", name(reply.getMetadata()),
+                "raw", spec == null ? null : spec.getRaw(),
+                "content", spec == null ? null : spec.getContent(),
+                "approved", spec != null && Boolean.TRUE.equals(spec.getApproved()),
+                "approvedTime", spec == null ? null : instant(spec.getApprovedTime()),
+                "hidden", spec != null && Boolean.TRUE.equals(spec.getHidden()),
+                "top", spec != null && Boolean.TRUE.equals(spec.getTop()),
+                "ownerKind", owner == null ? null : owner.getKind(),
+                "ownerName", owner == null ? null : owner.getName(),
+                "ownerDisplayName", owner == null ? null : owner.getDisplayName(),
+                "creationTime", spec == null || spec.getCreationTime() == null
+                        ? instant(reply.getMetadata() == null
+                                ? null
+                                : reply.getMetadata().getCreationTimestamp())
+                        : instant(spec.getCreationTime()),
+                "version", reply.getMetadata() == null ? null : reply.getMetadata().getVersion(),
+                "commentName", spec == null ? null : spec.getCommentName(),
+                "quoteReply", spec == null ? null : spec.getQuoteReply());
     }
 
     static Map<String, Object> attachment(Attachment attachment) {

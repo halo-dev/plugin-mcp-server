@@ -143,9 +143,9 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
         return tool(
                 UPLOAD,
                 "Upload Halo attachment",
-                "Upload a small attachment from Base64 content (maximum 8 MiB).",
+                "Upload an attachment from Base64 because MCP tool arguments are JSON (maximum 8 MiB).",
                 "上传附件",
-                "通过 Base64 内容上传附件，最大支持 8 MiB。",
+                "MCP tool 参数是 JSON，因此通过 Base64 内容上传附件，最大支持 8 MiB。",
                 "ATTACHMENT",
                 objectSchema(
                         map(
@@ -153,7 +153,9 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                                 "policyName", stringSchema(),
                                 "groupName", stringSchema(),
                                 "mediaType", stringSchema(),
-                                "contentBase64", stringSchema()),
+                                "contentBase64",
+                                        stringSchema(
+                                                "Base64-encoded file bytes; do not include a data URL prefix.")),
                         List.of("filename", "policyName", "contentBase64")),
                 ContentPayloads.attachmentSchema(),
                 CREATE,
