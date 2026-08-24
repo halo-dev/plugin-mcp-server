@@ -23,6 +23,8 @@ import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.mcpserver.McpAuthorization;
 import run.halo.mcpserver.api.McpToolException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.json.JsonMapper;
 
 abstract class ToolSupport {
 
@@ -32,6 +34,7 @@ abstract class ToolSupport {
     static final McpSchema.ToolAnnotations CREATE = annotations(false, false, false, false);
     static final McpSchema.ToolAnnotations UPDATE = annotations(false, false, true, false);
     static final McpSchema.ToolAnnotations DESTRUCTIVE = annotations(false, true, true, false);
+    private static final JsonMapper JSON_MAPPER = JsonMapper.shared();
 
     private final Logger log = LoggerFactory.getLogger(getClass());
     final McpAuthorization authorization;
@@ -70,11 +73,20 @@ abstract class ToolSupport {
             Function<Map<String, Object>, Mono<ToolPayload>> handler, Map<String, Object> arguments) {
         try {
             return handler.apply(arguments).map(payload -> McpSchema.CallToolResult.builder()
+                    .addTextContent(jsonText(payload.data()))
                     .addTextContent(payload.summary())
                     .structuredContent(payload.data())
                     .build());
         } catch (Throwable error) {
             return Mono.error(error);
+        }
+    }
+
+    private static String jsonText(Object data) {
+        try {
+            return JSON_MAPPER.writeValueAsString(data);
+        } catch (JacksonException error) {
+            throw new McpToolException("INTERNAL", "The tool returned invalid structured content", error);
         }
     }
 
