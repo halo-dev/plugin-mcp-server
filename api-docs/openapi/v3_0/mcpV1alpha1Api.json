@@ -272,9 +272,18 @@
         }
       },
       "CreateMcpAccessKeyRequest" : {
-        "required" : [ "allowedTools", "displayName" ],
+        "required" : [ "allowedIpRanges", "allowedTools", "displayName" ],
         "type" : "object",
         "properties" : {
+          "allowedIpRanges" : {
+            "uniqueItems" : true,
+            "type" : "array",
+            "description" : "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.",
+            "items" : {
+              "type" : "string",
+              "description" : "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted."
+            }
+          },
           "allowedTools" : {
             "uniqueItems" : true,
             "type" : "array",
@@ -325,9 +334,18 @@
         }
       },
       "McpAccessKey" : {
-        "required" : [ "allowedTools", "displayName", "enabled", "keyPrefix", "name", "ownerName" ],
+        "required" : [ "allowedIpRanges", "allowedTools", "displayName", "enabled", "keyPrefix", "name", "ownerName" ],
         "type" : "object",
         "properties" : {
+          "allowedIpRanges" : {
+            "uniqueItems" : true,
+            "type" : "array",
+            "description" : "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.",
+            "items" : {
+              "type" : "string",
+              "description" : "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted."
+            }
+          },
           "allowedTools" : {
             "uniqueItems" : true,
             "type" : "array",
@@ -583,9 +601,18 @@
         }
       },
       "UpdateMcpAccessKeyRequest" : {
-        "required" : [ "allowedTools", "displayName", "enabled" ],
+        "required" : [ "allowedIpRanges", "allowedTools", "displayName", "enabled" ],
         "type" : "object",
         "properties" : {
+          "allowedIpRanges" : {
+            "uniqueItems" : true,
+            "type" : "array",
+            "description" : "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.",
+            "items" : {
+              "type" : "string",
+              "description" : "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted."
+            }
+          },
           "allowedTools" : {
             "uniqueItems" : true,
             "type" : "array",

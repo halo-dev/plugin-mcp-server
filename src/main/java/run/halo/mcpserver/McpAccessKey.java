@@ -34,6 +34,8 @@ public class McpAccessKey extends AbstractExtension {
         private boolean enabled = true;
         private Instant expiresAt;
         private Set<String> allowedTools = new LinkedHashSet<>();
+        @Schema(description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
+        private Set<String> allowedIpRanges = new LinkedHashSet<>();
     }
 
     @Data

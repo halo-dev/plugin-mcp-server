@@ -40,6 +40,17 @@ Tool access is independent of Halo content RBAC: the key's exact tool allowlist
 is the authorization boundary. Newly installed tools are denied until an
 administrator explicitly adds them to a key. Disabled and expired keys are
 rejected, and rotating a key invalidates its previous secret immediately.
+Each key can optionally restrict access to exact IPv4 or IPv6 addresses and CIDR
+ranges. An empty IP allowlist means unrestricted access. Requests from an
+unmatched or unknown source are rejected as unauthorized and do not update the
+key's last-used time.
+
+IP restrictions use the remote address normalized by Halo's HTTP stack. When
+Halo is behind a reverse proxy, configure the proxy and Halo so that untrusted
+clients cannot supply or preserve `Forwarded` or `X-Forwarded-*` headers, and
+prevent direct access that bypasses the trusted proxy. An IP allowlist is an
+additional control, not a replacement for TLS and least-privilege tool access.
+
 Requests carrying an MCP Bearer token are limited to 600 per minute per observed
 network source before key validation. This is an overall source-level ceiling and
 includes successful requests. Tool calls are additionally limited to 120 per

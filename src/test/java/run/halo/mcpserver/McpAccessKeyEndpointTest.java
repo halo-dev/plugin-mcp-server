@@ -1,14 +1,17 @@
 package run.halo.mcpserver;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import run.halo.app.extension.Metadata;
@@ -39,6 +42,7 @@ class McpAccessKeyEndpointTest {
         key.getSpec().setDisplayName("Test key");
         key.getSpec().setKeyPrefix("hmcp_test");
         key.getSpec().setOwnerName("admin");
+        key.getSpec().setAllowedIpRanges(Set.of("203.0.113.0/24"));
         when(accessKeyService.list()).thenReturn(Flux.just(key));
 
         WebTestClient.bindToRouterFunction(endpoint.endpoint())
@@ -49,8 +53,35 @@ class McpAccessKeyEndpointTest {
                 .expectStatus()
                 .isOk()
                 .expectBody()
+                .jsonPath("$[0].allowedIpRanges[0]")
+                .isEqualTo("203.0.113.0/24")
                 .jsonPath("$[0].deletionTimestamp")
                 .isEqualTo(deletionTimestamp.toString());
+    }
+
+    @Test
+    void mapsInvalidIpRangesToBadRequestWhenUpdating() {
+        when(toolCatalog.availableNames()).thenReturn(reactor.core.publisher.Mono.just(Set.of()));
+        when(accessKeyService.update(any(), any(), any(), any(), any(), anyBoolean()))
+                .thenReturn(reactor.core.publisher.Mono.error(
+                        new IllegalArgumentException("Invalid IP address or CIDR: invalid")));
+
+        WebTestClient.bindToRouterFunction(endpoint.endpoint())
+                .build()
+                .put()
+                .uri("/keys/test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "displayName": "Test key",
+                          "allowedTools": [],
+                          "allowedIpRanges": ["invalid"],
+                          "enabled": true
+                        }
+                        """)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test

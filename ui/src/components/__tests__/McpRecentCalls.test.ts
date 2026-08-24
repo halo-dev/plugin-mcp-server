@@ -46,6 +46,7 @@ vi.mock('@/composables/useAccessKeys', () => ({
         keyPrefix: 'hmcp_test',
         ownerName: 'admin',
         enabled: true,
+        allowedIpRanges: [],
         allowedTools: [],
       },
     ]),

@@ -24,6 +24,7 @@ const { mutate, isLoading: submitting } = useMutation({
     const { data } = await mcpConsoleApiClient.createMcpAccessKey({
       createMcpAccessKeyRequest: {
         displayName: input.displayName,
+        allowedIpRanges: input.allowedIpRanges,
         allowedTools: input.allowedTools,
         expiresAt: input.expiresAt,
       },

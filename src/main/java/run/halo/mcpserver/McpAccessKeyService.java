@@ -1,5 +1,6 @@
 package run.halo.mcpserver;
 
+import java.net.InetSocketAddress;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
@@ -51,7 +52,9 @@ class McpAccessKeyService {
             String displayName,
             String ownerName,
             Set<String> allowedTools,
+            Set<String> allowedIpRanges,
             Instant expiresAt) {
+        var normalizedIpRanges = McpIpAllowlist.normalize(allowedIpRanges);
         var id = UUID.randomUUID().toString();
         var secret = randomSecret();
         var token = token(id, secret);
@@ -68,6 +71,7 @@ class McpAccessKeyService {
             spec.setEnabled(true);
             spec.setExpiresAt(expiresAt);
             spec.setAllowedTools(copyTools(allowedTools));
+            spec.setAllowedIpRanges(normalizedIpRanges);
             accessKey.setSpec(spec);
             return client.create(accessKey).map(created -> new CreatedKey(created, token));
         });
@@ -77,12 +81,15 @@ class McpAccessKeyService {
             String id,
             String displayName,
             Set<String> allowedTools,
+            Set<String> allowedIpRanges,
             Instant expiresAt,
             boolean enabled) {
+        var normalizedIpRanges = McpIpAllowlist.normalize(allowedIpRanges);
         return get(id).flatMap(accessKey -> {
             var spec = accessKey.getSpec();
             spec.setDisplayName(requireDisplayName(displayName));
             spec.setAllowedTools(copyTools(allowedTools));
+            spec.setAllowedIpRanges(normalizedIpRanges);
             spec.setExpiresAt(expiresAt);
             spec.setEnabled(enabled);
             return client.update(accessKey);
@@ -108,7 +115,8 @@ class McpAccessKeyService {
         return get(id).flatMap(client::delete).then();
     }
 
-    Mono<McpKeyAuthenticationToken> authenticate(String rawToken) {
+    Mono<McpKeyAuthenticationToken> authenticate(
+            String rawToken, InetSocketAddress remoteAddress) {
         var parsed = parse(rawToken);
         if (parsed == null) {
             return Mono.empty();
@@ -117,6 +125,8 @@ class McpAccessKeyService {
                 .filter(this::active)
                 .flatMap(accessKey -> matches(parsed.secret(), accessKey.getSpec().getKeyHash())
                         .filter(Boolean::booleanValue)
+                        .filter(ignored -> McpIpAllowlist.allows(
+                                accessKey.getSpec().getAllowedIpRanges(), remoteAddress))
                         .flatMap(ignored -> touch(accessKey).thenReturn(new McpKeyAuthenticationToken(
                                 parsed.id(),
                                 accessKey.getSpec().getDisplayName(),

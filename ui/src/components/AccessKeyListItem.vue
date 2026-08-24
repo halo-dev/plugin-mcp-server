@@ -42,6 +42,7 @@ const { mutate: changeEnabled, isLoading: changingEnabled } = useMutation({
       name: props.mcpAccessKey.name,
       updateMcpAccessKeyRequest: {
         displayName: props.mcpAccessKey.displayName,
+        allowedIpRanges: props.mcpAccessKey.allowedIpRanges,
         allowedTools: props.mcpAccessKey.allowedTools,
         expiresAt: props.mcpAccessKey.expiresAt,
         enabled,
@@ -112,6 +113,13 @@ function handleDelete() {
     <template #end>
       <div class=":uno: flex flex-wrap items-center justify-end gap-3 text-xs text-gray-500">
         <VTag>{{ mcpAccessKey.allowedTools.length }} 个工具</VTag>
+        <VTag>
+          {{
+            mcpAccessKey.allowedIpRanges.length
+              ? `限制 ${mcpAccessKey.allowedIpRanges.length} 个 IP 范围`
+              : 'IP 不限制'
+          }}
+        </VTag>
         <span v-tooltip="utils.date.format(mcpAccessKey.creationTimestamp)">
           创建：{{
             mcpAccessKey.creationTimestamp
