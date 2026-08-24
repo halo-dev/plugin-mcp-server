@@ -5,6 +5,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.net.InetSocketAddress;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,21 +68,26 @@ class McpKeyAuthenticationFilterTest {
                 "hmcp_00000000",
                 "admin",
                 Set.of("halo_search_content"));
-        when(accessKeyService.authenticate(rawToken)).thenReturn(Mono.just(authentication));
+        var remoteAddress = new InetSocketAddress("203.0.113.8", 41321);
+        when(accessKeyService.authenticate(rawToken, remoteAddress))
+                .thenReturn(Mono.just(authentication));
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
-                .header(HttpHeaders.AUTHORIZATION, "bEaReR " + rawToken));
+                .remoteAddress(remoteAddress)
+                .header(HttpHeaders.AUTHORIZATION, "bEaReR " + rawToken)
+                .header("X-Forwarded-For", "198.51.100.9"));
         filter.filter(exchange, ignored -> Mono.error(new AssertionError("Halo chain must not continue")))
                 .block();
 
         assertThat(handledAuthorization.get()).isNull();
         assertThat(handledPath.get()).isEqualTo(McpKeyAuthenticationFilter.MCP_PATH);
         assertThat(currentAuthentication.get()).isSameAs(authentication);
+        verify(accessKeyService).authenticate(rawToken, remoteAddress);
     }
 
     @Test
     void rejectsAnInvalidMcpKey() {
         var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_invalid";
-        when(accessKeyService.authenticate(rawToken)).thenReturn(Mono.empty());
+        when(accessKeyService.authenticate(rawToken, null)).thenReturn(Mono.empty());
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
 
@@ -119,7 +125,7 @@ class McpKeyAuthenticationFilterTest {
                 })
                 .block();
 
-        verify(accessKeyService, never()).authenticate(rawToken);
+        verify(accessKeyService, never()).authenticate(rawToken, null);
         assertThat(forwarded.get().getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION))
                 .isEqualTo("Bearer " + rawToken);
     }
@@ -133,14 +139,14 @@ class McpKeyAuthenticationFilterTest {
                 "hmcp_00000000",
                 "admin",
                 Set.of());
-        when(accessKeyService.authenticate(rawToken)).thenReturn(Mono.just(authentication));
+        when(accessKeyService.authenticate(rawToken, null)).thenReturn(Mono.just(authentication));
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/mcp/")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
 
         filter.filter(exchange, ignored -> Mono.error(new AssertionError("Halo chain must not continue")))
                 .block();
 
-        verify(accessKeyService).authenticate(rawToken);
+        verify(accessKeyService).authenticate(rawToken, null);
         assertThat(handledPath.get()).isEqualTo("/mcp/");
     }
 
@@ -153,7 +159,7 @@ class McpKeyAuthenticationFilterTest {
                 "hmcp_00000000",
                 "admin",
                 Set.of("halo_search_content"));
-        when(accessKeyService.authenticate(rawToken)).thenReturn(Mono.just(authentication));
+        when(accessKeyService.authenticate(rawToken, null)).thenReturn(Mono.just(authentication));
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken)
                 .header(io.modelcontextprotocol.spec.HttpHeaders.PROTOCOL_VERSION, "2099-01-01"));
@@ -179,6 +185,6 @@ class McpKeyAuthenticationFilterTest {
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
         assertThat(exchange.getResponse().getHeaders().getFirst(HttpHeaders.RETRY_AFTER))
                 .isEqualTo("60");
-        verify(accessKeyService, never()).authenticate(rawToken);
+        verify(accessKeyService, never()).authenticate(rawToken, null);
     }
 }

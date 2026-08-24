@@ -21,6 +21,12 @@
  */
 export interface McpAccessKey {
     /**
+     * Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.
+     * @type {Array<string>}
+     * @memberof McpAccessKey
+     */
+    'allowedIpRanges': Array<string>;
+    /**
      * 
      * @type {Array<string>}
      * @memberof McpAccessKey

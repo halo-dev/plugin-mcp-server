@@ -51,7 +51,7 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
             return tooManyRequests(exchange);
         }
         var rawToken = authorization.substring(BEARER_SCHEME.length());
-        return accessKeyService.authenticate(rawToken)
+        return accessKeyService.authenticate(rawToken, exchange.getRequest().getRemoteAddress())
                 .flatMap(authentication -> {
                     if (!hasSupportedProtocolVersion(exchange)) {
                         return badRequest(exchange).thenReturn(true);

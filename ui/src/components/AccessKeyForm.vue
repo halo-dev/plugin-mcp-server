@@ -22,6 +22,7 @@ const expiresAt = shallowRef(
   props.accessKey?.expiresAt ? utils.date.toDatetimeLocal(props.accessKey.expiresAt) : '',
 )
 const enabled = shallowRef(props.accessKey?.enabled ?? true)
+const allowedIpRanges = shallowRef((props.accessKey?.allowedIpRanges ?? []).join('\n'))
 const selected = reactive<Record<string, boolean>>(
   Object.fromEntries(
     props.tools.map((tool) => [
@@ -47,6 +48,14 @@ function applyPreset(preset: 'read' | 'content' | 'all' | 'none') {
 function onSubmit() {
   emit('submit', {
     displayName: displayName.value,
+    allowedIpRanges: [
+      ...new Set(
+        allowedIpRanges.value
+          .split(/\r?\n/)
+          .map((range) => range.trim())
+          .filter(Boolean),
+      ),
+    ],
     allowedTools: props.tools.filter((tool) => selected[tool.name]).map((tool) => tool.name),
     expiresAt: expiresAt.value ? utils.date.toISOString(expiresAt.value) : undefined,
     enabled: enabled.value,
@@ -76,6 +85,15 @@ defineExpose({
       help="留空表示永不过期"
     />
     <FormKit v-if="accessKey" v-model="enabled" type="switch" name="enabled" label="启用" />
+    <FormKit
+      v-model="allowedIpRanges"
+      type="textarea"
+      name="allowedIpRanges"
+      label="允许访问的 IP"
+      help="每行填写一个 IPv4、IPv6 或 CIDR；留空表示不限制。使用反向代理时需确保客户端来源地址可信。"
+      :placeholder="'203.0.113.10\n203.0.113.0/24\n2001:db8::/32'"
+      :rows="5"
+    />
 
     <div class=":uno: mt-5 border-t border-gray-100 pt-5">
       <div class=":uno: mb-3 flex flex-wrap items-center justify-between gap-3">

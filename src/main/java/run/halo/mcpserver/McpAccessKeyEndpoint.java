@@ -148,6 +148,7 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
                         tuple.getT1().displayName(),
                         tuple.getT2(),
                         tools(tuple.getT1().allowedTools()),
+                        tuple.getT1().allowedIpRanges(),
                         tuple.getT1().expiresAt()))
                 .flatMap(created -> ServerResponse.created(URI.create("keys/" + created.accessKey()
                                 .getMetadata()
@@ -166,11 +167,14 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
                         name,
                         body.displayName(),
                         tools(body.allowedTools()),
+                        body.allowedIpRanges(),
                         body.expiresAt(),
                         body.enabled()))
                 .flatMap(key -> ServerResponse.ok().bodyValue(view(key)))
                 .onErrorMap(McpAccessKeyService.AccessKeyNotFoundException.class, error ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, error.getMessage(), error));
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, error.getMessage(), error))
+                .onErrorMap(IllegalArgumentException.class, error ->
+                        new ServerWebInputException(error.getMessage(), null, error));
     }
 
     private Mono<ServerResponse> rotate(ServerRequest request) {
@@ -277,6 +281,7 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
                 spec.isEnabled(),
                 spec.getExpiresAt(),
                 spec.getAllowedTools() == null ? Set.of() : Set.copyOf(spec.getAllowedTools()),
+                spec.getAllowedIpRanges() == null ? Set.of() : Set.copyOf(spec.getAllowedIpRanges()),
                 status == null ? null : status.getLastUsedAt(),
                 metadata.getCreationTimestamp(),
                 metadata.getDeletionTimestamp());
@@ -291,12 +296,20 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
     record CreateKeyRequest(
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName,
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Set<String> allowedTools,
+            @Schema(
+                            requiredMode = Schema.RequiredMode.REQUIRED,
+                            description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
+                    Set<String> allowedIpRanges,
             Instant expiresAt) {}
 
     @Schema(name = "UpdateMcpAccessKeyRequest")
     record UpdateKeyRequest(
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName,
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Set<String> allowedTools,
+            @Schema(
+                            requiredMode = Schema.RequiredMode.REQUIRED,
+                            description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
+                    Set<String> allowedIpRanges,
             Instant expiresAt,
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean enabled) {}
 
@@ -309,6 +322,10 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean enabled,
             Instant expiresAt,
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Set<String> allowedTools,
+            @Schema(
+                            requiredMode = Schema.RequiredMode.REQUIRED,
+                            description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
+                    Set<String> allowedIpRanges,
             Instant lastUsedAt,
             Instant creationTimestamp,
             Instant deletionTimestamp) {}

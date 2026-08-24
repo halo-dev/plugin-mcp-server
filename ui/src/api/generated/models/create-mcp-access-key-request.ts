@@ -21,6 +21,12 @@
  */
 export interface CreateMcpAccessKeyRequest {
     /**
+     * Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.
+     * @type {Array<string>}
+     * @memberof CreateMcpAccessKeyRequest
+     */
+    'allowedIpRanges': Array<string>;
+    /**
      * 
      * @type {Array<string>}
      * @memberof CreateMcpAccessKeyRequest

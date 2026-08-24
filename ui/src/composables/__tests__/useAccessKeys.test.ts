@@ -9,6 +9,7 @@ function accessKey(deletionTimestamp?: string): McpAccessKey {
     keyPrefix: 'hmcp_test',
     ownerName: 'admin',
     enabled: true,
+    allowedIpRanges: [],
     allowedTools: [],
     deletionTimestamp,
   }

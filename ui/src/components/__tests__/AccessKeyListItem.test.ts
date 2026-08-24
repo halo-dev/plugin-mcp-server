@@ -9,6 +9,7 @@ type UpdateAccessKeyCall = (request: {
   name: string
   updateMcpAccessKeyRequest: {
     displayName: string
+    allowedIpRanges: string[]
     allowedTools: string[]
     expiresAt?: string
     enabled: boolean
@@ -56,6 +57,7 @@ const accessKey: McpAccessKey = {
   ownerName: 'admin',
   enabled: true,
   expiresAt: '2026-12-01T00:00:00Z',
+  allowedIpRanges: ['203.0.113.0/24'],
   allowedTools: ['halo_get_post'],
 }
 
@@ -89,12 +91,18 @@ describe('AccessKeyListItem', () => {
       name: 'key-1',
       updateMcpAccessKeyRequest: {
         displayName: '内容自动化',
+        allowedIpRanges: ['203.0.113.0/24'],
         allowedTools: ['halo_get_post'],
         expiresAt: '2026-12-01T00:00:00Z',
         enabled: false,
       },
     })
     expect(toastSuccess).toHaveBeenCalledWith('MCP 密钥已禁用')
+  })
+
+  it('shows whether IP access is restricted', () => {
+    expect(mountListItem().text()).toContain('限制 1 个 IP 范围')
+    expect(mountListItem({ ...accessKey, allowedIpRanges: [] }).text()).toContain('IP 不限制')
   })
 
   it('uses the expiration text to indicate an expired access key', () => {
