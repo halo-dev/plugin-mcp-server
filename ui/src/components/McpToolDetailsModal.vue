@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { McpTool } from '@/api'
 import JsonSchemaViewer from '@/components/JsonSchemaViewer.vue'
+import { toolCategoryLabel } from '@/utils/tool'
 import { VButton, VModal, VSpace, VTag } from '@halo-dev/components'
 import { useTemplateRef } from 'vue'
 
@@ -53,7 +54,7 @@ const modal = useTemplateRef<InstanceType<typeof VModal>>('modal')
         </div>
         <div>
           <dt class=":uno: text-xs text-gray-500">分类</dt>
-          <dd class=":uno: mt-1 text-sm text-gray-800">{{ tool.category }}</dd>
+          <dd class=":uno: mt-1 text-sm text-gray-800">{{ toolCategoryLabel(tool.category) }}</dd>
         </div>
       </dl>
 
