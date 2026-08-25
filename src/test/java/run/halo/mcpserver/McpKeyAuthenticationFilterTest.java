@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -59,6 +60,21 @@ class McpKeyAuthenticationFilterTest {
         rateLimiter = new McpRequestRateLimiter();
         filter = new McpKeyAuthenticationFilter(
                 accessKeyService, rateLimiter, new McpInFlightLimiter(), mcpServer);
+    }
+
+    @Test
+    void springCreatesTheFilterUsingTheProductionConstructor() {
+        try (var context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(McpAccessKeyService.class, () -> accessKeyService);
+            context.registerBean(McpRequestRateLimiter.class, () -> rateLimiter);
+            context.registerBean(McpInFlightLimiter.class, McpInFlightLimiter::new);
+            context.registerBean(HaloMcpServer.class, () -> mcpServer);
+            context.register(McpKeyAuthenticationFilter.class);
+
+            context.refresh();
+
+            assertThat(context.getBean(McpKeyAuthenticationFilter.class)).isNotNull();
+        }
     }
 
     @Test

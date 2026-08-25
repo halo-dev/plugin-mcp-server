@@ -4,6 +4,7 @@ import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.http.HttpHeaders.RETRY_AFTER;
 import static org.springframework.http.HttpHeaders.WWW_AUTHENTICATE;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -30,6 +31,7 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
     private final java.util.Set<String> protocolVersions;
     private final java.time.Duration requestTimeout;
 
+    @Autowired
     McpKeyAuthenticationFilter(
             McpAccessKeyService accessKeyService,
             McpRequestRateLimiter rateLimiter,
