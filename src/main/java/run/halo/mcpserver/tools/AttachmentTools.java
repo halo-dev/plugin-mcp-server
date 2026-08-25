@@ -79,7 +79,7 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
         }
         var mediaType = mediaType(arguments.get("mediaType"));
         return authorization.withKeyId(keyId -> {
-            var reservation = uploadLimiter.tryAcquire(keyId, estimatedDecodedBytes(encoded));
+            var reservation = uploadLimiter.tryAcquire(keyId, decodedLength(encoded));
             if (reservation == null) {
                 return Mono.error(new McpToolException(
                         "RATE_LIMITED", "Too many concurrent attachment uploads; please retry shortly"));
@@ -113,8 +113,19 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
         return bytes;
     }
 
-    private static long estimatedDecodedBytes(String encoded) {
-        return encoded.length() / 4L * 3L + 3L;
+    /**
+     * Returns the exact length valid Base64 decodes to. Invalid input may misestimate but never
+     * below zero; the content is still validated when it is actually decoded.
+     */
+    private static long decodedLength(String encoded) {
+        var length = encoded.length();
+        var padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+        var decoded = switch (length % 4) {
+            case 2 -> length / 4L * 3L + 1L;
+            case 3 -> length / 4L * 3L + 2L;
+            default -> length / 4L * 3L - padding;
+        };
+        return Math.max(decoded, 0L);
     }
 
     Mono<ToolPayload> delete(Map<String, Object> arguments) {

@@ -99,6 +99,39 @@ class AttachmentToolsTest {
     }
 
     @Test
+    void admitsConcurrentUploadsUpToTheExactPerKeyByteBudget() {
+        var uploadLimiter = new AttachmentUploadLimiter();
+        var tools = new AttachmentTools(client, attachmentService, uploadLimiter, authorization);
+        stubKeyId("key-one");
+        when(attachmentService.upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class)))
+                .thenReturn(Mono.never());
+        var arguments = Map.<String, Object>of(
+                "filename", "a.bin",
+                "policyName", "local",
+                "contentBase64", Base64.getEncoder().encodeToString(new byte[8 * 1024 * 1024]));
+
+        var errors = new java.util.concurrent.CopyOnWriteArrayList<Throwable>();
+        var uploads = new java.util.ArrayList<reactor.core.Disposable>();
+        for (var i = 0; i < 4; i++) {
+            uploads.add(tools.upload(arguments).subscribe(payload -> {}, errors::add));
+        }
+
+        // Four times 8 MiB is exactly the per-key budget: all four must be admitted.
+        assertThat(errors).isEmpty();
+        assertThat(uploads).allSatisfy(upload -> assertThat(upload.isDisposed()).isFalse());
+
+        StepVerifier.create(tools.upload(arguments))
+                .expectErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(McpToolException.class)
+                        .hasMessageContaining("concurrent attachment uploads"))
+                .verify();
+
+        uploads.forEach(reactor.core.Disposable::dispose);
+        assertThat(uploadLimiter.tryAcquire("key-one", AttachmentUploadLimiter.PER_KEY_BUDGET_BYTES))
+                .isNotNull();
+    }
+
+    @Test
     void deletionUsesExtensionLifecycleSoReconcilerCleansStorage() {
         var attachment = new Attachment();
         attachment.setMetadata(ToolSupport.metadata("attachment-one"));
