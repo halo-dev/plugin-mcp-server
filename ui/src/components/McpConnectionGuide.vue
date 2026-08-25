@@ -7,10 +7,6 @@ import OpenaiIcon from '~icons/simple-icons/openai'
 import CursorIcon from '~icons/simple-icons/cursor'
 import VSCodeIcon from '~icons/logos/visual-studio-code'
 
-const props = defineProps<{
-  token?: string
-}>()
-
 const icons: Record<McpClientId, Component> = {
   'claude-code': ClaudeIcon,
   codex: OpenaiIcon,
@@ -18,9 +14,9 @@ const icons: Record<McpClientId, Component> = {
   vscode: VSCodeIcon,
 }
 
-const guides = computed(() => mcpClientGuides(props.token))
+const guides = mcpClientGuides()
 const active = shallowRef<McpClientId>('claude-code')
-const current = computed(() => guides.value.find((guide) => guide.id === active.value)!)
+const current = computed(() => guides.find((guide) => guide.id === active.value)!)
 
 async function copy(value: string) {
   try {
@@ -68,9 +64,9 @@ async function copy(value: string) {
         </button>
       </div>
     </div>
-    <p v-if="!token" class=":uno: mt-2 text-xs text-gray-400">
-      将配置中的 $HALO_MCP_TOKEN 替换为创建密钥时获得的完整密钥；创建或轮换密钥后可一键安装到 Cursor
-      / VS Code。
+    <p class=":uno: mt-2 text-xs text-gray-400">
+      配置不包含密钥本身：Claude Code、Codex、Cursor 从环境变量 HALO_MCP_TOKEN 读取密钥，VS Code
+      首次启动时会提示输入并安全保存。
     </p>
   </div>
 </template>

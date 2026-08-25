@@ -32,7 +32,7 @@ const { copy, copied } = useClipboard({
       <FormKit type="textarea" :model-value="token" label="MCP 密钥" :rows="4" readonly />
       <div>
         <div class=":uno: mb-2 text-sm text-gray-700 font-medium">接入方式</div>
-        <McpConnectionGuide :token="token" />
+        <McpConnectionGuide />
       </div>
     </div>
     <template #footer>
