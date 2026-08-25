@@ -81,15 +81,17 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
                     // Defer so a synchronously throwing handler assembly still flows through
                     // the error path and releases the permit.
                     return Mono.defer(() -> mcpHandler.handle(exchange.mutate().request(request).build()))
-                            .timeout(requestTimeout)
-                            .onErrorResume(java.util.concurrent.TimeoutException.class,
-                                    error -> serviceUnavailable(exchange))
                             .doFinally(ignored -> permit.close())
                             .contextWrite(org.springframework.security.core.context.ReactiveSecurityContextHolder
                                     .withAuthentication(authentication))
                             .thenReturn(true);
                 })
                 .defaultIfEmpty(false)
+                // The deadline covers the whole authenticate-and-handle chain so stalled
+                // credential lookups cannot park requests either.
+                .timeout(requestTimeout)
+                .onErrorResume(java.util.concurrent.TimeoutException.class,
+                        error -> serviceUnavailable(exchange).thenReturn(true))
                 .flatMap(handled -> handled ? Mono.empty() : unauthorized(exchange));
     }
 

@@ -218,6 +218,22 @@ class McpKeyAuthenticationFilterTest {
     }
 
     @Test
+    void timesOutAStalledAuthentication() {
+        var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
+        when(accessKeyService.authenticate(rawToken, null)).thenReturn(Mono.never());
+        var fastFilter = new McpKeyAuthenticationFilter(
+                accessKeyService, new McpRequestRateLimiter(), new McpInFlightLimiter(), mcpServer,
+                java.time.Duration.ofMillis(50));
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
+
+        fastFilter.filter(exchange, ignored -> Mono.error(new AssertionError("Request must not continue")))
+                .block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    @Test
     void rejectsRequestsWhenTheInFlightBudgetIsExhausted() {
         var inFlightLimiter = new McpInFlightLimiter();
         var keyId = "00000000-0000-0000-0000-000000000000";
