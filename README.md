@@ -3,6 +3,8 @@
 Halo 的 [Model Context Protocol（MCP）](https://modelcontextprotocol.io/) 服务端插件，
 让 Codex、Claude Code、Cursor、VS Code 等 AI 客户端通过受控的访问密钥管理 Halo 网站。
 
+![](./images/preview.png)
+
 ## 功能特性
 
 - 搜索、读取、创建、更新、发布和回收文章及独立页面
