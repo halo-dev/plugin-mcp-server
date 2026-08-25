@@ -8,8 +8,8 @@ spec:
   pluginDependencies:
     mcp-server?: ">=1.0.0 & <2.0.0"
   author:
-    name: Halo MCP Server
-    website: https://github.com/ryanwang/mcp-server
+    name: Halo
+    website: https://github.com/halo-dev/plugin-mcp-server
   displayName: MCP Tool Clock
   description: Adds an optional current-time tool when Halo MCP Server is available.
   license:

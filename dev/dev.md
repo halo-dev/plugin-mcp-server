@@ -17,7 +17,7 @@ dependencies {
 ```
 
 When developing both projects locally, build `:api:jar` and use the generated
-`api/build/libs/plugin-mcp-server-api-1.0.0.jar`, as demonstrated by the plugins
+`api/build/libs/api-1.0.0-SNAPSHOT.jar`, as demonstrated by the plugins
 under [`examples/`](../examples/).
 
 ## Declare an optional plugin dependency

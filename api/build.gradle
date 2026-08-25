@@ -26,10 +26,6 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 21
 }
 
-tasks.named('jar') {
-    archiveBaseName = 'plugin-mcp-server-api'
-}
-
 mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
@@ -39,7 +35,7 @@ mavenPublishing {
     pom {
         name = 'Halo MCP Server API'
         description = 'Cross-plugin API for contributing Halo tools to the MCP Server plugin.'
-        url = 'https://github.com/ryanwang/mcp-server'
+        url = 'https://github.com/halo-dev/plugin-mcp-server'
         licenses {
             license {
                 name = 'The GNU General Public License v3.0'
@@ -48,14 +44,15 @@ mavenPublishing {
         }
         developers {
             developer {
-                id = 'ryanwang'
-                name = 'Ryan Wang'
+                id = 'halo-dev'
+                name = 'Halo'
+                email = 'hi@halo.run'
             }
         }
         scm {
-            url = 'https://github.com/ryanwang/mcp-server'
-            connection = 'scm:git:git@github.com:ryanwang/mcp-server.git'
-            developerConnection = 'scm:git:ssh://git@github.com/ryanwang/mcp-server.git'
+            url = 'https://github.com/halo-dev/plugin-mcp-server'
+            connection = 'scm:git:git@github.com:halo-dev/plugin-mcp-server.git'
+            developerConnection = 'scm:git:ssh://git@github.com/halo-dev/plugin-mcp-server.git'
         }
     }
 }

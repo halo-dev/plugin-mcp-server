@@ -235,4 +235,4 @@ direct content reads remain available in that situation.
 
 ## License
 
-[GPL-3.0](./LICENSE) © ryanwang
+[GPL-3.0](./LICENSE) © Halo
