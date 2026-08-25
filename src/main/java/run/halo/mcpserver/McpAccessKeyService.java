@@ -127,14 +127,26 @@ class McpAccessKeyService {
                         .filter(Boolean::booleanValue)
                         .filter(ignored -> McpIpAllowlist.allows(
                                 accessKey.getSpec().getAllowedIpRanges(), remoteAddress))
-                        .flatMap(ignored -> touch(accessKey).thenReturn(new McpKeyAuthenticationToken(
+                        .flatMap(ignored -> revalidate(accessKey))
+                        .flatMap(fresh -> touch(fresh).thenReturn(new McpKeyAuthenticationToken(
                                 parsed.id(),
-                                accessKey.getSpec().getDisplayName(),
-                                accessKey.getSpec().getKeyPrefix(),
-                                accessKey.getSpec().getOwnerName(),
-                                accessKey.getSpec().getAllowedTools() == null
+                                fresh.getSpec().getDisplayName(),
+                                fresh.getSpec().getKeyPrefix(),
+                                fresh.getSpec().getOwnerName(),
+                                fresh.getSpec().getAllowedTools() == null
                                         ? Set.of()
-                                        : accessKey.getSpec().getAllowedTools()))));
+                                        : fresh.getSpec().getAllowedTools()))));
+    }
+
+    /**
+     * Re-fetches the key after asynchronous password verification so a rotation, disablement,
+     * scope change, or deletion committed meanwhile invalidates this authentication. Status-only
+     * writes such as last-used updates do not affect the comparison.
+     */
+    private Mono<McpAccessKey> revalidate(McpAccessKey snapshot) {
+        return client.fetch(McpAccessKey.class, snapshot.getMetadata().getName())
+                .filter(this::active)
+                .filter(fresh -> fresh.getSpec().equals(snapshot.getSpec()));
     }
 
     private Mono<McpAccessKey> get(String id) {
