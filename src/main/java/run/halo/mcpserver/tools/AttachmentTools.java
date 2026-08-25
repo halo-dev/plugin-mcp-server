@@ -78,7 +78,7 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
             throw new McpToolException("INVALID_ARGUMENT", "contentBase64 exceeds the 8 MiB limit");
         }
         var mediaType = mediaType(arguments.get("mediaType"));
-        return authorization.withKeyId(keyId -> {
+        return authorization.keyId().flatMap(keyId -> {
             var reservation = uploadLimiter.tryAcquire(keyId, decodedLength(encoded));
             if (reservation == null) {
                 return Mono.error(new McpToolException(
@@ -117,15 +117,9 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
      * Returns the exact length valid Base64 decodes to. Invalid input may misestimate but never
      * below zero; the content is still validated when it is actually decoded.
      */
-    private static long decodedLength(String encoded) {
-        var length = encoded.length();
+    private static int decodedLength(String encoded) {
         var padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
-        var decoded = switch (length % 4) {
-            case 2 -> length / 4L * 3L + 1L;
-            case 3 -> length / 4L * 3L + 2L;
-            default -> length / 4L * 3L - padding;
-        };
-        return Math.max(decoded, 0L);
+        return Math.max(encoded.length() * 3 / 4 - padding, 0);
     }
 
     Mono<ToolPayload> delete(Map<String, Object> arguments) {

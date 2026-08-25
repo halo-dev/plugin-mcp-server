@@ -32,18 +32,8 @@ public class McpAuthorization {
         }));
     }
 
-    /** Runs an action with the current key's ID while keeping the authentication token internal. */
-    public <T> Mono<T> withKeyId(java.util.function.Function<String, Mono<T>> action) {
-        return authentication().map(McpKeyAuthenticationToken::keyId).flatMap(keyId -> {
-            try {
-                var result = action.apply(keyId);
-                return result == null
-                        ? Mono.error(new McpToolException("INTERNAL", "The tool returned no result"))
-                        : result;
-            } catch (Throwable error) {
-                return Mono.error(error);
-            }
-        });
+    public Mono<String> keyId() {
+        return authentication().map(McpKeyAuthenticationToken::keyId);
     }
 
     Mono<McpKeyAuthenticationToken> authentication() {

@@ -150,9 +150,6 @@ class AttachmentToolsTest {
     }
 
     private void stubKeyId(String keyId) {
-        when(authorization.withKeyId(any())).thenAnswer(invocation -> {
-            java.util.function.Function<String, Mono<?>> action = invocation.getArgument(0);
-            return action.apply(keyId);
-        });
+        when(authorization.keyId()).thenReturn(Mono.just(keyId));
     }
 }
