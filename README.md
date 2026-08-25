@@ -1,119 +1,42 @@
 # Halo MCP Server
 
-A [Model Context Protocol](https://modelcontextprotocol.io/) server for Halo.
-It exposes native post, single-page, taxonomy, and attachment tools to MCP clients
-through scoped MCP access keys. Enabled Halo plugins can
-also contribute their own tools through the small, protocol-neutral MCP Server API.
+Halo 的 [Model Context Protocol（MCP）](https://modelcontextprotocol.io/) 服务端插件，
+让 Codex、Claude Code、Cursor、VS Code 等 AI 客户端通过受控的访问密钥管理 Halo 网站。
 
-## Requirements
+## 功能特性
 
-- Halo 2.26.0 or later
-- Java 21 for local development
-- An HTTPS endpoint for production use
-- An MCP client that supports Streamable HTTP and custom bearer tokens
+- 搜索、读取、创建、更新、发布和回收文章及独立页面
+- 查询和管理文章分类、标签、评论及评论回复
+- 查询、上传和删除附件
+- 按访问密钥选择可用工具，并支持有效期、禁用、轮换和 IP 白名单
+- 在 Halo 控制台查看工具来源和最近调用记录
+- 自动发现其他 Halo 插件贡献的 MCP 工具
 
-The plugin uses MCP Java SDK 2.0.0 and supports protocol versions `2024-11-05`,
-`2025-03-26`, `2025-06-18`, and `2025-11-25`. It does not implement the legacy
-HTTP+SSE transport, the 2026 protocol era, or MCP OAuth discovery.
+## 使用要求
 
-## Endpoint and authentication
+- Halo 2.26.0 或更高版本
+- 生产环境使用 HTTPS
+- 支持 Streamable HTTP 和自定义 Bearer Token 的 MCP 客户端
 
-After installing and enabling the plugin, the MCP endpoint is:
+## 快速开始
+
+1. 在 Halo 控制台中安装并启用 MCP Server 插件。
+2. 打开「工具 → MCP 服务」。
+3. 创建访问密钥，并选择该密钥可以调用的工具。
+4. 复制页面提供的客户端配置，并按提示通过环境变量或安全输入保存密钥。
+
+MCP 端点为：
 
 ```text
 https://halo.example.com/mcp
 ```
 
-Open **Tools → MCP 服务** in Halo Console, generate a key, and select the exact
-tools that key may call. The page also shows the endpoint, a quick client
-configuration, and each tool's built-in or provider-plugin source. The management
-page and API are restricted to Halo super administrators. The generated key is
-displayed only once.
+访问密钥只会在创建或轮换后显示一次。新安装的工具默认不会加入已有密钥，需要管理员手动
+选择。MCP 服务管理入口仅对 Halo 超级管理员开放。
 
-Requests must include the generated MCP key:
+## 客户端配置
 
-```http
-Authorization: Bearer hmcp_...
-```
-
-Tool access is independent of Halo content RBAC: the key's exact tool allowlist
-is the authorization boundary. Newly installed tools are denied until an
-administrator explicitly adds them to a key. Disabled and expired keys are
-rejected, and rotating a key invalidates its previous secret immediately.
-Each key can optionally restrict access to exact IPv4 or IPv6 addresses and CIDR
-ranges. An empty IP allowlist means unrestricted access. Requests from an
-unmatched or unknown source are rejected as unauthorized and do not update the
-key's last-used time.
-
-IP restrictions use the remote address normalized by Halo's HTTP stack. When
-Halo is behind a reverse proxy, configure the proxy and Halo so that untrusted
-clients cannot supply or preserve `Forwarded` or `X-Forwarded-*` headers, and
-prevent direct access that bypasses the trusted proxy. An IP allowlist is an
-additional control, not a replacement for TLS and least-privilege tool access.
-
-Requests carrying an MCP Bearer token are limited to 600 per minute per observed
-network source before key validation. This is an overall source-level ceiling and
-includes successful requests. Tool calls are additionally limited to 120 per
-minute for each access-key and tool pair. Limits are process-local and therefore
-apply independently to each Halo replica.
-
-Authenticated request handling is cancelled after a 30-second deadline, and
-concurrent authenticated requests are capped at 100 globally and 16 per access
-key; requests beyond the cap receive `429 Too Many Requests`. Attachment uploads
-reserve their decoded size against in-flight byte budgets of 64 MiB globally and
-32 MiB per key before decoding, and excess uploads fail with `RATE_LIMITED`.
-
-Use a dedicated, least-privilege key. Do not put keys in URLs, configuration
-files committed to source control, shell history, or logs.
-
-Direct browser requests are rejected because the transport does not allow an
-`Origin` header by default. CLI clients and server-side Inspector connections
-normally omit that header.
-
-## Tools
-
-| Tool                                                                                   | Purpose                                                           |
-| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `halo_search_content`                                                                  | Search posts and single pages.                                    |
-| `halo_list_posts` / `halo_get_post`                                                    | List posts or read HEAD/RELEASE content.                          |
-| `halo_create_post` / `halo_update_post`                                                | Create or update a post and its content snapshots.                |
-| `halo_set_post_publish_state` / `halo_recycle_post`                                   | Set a post's publication state or recycle it.                     |
-| `halo_list_single_pages` / `halo_get_single_page`                                      | List single pages or read HEAD/RELEASE content.                   |
-| `halo_create_single_page` / `halo_update_single_page`                                  | Create or update a single page and its content snapshots.         |
-| `halo_set_single_page_publish_state` / `halo_recycle_single_page`                     | Set a page's publication state or recycle it.                     |
-| `halo_list_categories` / `halo_create_category` / `halo_update_category`              | List, create, or update post categories.                          |
-| `halo_list_tags` / `halo_create_tag` / `halo_update_tag`                              | List, create, or update post tags.                                |
-| `halo_list_comments` / `halo_set_comment_approval` / `halo_delete_comment`            | List, moderate, or delete comments.                               |
-| `halo_list_comment_replies` / `halo_set_reply_approval` / `halo_delete_reply`         | List, moderate, or delete comment replies.                        |
-| `halo_list_attachments` / `halo_get_attachment`                                        | List or inspect attachments.                                      |
-| `halo_upload_attachment` / `halo_delete_attachment`                                    | Upload a Base64 attachment (up to 8 MiB) or delete an attachment. |
-
-Native and plugin-contributed tools are exposed directly in `tools/list`; there
-are no discovery or execution gateway tools. The response contains only the
-tools selected for the current key. Category and tag updates, comment and reply
-moderation, and attachment deletion accept an optional `expectedVersion`; a stale
-version returns `CONFLICT` instead of overwriting a newer resource. Post and
-single-page writes instead re-read and retry the latest resource because Halo
-reconcilers may advance their metadata versions independently. Attachment uploads
-intentionally accept inline Base64 only, avoiding server-side URL fetching and
-SSRF exposure.
-
-## Plugin integration
-
-Halo plugins can contribute tools without making MCP Server a required runtime
-dependency. See the [plugin integration guide](./dev/dev.md) for the Gradle
-dependency, optional plugin manifest entry, provider implementation, lifecycle,
-and verification steps.
-
-Search, list, and lookup tools are read-only. Create, update, publish, unpublish,
-and comment moderation tools are non-destructive writes; only recycle and delete
-tools are annotated as destructive. Recycled content and attachments are excluded
-from lists by default. `halo_get_post` and `halo_get_single_page` limit each
-returned content field to 65,536 characters and report whether truncation occurred.
-
-## Client configuration
-
-Export the token in the client process environment:
+先在客户端进程的环境变量中设置密钥：
 
 ```bash
 export HALO_MCP_TOKEN='hmcp_replace_me'
@@ -121,8 +44,7 @@ export HALO_MCP_TOKEN='hmcp_replace_me'
 
 ### Codex
 
-Add the following to `~/.codex/config.toml` or a trusted project's
-`.codex/config.toml`:
+将以下配置加入 `~/.codex/config.toml`，或可信项目中的 `.codex/config.toml`：
 
 ```toml
 [mcp_servers.halo]
@@ -130,12 +52,11 @@ url = "https://halo.example.com/mcp"
 bearer_token_env_var = "HALO_MCP_TOKEN"
 ```
 
-See the [official Codex MCP documentation](https://developers.openai.com/codex/mcp/)
-for other client options.
+其他选项参阅 [Codex 官方 MCP 文档](https://developers.openai.com/codex/mcp/)。
 
 ### Claude Code
 
-Add a project-scoped `.mcp.json` that reads the token from the environment:
+在项目级 `.mcp.json` 中通过环境变量读取密钥：
 
 ```json
 {
@@ -151,12 +72,11 @@ Add a project-scoped `.mcp.json` that reads the token from the environment:
 }
 ```
 
-See the [official Claude Code MCP documentation](https://code.claude.com/docs/en/mcp).
+其他选项参阅 [Claude Code 官方 MCP 文档](https://code.claude.com/docs/en/mcp)。
 
 ### MCP Inspector
 
-The current Inspector accepts an ad-hoc Streamable HTTP target and repeated
-headers:
+Inspector 支持临时指定 Streamable HTTP 端点和 Bearer 请求头：
 
 ```bash
 npx @modelcontextprotocol/inspector \
@@ -165,74 +85,20 @@ npx @modelcontextprotocol/inspector \
   --header "Authorization: Bearer ${HALO_MCP_TOKEN}"
 ```
 
-Keep the Inspector protocol era on `legacy` or `auto`; Java SDK 2.0.0 does not
-implement the 2026 protocol era.
+Inspector 的协议版本请选择 `legacy` 或 `auto`。
 
-## Development
+## 安全提醒
 
-Run the tests and build the plugin JAR:
+- 为每个客户端创建专用的最小权限密钥，不要把密钥提交到版本库或写入日志。
+- IP 白名单是附加防护，不能替代 HTTPS 和最小权限的工具授权。
+- Halo 位于反向代理之后时，只信任由可信代理写入的 `Forwarded` 和 `X-Forwarded-*` 请求头，并阻止客户端绕过代理直接访问 Halo。
+- 默认不允许携带 `Origin` 请求头的浏览器直连请求，请使用 MCP 客户端或 Inspector。
 
-```bash
-bash gradlew test
-bash gradlew build
-```
+## 插件开发
 
-Regenerate the Console API client after changing an API route or DTO:
+其他 Halo 插件可以通过协议无关的 API 贡献 MCP 工具，接入方式参阅
+[插件工具 Provider 接入指南](./dev/dev.md)。
 
-```bash
-bash gradlew generateApiClient
-```
-
-The generated OpenAPI document is written to
-`api-docs/openapi/v3_0/mcpV1alpha1Api.json`, and the TypeScript Axios client is
-written to `ui/src/api/generated`. Do not edit generated client files manually.
-
-Run a compatible Halo development server:
-
-```bash
-bash gradlew haloServer
-```
-
-The official conformance CLI cannot add the custom Bearer header required by
-this plugin. For local protocol checks, start the loopback-only authentication
-proxy with a temporary least-privilege key, then run applicable server scenarios:
-
-```bash
-HALO_MCP_TOKEN='hmcp_...' node dev/conformance-proxy.mjs
-npx @modelcontextprotocol/conformance@0.1.11 server \
-  --url http://127.0.0.1:8091/mcp \
-  --scenario server-initialize
-```
-
-Run scenarios matching the plugin's advertised capabilities, such as
-`server-initialize`, `ping`, and `tools-list`. The complete conformance server
-suite targets an everything-server fixture and also requires optional resources,
-prompts, audio, image, sampling, and elicitation features that this plugin does
-not advertise. Its localhost DNS-rebinding scenario is also scoped to servers
-without authentication, whereas this endpoint always requires an MCP key and
-rejects browser `Origin` headers.
-
-The distributable JAR is generated under `build/libs/`.
-
-## Error model
-
-Tool failures return `isError: true` with a stable structured error code:
-
-- `INVALID_ARGUMENT`
-- `INVALID_ARGUMENTS`
-- `NOT_FOUND`
-- `FORBIDDEN`
-- `CONFLICT`
-- `SEARCH_UNAVAILABLE`
-- `CONTENT_UNAVAILABLE`
-- `ATTACHMENT_UNAVAILABLE`
-- `INVALID_TOOL_RESULT`
-- `RATE_LIMITED`
-- `INTERNAL`
-
-Search can be unavailable when Halo has no active search engine. Listing and
-direct content reads remain available in that situation.
-
-## License
+## 许可证
 
 [GPL-3.0](./LICENSE) © Halo
