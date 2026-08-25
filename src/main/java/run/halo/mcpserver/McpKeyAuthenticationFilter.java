@@ -68,27 +68,37 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
             return tooManyRequests(exchange);
         }
         var rawToken = authorization.substring(BEARER_SCHEME.length());
-        return accessKeyService.authenticate(rawToken, exchange.getRequest().getRemoteAddress())
-                .flatMap(authentication -> {
-                    if (!hasSupportedProtocolVersion(exchange)) {
-                        return badRequest(exchange).thenReturn(true);
-                    }
-                    var permit = inFlightLimiter.tryAcquire(authentication.keyId());
-                    if (permit == null) {
+        return Mono.defer(() -> {
+                    var authenticationPermit = inFlightLimiter.tryAcquireAuthentication();
+                    if (authenticationPermit == null) {
                         return tooManyRequests(exchange).thenReturn(true);
                     }
-                    var request = exchange.getRequest().mutate()
-                            .headers(headers -> headers.remove(AUTHORIZATION))
-                            .build();
-                    // Defer so a synchronously throwing handler assembly still flows through
-                    // the error path and releases the permit.
-                    return Mono.defer(() -> mcpHandler.handle(exchange.mutate().request(request).build()))
-                            .doFinally(ignored -> permit.close())
-                            .contextWrite(org.springframework.security.core.context.ReactiveSecurityContextHolder
-                                    .withAuthentication(authentication))
-                            .thenReturn(true);
+                    return Mono.defer(() -> accessKeyService.authenticate(
+                                    rawToken, exchange.getRequest().getRemoteAddress()))
+                            .doFinally(ignored -> authenticationPermit.close())
+                            .flatMap(authentication -> {
+                                if (!hasSupportedProtocolVersion(exchange)) {
+                                    return badRequest(exchange).thenReturn(true);
+                                }
+                                var permit = inFlightLimiter.tryAcquire(authentication.keyId());
+                                if (permit == null) {
+                                    return tooManyRequests(exchange).thenReturn(true);
+                                }
+                                var request = exchange.getRequest().mutate()
+                                        .headers(headers -> headers.remove(AUTHORIZATION))
+                                        .build();
+                                // Defer so a synchronously throwing handler assembly still flows through
+                                // the error path and releases the permit.
+                                return Mono.defer(() -> mcpHandler.handle(
+                                                exchange.mutate().request(request).build()))
+                                        .doFinally(ignored -> permit.close())
+                                        .contextWrite(org.springframework.security.core.context
+                                                .ReactiveSecurityContextHolder
+                                                .withAuthentication(authentication))
+                                        .thenReturn(true);
+                            })
+                            .defaultIfEmpty(false);
                 })
-                .defaultIfEmpty(false)
                 // The deadline covers the whole authenticate-and-handle chain so stalled
                 // credential lookups cannot park requests either.
                 .timeout(requestTimeout)

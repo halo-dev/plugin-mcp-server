@@ -7,6 +7,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.net.InetSocketAddress;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +26,7 @@ import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
 @ExtendWith(MockitoExtension.class)
 class McpKeyAuthenticationFilterTest {
@@ -247,6 +250,49 @@ class McpKeyAuthenticationFilterTest {
                 .block();
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    @Test
+    void limitsConcurrentAuthenticationBeforeCredentialLookup() {
+        var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
+        when(accessKeyService.authenticate(
+                org.mockito.ArgumentMatchers.eq(rawToken),
+                org.mockito.ArgumentMatchers.any(InetSocketAddress.class)))
+                .thenReturn(Mono.never());
+        var inFlightLimiter = new McpInFlightLimiter();
+        var boundedFilter = new McpKeyAuthenticationFilter(
+                accessKeyService, new McpRequestRateLimiter(), inFlightLimiter, mcpServer);
+        var requests = new ArrayList<reactor.core.Disposable>();
+        try {
+            for (var i = 0; i < McpInFlightLimiter.AUTHENTICATION_LIMIT; i++) {
+                var exchange = MockServerWebExchange.from(MockServerHttpRequest
+                        .post(McpKeyAuthenticationFilter.MCP_PATH)
+                        .remoteAddress(new InetSocketAddress("192.0.2." + (i + 1), 8080))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
+                requests.add(boundedFilter.filter(exchange,
+                                ignored -> Mono.error(new AssertionError("Request must not continue")))
+                        .subscribe());
+            }
+            var overflow = MockServerWebExchange.from(MockServerHttpRequest
+                    .post(McpKeyAuthenticationFilter.MCP_PATH)
+                    .remoteAddress(new InetSocketAddress("198.51.100.1", 8080))
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
+
+            StepVerifier.create(boundedFilter.filter(overflow,
+                            ignored -> Mono.error(new AssertionError("Request must not continue"))))
+                    .expectComplete()
+                    .verify(Duration.ofMillis(200));
+
+            assertThat(overflow.getResponse().getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        } finally {
+            requests.forEach(reactor.core.Disposable::dispose);
+        }
+        var released = new ArrayList<KeyedInFlightLimiter.Lease>();
+        for (var i = 0; i < McpInFlightLimiter.AUTHENTICATION_LIMIT; i++) {
+            released.add(inFlightLimiter.tryAcquireAuthentication());
+        }
+        assertThat(released).doesNotContainNull();
+        released.forEach(KeyedInFlightLimiter.Lease::close);
     }
 
     @Test
