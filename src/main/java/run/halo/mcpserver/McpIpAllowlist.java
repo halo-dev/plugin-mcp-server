@@ -37,13 +37,12 @@ final class McpIpAllowlist {
         if (ranges == null || ranges.isEmpty()) {
             return true;
         }
-        if (remoteAddress == null) {
+        var resolved = resolveNumericAddress(remoteAddress);
+        if (resolved.isEmpty()) {
             return false;
         }
         try {
-            var address = remoteAddress.getAddress() == null
-                    ? parseNumericAddress(remoteAddress.getHostString())
-                    : remoteAddress.getAddress();
+            var address = resolved.get();
             var matchers = ranges.stream()
                     .map(McpIpAllowlist::compile)
                     .toList();
@@ -56,6 +55,23 @@ final class McpIpAllowlist {
             return false;
         }
         return false;
+    }
+
+    /**
+     * Resolves the numeric client address for both IP authorization and rate limiting, whether
+     * the socket address carried a resolved InetAddress or only a numeric host string.
+     */
+    static java.util.Optional<InetAddress> resolveNumericAddress(InetSocketAddress remoteAddress) {
+        if (remoteAddress == null) {
+            return java.util.Optional.empty();
+        }
+        try {
+            return java.util.Optional.of(remoteAddress.getAddress() == null
+                    ? parseNumericAddress(remoteAddress.getHostString())
+                    : remoteAddress.getAddress());
+        } catch (IllegalArgumentException error) {
+            return java.util.Optional.empty();
+        }
     }
 
     private static CompiledRange compile(String range) {
