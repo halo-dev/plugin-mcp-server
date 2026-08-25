@@ -1,6 +1,7 @@
 package run.halo.mcpserver;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -236,5 +237,34 @@ class McpKeyAuthenticationFilterTest {
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
         assertThat(handledPath.get()).isNull();
+    }
+
+    @Test
+    void releasesThePermitWhenTheHandlerAssemblyFailsSynchronously() {
+        org.springframework.web.reactive.function.server.RouterFunction<ServerResponse> broken =
+                request -> {
+                    throw new IllegalStateException("boom");
+                };
+        when(mcpServer.routerFunction()).thenReturn(broken);
+        var inFlightLimiter = new McpInFlightLimiter();
+        var brokenFilter = new McpKeyAuthenticationFilter(
+                accessKeyService, new McpRequestRateLimiter(), inFlightLimiter, mcpServer);
+        var keyId = "00000000-0000-0000-0000-000000000000";
+        var rawToken = "hmcp_" + keyId + "_secret";
+        when(accessKeyService.authenticate(rawToken, null))
+                .thenReturn(Mono.just(new McpKeyAuthenticationToken(
+                        keyId, "Automation", "hmcp_00000000", "admin", Set.of())));
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
+
+        assertThatThrownBy(() -> brokenFilter
+                        .filter(exchange, ignored -> Mono.error(new AssertionError("Request must not continue")))
+                        .block())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("boom");
+
+        for (var i = 0; i < McpInFlightLimiter.PER_KEY_LIMIT; i++) {
+            assertThat(inFlightLimiter.tryAcquire(keyId)).isNotNull();
+        }
     }
 }

@@ -78,7 +78,9 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
                     var request = exchange.getRequest().mutate()
                             .headers(headers -> headers.remove(AUTHORIZATION))
                             .build();
-                    return mcpHandler.handle(exchange.mutate().request(request).build())
+                    // Defer so a synchronously throwing handler assembly still flows through
+                    // the error path and releases the permit.
+                    return Mono.defer(() -> mcpHandler.handle(exchange.mutate().request(request).build()))
                             .timeout(requestTimeout)
                             .onErrorResume(java.util.concurrent.TimeoutException.class,
                                     error -> serviceUnavailable(exchange))

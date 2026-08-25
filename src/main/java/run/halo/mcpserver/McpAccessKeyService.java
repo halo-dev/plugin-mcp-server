@@ -141,7 +141,9 @@ class McpAccessKeyService {
     /**
      * Re-fetches the key after asynchronous password verification so a rotation, disablement,
      * scope change, or deletion committed meanwhile invalidates this authentication. Status-only
-     * writes such as last-used updates do not affect the comparison.
+     * writes such as last-used updates do not affect the comparison. This relies on the extension
+     * client returning a freshly deserialized instance per fetch; a shared mutable instance would
+     * make the spec comparison trivially equal and silently defeat this check.
      */
     private Mono<McpAccessKey> revalidate(McpAccessKey snapshot) {
         return client.fetch(McpAccessKey.class, snapshot.getMetadata().getName())
