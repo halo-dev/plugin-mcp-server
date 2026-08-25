@@ -46,6 +46,19 @@ class AttachmentUploadLimiterTest {
     }
 
     @Test
+    void forgetsKeysWhoseReservationsHaveAllBeenReleased() {
+        var limiter = new AttachmentUploadLimiter();
+
+        for (var i = 0; i < AttachmentUploadLimiter.MAX_TRACKED_KEYS + 1; i++) {
+            var reservation = limiter.tryAcquire("key-" + i, 1);
+            assertThat(reservation).isNotNull();
+            reservation.close();
+        }
+
+        assertThat(limiter.tryAcquire("key-fresh", EIGHT_MIB)).isNotNull();
+    }
+
+    @Test
     void ignoresDoubleRelease() {
         var limiter = new AttachmentUploadLimiter();
         var reservation = limiter.tryAcquire("key-one", EIGHT_MIB);

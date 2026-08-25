@@ -11,7 +11,7 @@ class McpInFlightLimiter {
 
     static final int GLOBAL_LIMIT = 100;
     static final int PER_KEY_LIMIT = 16;
-    private static final int MAX_TRACKED_KEYS = 10_000;
+    static final int MAX_TRACKED_KEYS = 10_000;
 
     private final AtomicInteger globalCount = new AtomicInteger();
     private final ConcurrentHashMap<String, AtomicInteger> keyCounts = new ConcurrentHashMap<>();
@@ -50,10 +50,10 @@ class McpInFlightLimiter {
         public void close() {
             if (released.compareAndSet(false, true)) {
                 globalCount.decrementAndGet();
-                var count = keyCounts.get(keyId);
-                if (count != null) {
-                    count.decrementAndGet();
-                }
+                // Drop the entry once the key holds no permits so churn through many keys
+                // cannot permanently exhaust MAX_TRACKED_KEYS.
+                keyCounts.computeIfPresent(
+                        keyId, (key, count) -> count.decrementAndGet() <= 0 ? null : count);
             }
         }
     }

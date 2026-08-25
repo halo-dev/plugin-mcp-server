@@ -42,6 +42,19 @@ class McpInFlightLimiterTest {
     }
 
     @Test
+    void forgetsKeysWhosePermitsHaveAllBeenReleased() {
+        var limiter = new McpInFlightLimiter();
+
+        for (var i = 0; i < McpInFlightLimiter.MAX_TRACKED_KEYS + 1; i++) {
+            var permit = limiter.tryAcquire("key-" + i);
+            assertThat(permit).isNotNull();
+            permit.close();
+        }
+
+        assertThat(limiter.tryAcquire("key-fresh")).isNotNull();
+    }
+
+    @Test
     void ignoresDoubleRelease() {
         var limiter = new McpInFlightLimiter();
         var permit = limiter.tryAcquire("key-one");

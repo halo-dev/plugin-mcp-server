@@ -11,7 +11,7 @@ class AttachmentUploadLimiter {
 
     static final long GLOBAL_BUDGET_BYTES = 64L * 1024 * 1024;
     static final long PER_KEY_BUDGET_BYTES = 32L * 1024 * 1024;
-    private static final int MAX_TRACKED_KEYS = 10_000;
+    static final int MAX_TRACKED_KEYS = 10_000;
 
     private final AtomicLong globalBytes = new AtomicLong();
     private final ConcurrentHashMap<String, AtomicLong> keyBytes = new ConcurrentHashMap<>();
@@ -65,10 +65,10 @@ class AttachmentUploadLimiter {
         public void close() {
             if (released.compareAndSet(false, true)) {
                 globalBytes.addAndGet(-bytes);
-                var usage = keyBytes.get(keyId);
-                if (usage != null) {
-                    usage.addAndGet(-bytes);
-                }
+                // Drop the entry once the key holds no reservation so churn through many keys
+                // cannot permanently exhaust MAX_TRACKED_KEYS.
+                keyBytes.computeIfPresent(
+                        keyId, (key, usage) -> usage.addAndGet(-bytes) <= 0 ? null : usage);
             }
         }
     }
