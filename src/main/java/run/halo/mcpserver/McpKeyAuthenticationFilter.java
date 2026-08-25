@@ -20,21 +20,36 @@ import run.halo.app.security.BeforeSecurityWebFilter;
 class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
 
     static final String MCP_PATH = "/mcp";
+    static final java.time.Duration DEFAULT_REQUEST_TIMEOUT = java.time.Duration.ofSeconds(30);
     private static final String BEARER_SCHEME = "Bearer ";
 
     private final McpAccessKeyService accessKeyService;
     private final McpRequestRateLimiter rateLimiter;
+    private final McpInFlightLimiter inFlightLimiter;
     private final WebHandler mcpHandler;
     private final java.util.Set<String> protocolVersions;
+    private final java.time.Duration requestTimeout;
 
     McpKeyAuthenticationFilter(
             McpAccessKeyService accessKeyService,
             McpRequestRateLimiter rateLimiter,
+            McpInFlightLimiter inFlightLimiter,
             HaloMcpServer mcpServer) {
+        this(accessKeyService, rateLimiter, inFlightLimiter, mcpServer, DEFAULT_REQUEST_TIMEOUT);
+    }
+
+    McpKeyAuthenticationFilter(
+            McpAccessKeyService accessKeyService,
+            McpRequestRateLimiter rateLimiter,
+            McpInFlightLimiter inFlightLimiter,
+            HaloMcpServer mcpServer,
+            java.time.Duration requestTimeout) {
         this.accessKeyService = accessKeyService;
         this.rateLimiter = rateLimiter;
+        this.inFlightLimiter = inFlightLimiter;
         this.mcpHandler = RouterFunctions.toWebHandler(mcpServer.routerFunction());
         this.protocolVersions = java.util.Set.copyOf(mcpServer.protocolVersions());
+        this.requestTimeout = requestTimeout;
     }
 
     @Override
@@ -56,10 +71,18 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
                     if (!hasSupportedProtocolVersion(exchange)) {
                         return badRequest(exchange).thenReturn(true);
                     }
+                    var permit = inFlightLimiter.tryAcquire(authentication.keyId());
+                    if (permit == null) {
+                        return tooManyRequests(exchange).thenReturn(true);
+                    }
                     var request = exchange.getRequest().mutate()
                             .headers(headers -> headers.remove(AUTHORIZATION))
                             .build();
                     return mcpHandler.handle(exchange.mutate().request(request).build())
+                            .timeout(requestTimeout)
+                            .onErrorResume(java.util.concurrent.TimeoutException.class,
+                                    error -> serviceUnavailable(exchange))
+                            .doFinally(ignored -> permit.close())
                             .contextWrite(org.springframework.security.core.context.ReactiveSecurityContextHolder
                                     .withAuthentication(authentication))
                             .thenReturn(true);
@@ -102,6 +125,14 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
         exchange.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
         exchange.getResponse().getHeaders().set(
                 RETRY_AFTER, String.valueOf(McpRequestRateLimiter.RETRY_AFTER_SECONDS));
+        return exchange.getResponse().setComplete();
+    }
+
+    private static Mono<Void> serviceUnavailable(ServerWebExchange exchange) {
+        if (exchange.getResponse().isCommitted()) {
+            return Mono.empty();
+        }
+        exchange.getResponse().setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
         return exchange.getResponse().setComplete();
     }
 }
