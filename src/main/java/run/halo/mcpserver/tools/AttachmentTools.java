@@ -33,14 +33,17 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
 
     private final ReactiveExtensionClient client;
     private final AttachmentService attachmentService;
+    private final AttachmentUploadLimiter uploadLimiter;
 
     AttachmentTools(
             ReactiveExtensionClient client,
             AttachmentService attachmentService,
+            AttachmentUploadLimiter uploadLimiter,
             McpAuthorization authorization) {
         super(authorization);
         this.client = client;
         this.attachmentService = attachmentService;
+        this.uploadLimiter = uploadLimiter;
     }
 
     @Override
@@ -74,6 +77,29 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
         if (encoded.length() > 12_000_000) {
             throw new McpToolException("INVALID_ARGUMENT", "contentBase64 exceeds the 8 MiB limit");
         }
+        var mediaType = mediaType(arguments.get("mediaType"));
+        return authorization.withKeyId(keyId -> {
+            var reservation = uploadLimiter.tryAcquire(keyId, estimatedDecodedBytes(encoded));
+            if (reservation == null) {
+                return Mono.error(new McpToolException(
+                        "RATE_LIMITED", "Too many concurrent attachment uploads; please retry shortly"));
+            }
+            return Mono.fromCallable(() -> decode(encoded))
+                    .flatMap(bytes -> {
+                        var buffer = DefaultDataBufferFactory.sharedInstance.wrap(bytes);
+                        return attachmentService
+                                .upload(policyName, groupName, filename, Flux.just(buffer), mediaType)
+                                .switchIfEmpty(Mono.error(new McpToolException(
+                                        "ATTACHMENT_UNAVAILABLE", "Halo did not create the attachment")))
+                                .map(attachment -> payload(
+                                        ContentPayloads.attachment(attachment),
+                                        "Uploaded attachment " + filename));
+                    })
+                    .doFinally(ignored -> reservation.close());
+        });
+    }
+
+    private static byte[] decode(String encoded) {
         final byte[] bytes;
         try {
             bytes = Base64.getDecoder().decode(encoded);
@@ -84,17 +110,11 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
             throw new McpToolException(
                     "INVALID_ARGUMENT", "Attachment content must be between 1 byte and 8 MiB");
         }
-        var buffer = DefaultDataBufferFactory.sharedInstance.wrap(bytes);
-        return attachmentService
-                .upload(
-                        policyName,
-                        groupName,
-                        filename,
-                        Flux.just(buffer),
-                        mediaType(arguments.get("mediaType")))
-                .switchIfEmpty(Mono.error(new McpToolException(
-                        "ATTACHMENT_UNAVAILABLE", "Halo did not create the attachment")))
-                .map(attachment -> payload(ContentPayloads.attachment(attachment), "Uploaded attachment " + filename));
+        return bytes;
+    }
+
+    private static long estimatedDecodedBytes(String encoded) {
+        return encoded.length() / 4L * 3L + 3L;
     }
 
     Mono<ToolPayload> delete(Map<String, Object> arguments) {

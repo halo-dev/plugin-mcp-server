@@ -57,6 +57,12 @@ includes successful requests. Tool calls are additionally limited to 120 per
 minute for each access-key and tool pair. Limits are process-local and therefore
 apply independently to each Halo replica.
 
+Authenticated request handling is cancelled after a 30-second deadline, and
+concurrent authenticated requests are capped at 100 globally and 16 per access
+key; requests beyond the cap receive `429 Too Many Requests`. Attachment uploads
+reserve their decoded size against in-flight byte budgets of 64 MiB globally and
+32 MiB per key before decoding, and excess uploads fail with `RATE_LIMITED`.
+
 Use a dedicated, least-privilege key. Do not put keys in URLs, configuration
 files committed to source control, shell history, or logs.
 
