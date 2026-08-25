@@ -103,6 +103,14 @@ class McpIpAllowlistTest {
     }
 
     @Test
+    void rejectsHostnamesDisguisedWithHexPrefixesAndColons() {
+        var disguised = InetSocketAddress.createUnresolved("1:a.attacker.example", 443);
+        assertThat(McpIpAllowlist.resolveNumericAddress(disguised)).isEmpty();
+        assertThat(McpIpAllowlist.allows(Set.of("0.0.0.0/0"), disguised)).isFalse();
+        assertThat(McpIpAllowlist.allows(Set.of(), disguised)).isTrue();
+    }
+
+    @Test
     void failsClosedWhenStoredConfigurationIsInvalid() {
         var ranges = new LinkedHashSet<>(java.util.List.of("203.0.113.10", "invalid"));
 

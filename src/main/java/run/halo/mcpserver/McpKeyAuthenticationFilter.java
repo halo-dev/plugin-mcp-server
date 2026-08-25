@@ -4,6 +4,7 @@ import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.http.HttpHeaders.RETRY_AFTER;
 import static org.springframework.http.HttpHeaders.WWW_AUTHENTICATE;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -20,21 +21,37 @@ import run.halo.app.security.BeforeSecurityWebFilter;
 class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
 
     static final String MCP_PATH = "/mcp";
+    static final java.time.Duration DEFAULT_REQUEST_TIMEOUT = java.time.Duration.ofSeconds(30);
     private static final String BEARER_SCHEME = "Bearer ";
 
     private final McpAccessKeyService accessKeyService;
     private final McpRequestRateLimiter rateLimiter;
+    private final McpInFlightLimiter inFlightLimiter;
     private final WebHandler mcpHandler;
     private final java.util.Set<String> protocolVersions;
+    private final java.time.Duration requestTimeout;
+
+    @Autowired
+    McpKeyAuthenticationFilter(
+            McpAccessKeyService accessKeyService,
+            McpRequestRateLimiter rateLimiter,
+            McpInFlightLimiter inFlightLimiter,
+            HaloMcpServer mcpServer) {
+        this(accessKeyService, rateLimiter, inFlightLimiter, mcpServer, DEFAULT_REQUEST_TIMEOUT);
+    }
 
     McpKeyAuthenticationFilter(
             McpAccessKeyService accessKeyService,
             McpRequestRateLimiter rateLimiter,
-            HaloMcpServer mcpServer) {
+            McpInFlightLimiter inFlightLimiter,
+            HaloMcpServer mcpServer,
+            java.time.Duration requestTimeout) {
         this.accessKeyService = accessKeyService;
         this.rateLimiter = rateLimiter;
+        this.inFlightLimiter = inFlightLimiter;
         this.mcpHandler = RouterFunctions.toWebHandler(mcpServer.routerFunction());
         this.protocolVersions = java.util.Set.copyOf(mcpServer.protocolVersions());
+        this.requestTimeout = requestTimeout;
     }
 
     @Override
@@ -56,15 +73,27 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
                     if (!hasSupportedProtocolVersion(exchange)) {
                         return badRequest(exchange).thenReturn(true);
                     }
+                    var permit = inFlightLimiter.tryAcquire(authentication.keyId());
+                    if (permit == null) {
+                        return tooManyRequests(exchange).thenReturn(true);
+                    }
                     var request = exchange.getRequest().mutate()
                             .headers(headers -> headers.remove(AUTHORIZATION))
                             .build();
-                    return mcpHandler.handle(exchange.mutate().request(request).build())
+                    // Defer so a synchronously throwing handler assembly still flows through
+                    // the error path and releases the permit.
+                    return Mono.defer(() -> mcpHandler.handle(exchange.mutate().request(request).build()))
+                            .doFinally(ignored -> permit.close())
                             .contextWrite(org.springframework.security.core.context.ReactiveSecurityContextHolder
                                     .withAuthentication(authentication))
                             .thenReturn(true);
                 })
                 .defaultIfEmpty(false)
+                // The deadline covers the whole authenticate-and-handle chain so stalled
+                // credential lookups cannot park requests either.
+                .timeout(requestTimeout)
+                .onErrorResume(java.util.concurrent.TimeoutException.class,
+                        error -> serviceUnavailable(exchange).thenReturn(true))
                 .flatMap(handled -> handled ? Mono.empty() : unauthorized(exchange));
     }
 
@@ -102,6 +131,14 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
         exchange.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
         exchange.getResponse().getHeaders().set(
                 RETRY_AFTER, String.valueOf(McpRequestRateLimiter.RETRY_AFTER_SECONDS));
+        return exchange.getResponse().setComplete();
+    }
+
+    private static Mono<Void> serviceUnavailable(ServerWebExchange exchange) {
+        if (exchange.getResponse().isCommitted()) {
+            return Mono.empty();
+        }
+        exchange.getResponse().setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
         return exchange.getResponse().setComplete();
     }
 }

@@ -26,13 +26,13 @@ const { copy, copied } = useClipboard({
       <VAlert
         type="warning"
         title="请立即保存并妥善保管"
-        description="完整密钥只显示这一次，关闭后无法再次查看，只能轮换生成新的密钥。千万不要泄露给任何人。"
+        description="完整密钥只显示这一次，关闭后无法再次查看，只能轮换生成新的密钥。不要在任何地方泄露或分享密钥，避免造成不必要的损失。"
         :closable="false"
       />
       <FormKit type="textarea" :model-value="token" label="MCP 密钥" :rows="4" readonly />
       <div>
         <div class=":uno: mb-2 text-sm text-gray-700 font-medium">接入方式</div>
-        <McpConnectionGuide :token="token" />
+        <McpConnectionGuide />
       </div>
     </div>
     <template #footer>

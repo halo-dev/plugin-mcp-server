@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -168,6 +169,34 @@ class McpToolRegistryTest {
                 .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
                         .contains("FORBIDDEN"))
                 .verifyComplete();
+    }
+
+    @Test
+    void defersTheProviderPermissionCallbackUntilTheKeyAllowlistPasses() {
+        var permissionChecks = new AtomicInteger();
+        var tool = McpToolDefinition.builder()
+                .name("demo/secret")
+                .inputSchema(objectSchema(Map.of(), List.of()))
+                .permission(invocation -> {
+                    permissionChecks.incrementAndGet();
+                    return Mono.just(true);
+                })
+                .handler(invocation -> Mono.just(McpToolResult.success(Map.of("ok", true))))
+                .build();
+        providerTools(provider, "demo", tool);
+
+        StepVerifier.create(registry.executeIfContributed("demo/secret", Map.of())
+                        .contextWrite(context("demo/other")))
+                .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
+                        .contains("FORBIDDEN"))
+                .verifyComplete();
+        assertThat(permissionChecks).hasValue(0);
+
+        StepVerifier.create(registry.executeIfContributed("demo/secret", Map.of())
+                        .contextWrite(context("demo/secret")))
+                .assertNext(result -> assertThat(result.orElseThrow().isError()).isFalse())
+                .verifyComplete();
+        assertThat(permissionChecks).hasValue(1);
     }
 
     @Test

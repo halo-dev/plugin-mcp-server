@@ -31,9 +31,9 @@ class McpRequestRateLimiter {
     }
 
     boolean allowRequest(InetSocketAddress remoteAddress) {
-        var source = remoteAddress == null || remoteAddress.getAddress() == null
-                ? "unknown"
-                : remoteAddress.getAddress().getHostAddress();
+        var source = McpIpAllowlist.resolveNumericAddress(remoteAddress)
+                .map(java.net.InetAddress::getHostAddress)
+                .orElse("unknown");
         return allow(currentWindow().requestCounts, source, REQUESTS_PER_MINUTE);
     }
 

@@ -37,4 +37,52 @@ class McpRequestRateLimiterTest {
         limiter.clear();
         assertThat(limiter.allowTool("key-one", "demo/one")).isTrue();
     }
+
+    @Test
+    void givesForwardedClientsIndependentBuckets() {
+        var limiter = new McpRequestRateLimiter(() -> 0L);
+        var first = InetSocketAddress.createUnresolved("203.0.113.10", 443);
+        var second = InetSocketAddress.createUnresolved("203.0.113.11", 443);
+
+        for (var i = 0; i < McpRequestRateLimiter.REQUESTS_PER_MINUTE; i++) {
+            assertThat(limiter.allowRequest(first)).isTrue();
+        }
+        assertThat(limiter.allowRequest(first)).isFalse();
+        assertThat(limiter.allowRequest(second)).isTrue();
+    }
+
+    @Test
+    void canonicalizesResolvedAndUnresolvedFormsOfOneAddress() {
+        var limiter = new McpRequestRateLimiter(() -> 0L);
+        var resolved = new InetSocketAddress("203.0.113.10", 443);
+        var unresolved = InetSocketAddress.createUnresolved("203.0.113.10", 443);
+
+        for (var i = 0; i < McpRequestRateLimiter.REQUESTS_PER_MINUTE; i++) {
+            assertThat(limiter.allowRequest(resolved)).isTrue();
+        }
+        assertThat(limiter.allowRequest(unresolved)).isFalse();
+    }
+
+    @Test
+    void constrainsUnresolvableClientsToOneSharedBucket() {
+        var limiter = new McpRequestRateLimiter(() -> 0L);
+
+        for (var i = 0; i < McpRequestRateLimiter.REQUESTS_PER_MINUTE; i++) {
+            assertThat(limiter.allowRequest(null)).isTrue();
+        }
+        assertThat(limiter.allowRequest(InetSocketAddress.createUnresolved("not-an-ip", 443)))
+                .isFalse();
+        assertThat(limiter.allowRequest(new InetSocketAddress("203.0.113.10", 443))).isTrue();
+    }
+
+    @Test
+    void bucketsHostnamesAsUnknownWithoutResolvingThem() {
+        var limiter = new McpRequestRateLimiter(() -> 0L);
+        var disguised = InetSocketAddress.createUnresolved("1:a.attacker.example", 443);
+
+        for (var i = 0; i < McpRequestRateLimiter.REQUESTS_PER_MINUTE; i++) {
+            assertThat(limiter.allowRequest(disguised)).isTrue();
+        }
+        assertThat(limiter.allowRequest(null)).isFalse();
+    }
 }

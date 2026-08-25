@@ -1,11 +1,13 @@
 package run.halo.mcpserver.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,14 +35,100 @@ class AttachmentToolsTest {
 
     @Test
     void validatesAttachmentBase64BeforeUpload() {
-        var tools = new AttachmentTools(client, attachmentService, authorization);
+        var tools = new AttachmentTools(
+                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        stubKeyId("key-one");
 
-        assertThatThrownBy(() -> tools.upload(Map.of(
+        StepVerifier.create(tools.upload(Map.<String, Object>of(
                         "filename", "a.txt",
                         "policyName", "local",
                         "contentBase64", "not-base64")))
-                .isInstanceOf(McpToolException.class)
-                .hasMessageContaining("valid Base64");
+                .expectErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(McpToolException.class)
+                        .hasMessageContaining("valid Base64"))
+                .verify();
+        verify(attachmentService, never()).upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class));
+    }
+
+    @Test
+    void rejectsUploadsWhenTheInFlightByteBudgetIsExhausted() {
+        var uploadLimiter = new AttachmentUploadLimiter();
+        var reservation = uploadLimiter.tryAcquire(
+                "key-one", AttachmentUploadLimiter.PER_KEY_BUDGET_BYTES);
+        var tools = new AttachmentTools(client, attachmentService, uploadLimiter, authorization);
+        stubKeyId("key-one");
+        var arguments = Map.<String, Object>of(
+                "filename", "a.txt",
+                "policyName", "local",
+                "contentBase64", Base64.getEncoder().encodeToString("hello".getBytes(StandardCharsets.UTF_8)));
+
+        StepVerifier.create(tools.upload(arguments))
+                .expectErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(McpToolException.class)
+                        .hasMessageContaining("concurrent attachment uploads"))
+                .verify();
+        verify(attachmentService, never()).upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class));
+
+        reservation.close();
+        var attachment = new Attachment();
+        attachment.setMetadata(ToolSupport.metadata("a.txt"));
+        when(attachmentService.upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class)))
+                .thenReturn(Mono.just(attachment));
+        StepVerifier.create(tools.upload(arguments))
+                .assertNext(payload -> assertThat(payload.summary()).contains("a.txt"))
+                .verifyComplete();
+    }
+
+    @Test
+    void releasesTheByteBudgetWhenTheUploadIsCancelled() {
+        var uploadLimiter = new AttachmentUploadLimiter();
+        var tools = new AttachmentTools(client, attachmentService, uploadLimiter, authorization);
+        stubKeyId("key-one");
+        when(attachmentService.upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class))).thenReturn(Mono.never());
+
+        StepVerifier.create(tools.upload(Map.<String, Object>of(
+                        "filename", "a.txt",
+                        "policyName", "local",
+                        "contentBase64",
+                                Base64.getEncoder().encodeToString("hello".getBytes(StandardCharsets.UTF_8)))))
+                .thenCancel()
+                .verify();
+
+        assertThat(uploadLimiter.tryAcquire("key-one", AttachmentUploadLimiter.PER_KEY_BUDGET_BYTES))
+                .isNotNull();
+    }
+
+    @Test
+    void admitsConcurrentUploadsUpToTheExactPerKeyByteBudget() {
+        var uploadLimiter = new AttachmentUploadLimiter();
+        var tools = new AttachmentTools(client, attachmentService, uploadLimiter, authorization);
+        stubKeyId("key-one");
+        when(attachmentService.upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class)))
+                .thenReturn(Mono.never());
+        var arguments = Map.<String, Object>of(
+                "filename", "a.bin",
+                "policyName", "local",
+                "contentBase64", Base64.getEncoder().encodeToString(new byte[8 * 1024 * 1024]));
+
+        var errors = new java.util.concurrent.CopyOnWriteArrayList<Throwable>();
+        var uploads = new java.util.ArrayList<reactor.core.Disposable>();
+        for (var i = 0; i < 4; i++) {
+            uploads.add(tools.upload(arguments).subscribe(payload -> {}, errors::add));
+        }
+
+        // Four times 8 MiB is exactly the per-key budget: all four must be admitted.
+        assertThat(errors).isEmpty();
+        assertThat(uploads).allSatisfy(upload -> assertThat(upload.isDisposed()).isFalse());
+
+        StepVerifier.create(tools.upload(arguments))
+                .expectErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(McpToolException.class)
+                        .hasMessageContaining("concurrent attachment uploads"))
+                .verify();
+
+        uploads.forEach(reactor.core.Disposable::dispose);
+        assertThat(uploadLimiter.tryAcquire("key-one", AttachmentUploadLimiter.PER_KEY_BUDGET_BYTES))
+                .isNotNull();
     }
 
     @Test
@@ -50,7 +138,8 @@ class AttachmentToolsTest {
         attachment.getMetadata().setVersion(1L);
         when(client.fetch(Attachment.class, "attachment-one")).thenReturn(Mono.just(attachment));
         when(client.delete(attachment)).thenReturn(Mono.just(attachment));
-        var tools = new AttachmentTools(client, attachmentService, authorization);
+        var tools = new AttachmentTools(
+                client, attachmentService, new AttachmentUploadLimiter(), authorization);
 
         StepVerifier.create(tools.delete(Map.of("name", "attachment-one")))
                 .assertNext(payload -> assertThat(payload.summary()).contains("attachment-one"))
@@ -58,5 +147,9 @@ class AttachmentToolsTest {
 
         verify(client).delete(attachment);
         verify(attachmentService, never()).delete(attachment);
+    }
+
+    private void stubKeyId(String keyId) {
+        when(authorization.keyId()).thenReturn(Mono.just(keyId));
     }
 }

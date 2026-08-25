@@ -32,6 +32,10 @@ public class McpAuthorization {
         }));
     }
 
+    public Mono<String> keyId() {
+        return authentication().map(McpKeyAuthenticationToken::keyId);
+    }
+
     Mono<McpKeyAuthenticationToken> authentication() {
         return ReactiveSecurityContextHolder.getContext()
                 .map(SecurityContext::getAuthentication)

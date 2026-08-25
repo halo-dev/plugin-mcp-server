@@ -2,9 +2,9 @@ package run.halo.mcpserver;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import com.google.common.net.InetAddresses;
 import org.springframework.security.util.matcher.InetAddressMatcher;
 import org.springframework.security.util.matcher.InetAddressMatchers;
 import org.springframework.util.StringUtils;
@@ -37,13 +37,12 @@ final class McpIpAllowlist {
         if (ranges == null || ranges.isEmpty()) {
             return true;
         }
-        if (remoteAddress == null) {
+        var resolved = resolveNumericAddress(remoteAddress);
+        if (resolved.isEmpty()) {
             return false;
         }
         try {
-            var address = remoteAddress.getAddress() == null
-                    ? parseNumericAddress(remoteAddress.getHostString())
-                    : remoteAddress.getAddress();
+            var address = resolved.get();
             var matchers = ranges.stream()
                     .map(McpIpAllowlist::compile)
                     .toList();
@@ -58,6 +57,23 @@ final class McpIpAllowlist {
         return false;
     }
 
+    /**
+     * Resolves the numeric client address for both IP authorization and rate limiting, whether
+     * the socket address carried a resolved InetAddress or only a numeric host string.
+     */
+    static java.util.Optional<InetAddress> resolveNumericAddress(InetSocketAddress remoteAddress) {
+        if (remoteAddress == null) {
+            return java.util.Optional.empty();
+        }
+        try {
+            return java.util.Optional.of(remoteAddress.getAddress() == null
+                    ? parseNumericAddress(remoteAddress.getHostString())
+                    : remoteAddress.getAddress());
+        } catch (IllegalArgumentException error) {
+            return java.util.Optional.empty();
+        }
+    }
+
     private static CompiledRange compile(String range) {
         var matcher = InetAddressMatchers.fromIpAddress(range);
         var slashIndex = range.indexOf('/');
@@ -69,16 +85,15 @@ final class McpIpAllowlist {
         return new CompiledRange(addressLength, matcher);
     }
 
+    /**
+     * Parses a strict numeric IP literal without ever consulting DNS; anything else is rejected
+     * with an IllegalArgumentException.
+     */
     private static InetAddress parseNumericAddress(String address) {
         var value = address.startsWith("[") && address.endsWith("]")
                 ? address.substring(1, address.length() - 1)
                 : address;
-        InetAddressMatchers.fromIpAddress(value);
-        try {
-            return InetAddress.getByName(value);
-        } catch (UnknownHostException error) {
-            throw new IllegalArgumentException(error);
-        }
+        return InetAddresses.forString(value);
     }
 
     private static void validateMask(String mask, int maxBits) {

@@ -6,7 +6,6 @@ import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpStatelessAsyncServer;
 import io.modelcontextprotocol.server.transport.DefaultServerTransportSecurityValidator;
 import io.modelcontextprotocol.spec.McpSchema;
-import java.time.Duration;
 import org.springframework.ai.mcp.server.webflux.transport.WebFluxStatelessServerTransport;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
@@ -53,7 +52,6 @@ class HaloMcpServer {
                 .capabilities(McpSchema.ServerCapabilities.builder()
                         .tools(false)
                         .build())
-                .requestTimeout(Duration.ofSeconds(30))
                 .tools(builtInTools.specifications())
                 .build();
     }

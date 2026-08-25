@@ -27,7 +27,7 @@ class BuiltInToolsTest {
                 new CategoryTools(client, authorization),
                 new TagTools(client, authorization),
                 new CommentTools(client, authorization),
-                new AttachmentTools(client, mock(AttachmentService.class), authorization));
+                new AttachmentTools(client, mock(AttachmentService.class), new AttachmentUploadLimiter(), authorization));
 
         var names = tools.names().toList();
         assertThat(tools.tools()).hasSize(29);
@@ -70,7 +70,7 @@ class BuiltInToolsTest {
                 new CategoryTools(client, authorization),
                 new TagTools(client, authorization),
                 new CommentTools(client, authorization),
-                new AttachmentTools(client, mock(AttachmentService.class), authorization));
+                new AttachmentTools(client, mock(AttachmentService.class), new AttachmentUploadLimiter(), authorization));
 
         var destructive = tools.tools().stream()
                 .filter(tool -> Boolean.TRUE.equals(tool.protocolTool().annotations().destructiveHint()))
@@ -98,7 +98,7 @@ class BuiltInToolsTest {
                 new CategoryTools(client, authorization),
                 new TagTools(client, authorization),
                 new CommentTools(client, authorization),
-                new AttachmentTools(client, mock(AttachmentService.class), authorization));
+                new AttachmentTools(client, mock(AttachmentService.class), new AttachmentUploadLimiter(), authorization));
         var schemaValidator = new DefaultJsonSchemaValidator();
 
         assertThat(tools.tools()).allSatisfy(tool -> {
