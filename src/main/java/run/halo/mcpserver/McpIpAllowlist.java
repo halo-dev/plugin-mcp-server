@@ -2,9 +2,9 @@ package run.halo.mcpserver;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import com.google.common.net.InetAddresses;
 import org.springframework.security.util.matcher.InetAddressMatcher;
 import org.springframework.security.util.matcher.InetAddressMatchers;
 import org.springframework.util.StringUtils;
@@ -85,16 +85,15 @@ final class McpIpAllowlist {
         return new CompiledRange(addressLength, matcher);
     }
 
+    /**
+     * Parses a strict numeric IP literal without ever consulting DNS; anything else is rejected
+     * with an IllegalArgumentException.
+     */
     private static InetAddress parseNumericAddress(String address) {
         var value = address.startsWith("[") && address.endsWith("]")
                 ? address.substring(1, address.length() - 1)
                 : address;
-        InetAddressMatchers.fromIpAddress(value);
-        try {
-            return InetAddress.getByName(value);
-        } catch (UnknownHostException error) {
-            throw new IllegalArgumentException(error);
-        }
+        return InetAddresses.forString(value);
     }
 
     private static void validateMask(String mask, int maxBits) {

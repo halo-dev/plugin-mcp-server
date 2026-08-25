@@ -74,4 +74,15 @@ class McpRequestRateLimiterTest {
                 .isFalse();
         assertThat(limiter.allowRequest(new InetSocketAddress("203.0.113.10", 443))).isTrue();
     }
+
+    @Test
+    void bucketsHostnamesAsUnknownWithoutResolvingThem() {
+        var limiter = new McpRequestRateLimiter(() -> 0L);
+        var disguised = InetSocketAddress.createUnresolved("1:a.attacker.example", 443);
+
+        for (var i = 0; i < McpRequestRateLimiter.REQUESTS_PER_MINUTE; i++) {
+            assertThat(limiter.allowRequest(disguised)).isTrue();
+        }
+        assertThat(limiter.allowRequest(null)).isFalse();
+    }
 }
