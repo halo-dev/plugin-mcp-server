@@ -3,6 +3,7 @@ package run.halo.mcpserver;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
 
 /** Process-local bounds on concurrent authenticated MCP request work. */
@@ -28,32 +29,48 @@ class McpInFlightLimiter {
             globalCount.decrementAndGet();
             return null;
         }
-        var count = keyCounts.computeIfAbsent(keyId, ignored -> new AtomicInteger());
-        if (count.incrementAndGet() > PER_KEY_LIMIT) {
-            count.decrementAndGet();
+        // Create-or-increment and the limit check run inside the key's map bin so a permit can
+        // never land on a counter that a concurrent release has already unmapped.
+        var acquired = new AtomicReference<AtomicInteger>();
+        keyCounts.compute(keyId, (key, existing) -> {
+            var count = existing == null ? new AtomicInteger() : existing;
+            if (count.incrementAndGet() > PER_KEY_LIMIT) {
+                count.decrementAndGet();
+                return existing;
+            }
+            acquired.set(count);
+            return count;
+        });
+        var count = acquired.get();
+        if (count == null) {
             globalCount.decrementAndGet();
             return null;
         }
-        return new Permit(keyId);
+        return new Permit(keyId, count);
     }
 
     final class Permit implements AutoCloseable {
 
         private final String keyId;
+        private final AtomicInteger count;
         private final AtomicBoolean released = new AtomicBoolean();
 
-        private Permit(String keyId) {
+        private Permit(String keyId, AtomicInteger count) {
             this.keyId = keyId;
+            this.count = count;
         }
 
         @Override
         public void close() {
             if (released.compareAndSet(false, true)) {
                 globalCount.decrementAndGet();
-                // Drop the entry once the key holds no permits so churn through many keys
-                // cannot permanently exhaust MAX_TRACKED_KEYS.
-                keyCounts.computeIfPresent(
-                        keyId, (key, count) -> count.decrementAndGet() <= 0 ? null : count);
+                if (count.decrementAndGet() <= 0) {
+                    // Drop the entry once the key holds no permits so churn through many keys
+                    // cannot permanently exhaust MAX_TRACKED_KEYS. The identity and zero
+                    // rechecks keep a racing acquisition from losing its counter.
+                    keyCounts.computeIfPresent(keyId,
+                            (key, mapped) -> mapped == count && mapped.get() <= 0 ? null : mapped);
+                }
             }
         }
     }

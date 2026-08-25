@@ -3,6 +3,9 @@ package run.halo.mcpserver.tools;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
 class AttachmentUploadLimiterTest {
@@ -56,6 +59,55 @@ class AttachmentUploadLimiterTest {
         }
 
         assertThat(limiter.tryAcquire("key-fresh", EIGHT_MIB)).isNotNull();
+    }
+
+    @Test
+    void keepsPerKeyAccountingConsistentUnderConcurrentChurn() throws InterruptedException {
+        var limiter = new AttachmentUploadLimiter();
+        // The test counters bracket acquire and close so they always overestimate the true
+        // reserved bytes; exceeding the budget here therefore proves a real breach.
+        var inFlightPerKey = new ConcurrentHashMap<String, AtomicLong>();
+        var maxPerKey = new ConcurrentHashMap<String, AtomicLong>();
+        var errors = new CopyOnWriteArrayList<Throwable>();
+        var threads = new ArrayList<Thread>();
+        for (var t = 0; t < 8; t++) {
+            var thread = new Thread(() -> {
+                try {
+                    for (var i = 0; i < 2_000; i++) {
+                        var key = "key-" + i % 4;
+                        var reservation = limiter.tryAcquire(key, EIGHT_MIB);
+                        if (reservation == null) {
+                            continue;
+                        }
+                        var usage = inFlightPerKey
+                                .computeIfAbsent(key, ignored -> new AtomicLong());
+                        var inFlight = usage.addAndGet(EIGHT_MIB);
+                        maxPerKey.computeIfAbsent(key, ignored -> new AtomicLong())
+                                .accumulateAndGet(inFlight, Math::max);
+                        usage.addAndGet(-EIGHT_MIB);
+                        reservation.close();
+                    }
+                } catch (Throwable error) {
+                    errors.add(error);
+                }
+            });
+            threads.add(thread);
+            thread.start();
+        }
+        for (var thread : threads) {
+            thread.join();
+        }
+
+        assertThat(errors).isEmpty();
+        assertThat(maxPerKey.values())
+                .allSatisfy(max -> assertThat(max.get())
+                        .isLessThanOrEqualTo(AttachmentUploadLimiter.PER_KEY_BUDGET_BYTES));
+        // Both budgets must drain back to zero once every reservation is closed.
+        for (var i = 0; i < 4; i++) {
+            var drained = limiter.tryAcquire("key-" + i, AttachmentUploadLimiter.PER_KEY_BUDGET_BYTES);
+            assertThat(drained).isNotNull();
+            drained.close();
+        }
     }
 
     @Test

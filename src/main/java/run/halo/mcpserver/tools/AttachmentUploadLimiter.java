@@ -3,6 +3,7 @@ package run.halo.mcpserver.tools;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
 
 /** Process-local in-flight byte budgets that bound concurrent attachment uploads. */
@@ -30,12 +31,24 @@ class AttachmentUploadLimiter {
         if (!reserve(globalBytes, GLOBAL_BUDGET_BYTES, bytes)) {
             return null;
         }
-        var usage = keyBytes.computeIfAbsent(keyId, ignored -> new AtomicLong());
-        if (!reserve(usage, PER_KEY_BUDGET_BYTES, bytes)) {
+        // Create-or-add and the budget check run inside the key's map bin so a reservation can
+        // never land on a counter that a concurrent release has already unmapped.
+        var acquired = new AtomicReference<AtomicLong>();
+        keyBytes.compute(keyId, (key, existing) -> {
+            var usage = existing == null ? new AtomicLong() : existing;
+            if (usage.addAndGet(bytes) > PER_KEY_BUDGET_BYTES) {
+                usage.addAndGet(-bytes);
+                return existing;
+            }
+            acquired.set(usage);
+            return usage;
+        });
+        var usage = acquired.get();
+        if (usage == null) {
             globalBytes.addAndGet(-bytes);
             return null;
         }
-        return new Reservation(keyId, bytes);
+        return new Reservation(keyId, usage, bytes);
     }
 
     private static boolean reserve(AtomicLong usage, long limit, long bytes) {
@@ -53,11 +66,13 @@ class AttachmentUploadLimiter {
     final class Reservation implements AutoCloseable {
 
         private final String keyId;
+        private final AtomicLong usage;
         private final long bytes;
         private final AtomicBoolean released = new AtomicBoolean();
 
-        private Reservation(String keyId, long bytes) {
+        private Reservation(String keyId, AtomicLong usage, long bytes) {
             this.keyId = keyId;
+            this.usage = usage;
             this.bytes = bytes;
         }
 
@@ -65,10 +80,13 @@ class AttachmentUploadLimiter {
         public void close() {
             if (released.compareAndSet(false, true)) {
                 globalBytes.addAndGet(-bytes);
-                // Drop the entry once the key holds no reservation so churn through many keys
-                // cannot permanently exhaust MAX_TRACKED_KEYS.
-                keyBytes.computeIfPresent(
-                        keyId, (key, usage) -> usage.addAndGet(-bytes) <= 0 ? null : usage);
+                if (usage.addAndGet(-bytes) <= 0) {
+                    // Drop the entry once the key holds no reservation so churn through many keys
+                    // cannot permanently exhaust MAX_TRACKED_KEYS. The identity and zero
+                    // rechecks keep a racing acquisition from losing its counter.
+                    keyBytes.computeIfPresent(keyId,
+                            (key, mapped) -> mapped == usage && mapped.get() <= 0 ? null : mapped);
+                }
             }
         }
     }
