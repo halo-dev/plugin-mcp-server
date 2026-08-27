@@ -111,42 +111,56 @@ function handleDelete() {
       />
     </template>
     <template #end>
-      <div class=":uno: flex flex-wrap items-center justify-end gap-3 text-xs text-gray-500">
-        <VTag>{{ mcpAccessKey.allowedTools.length }} 个工具</VTag>
-        <VTag>
-          {{
-            mcpAccessKey.allowedIpRanges.length
-              ? `限制 ${mcpAccessKey.allowedIpRanges.length} 个 IP 范围`
-              : 'IP 不限制'
-          }}
-        </VTag>
-        <span v-tooltip="utils.date.format(mcpAccessKey.creationTimestamp)">
-          创建：{{
-            mcpAccessKey.creationTimestamp
-              ? utils.date.timeAgo(mcpAccessKey.creationTimestamp)
-              : '-'
-          }}
-        </span>
-        <span
-          v-tooltip="{
-            content: utils.date.format(mcpAccessKey.lastUsedAt),
-            disabled: !mcpAccessKey.lastUsedAt,
-          }"
-        >
-          最后使用：{{
-            mcpAccessKey.lastUsedAt ? utils.date.timeAgo(mcpAccessKey.lastUsedAt) : '从未'
-          }}
-        </span>
-        <span v-if="mcpAccessKey.expiresAt" :class="{ 'text-red-600': expired }">
-          {{ expired ? '已过期' : '到期' }}：{{ utils.date.format(mcpAccessKey.expiresAt) }}
-        </span>
-        <VSwitch
-          :model-value="mcpAccessKey.enabled"
-          :loading="changingEnabled"
-          :disabled="Boolean(mcpAccessKey.deletionTimestamp)"
-          @change="changeEnabled"
-        />
-      </div>
+      <VEntityField>
+        <template #description>
+          <VTag>{{ mcpAccessKey.allowedTools.length }} 个工具</VTag>
+        </template>
+      </VEntityField>
+      <VEntityField>
+        <template #description>
+          <VTag>
+            {{
+              mcpAccessKey.allowedIpRanges.length
+                ? `限制 ${mcpAccessKey.allowedIpRanges.length} 个 IP 范围`
+                : 'IP 不限制'
+            }}
+          </VTag>
+        </template>
+      </VEntityField>
+      <VEntityField
+        v-tooltip="utils.date.format(mcpAccessKey.creationTimestamp)"
+        :description="`创建：${
+          mcpAccessKey.creationTimestamp ? utils.date.timeAgo(mcpAccessKey.creationTimestamp) : '-'
+        }`"
+      >
+      </VEntityField>
+      <VEntityField
+        v-tooltip="{
+          content: utils.date.format(mcpAccessKey.lastUsedAt),
+          disabled: !mcpAccessKey.lastUsedAt,
+        }"
+        :description="`最后使用：${
+          mcpAccessKey.lastUsedAt ? utils.date.timeAgo(mcpAccessKey.lastUsedAt) : '从未'
+        }`"
+      >
+      </VEntityField>
+      <VEntityField v-if="mcpAccessKey.expiresAt">
+        <template #description>
+          <span class="text-xs text-gray-500" :class="{ '!text-red-600': expired }">
+            {{ expired ? '已过期' : '到期' }}：{{ utils.date.format(mcpAccessKey.expiresAt) }}
+          </span>
+        </template>
+      </VEntityField>
+      <VEntityField>
+        <template #description>
+          <VSwitch
+            :model-value="mcpAccessKey.enabled"
+            :loading="changingEnabled"
+            :disabled="Boolean(mcpAccessKey.deletionTimestamp)"
+            @change="changeEnabled"
+          />
+        </template>
+      </VEntityField>
     </template>
     <template #dropdownItems>
       <template v-if="!mcpAccessKey.deletionTimestamp">
