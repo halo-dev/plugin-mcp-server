@@ -282,7 +282,8 @@ class HaloMcpServerTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.result.structuredContent.message").isEqualTo("Hello Halo");
+                .jsonPath("$.result.structuredContent.message").isEqualTo("Hello Halo")
+                .jsonPath("$.result.content[0].text").isEqualTo("{\"message\":\"Hello Halo\"}");
 
         var page = recentCallHistory.list(new McpRecentCallQuery(1, 20, null, null, null));
         org.assertj.core.api.Assertions.assertThat(page.total()).isEqualTo(1);
