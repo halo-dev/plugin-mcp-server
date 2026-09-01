@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 import run.halo.app.core.extension.Plugin;
 import run.halo.app.extension.Metadata;
@@ -59,7 +60,8 @@ class McpToolRegistryTest {
                 .annotations(McpToolAnnotations.readOnly("Hello"))
                 .permission(invocation -> Mono.just(true))
                 .handler(invocation -> Mono.just(McpToolResult.success(
-                        Map.of("message", "Hello " + invocation.arguments().get("name")))))
+                        Map.of("message", "Hello " + invocation.arguments().get("name")),
+                        "Custom greeting")))
                 .build();
         providerTools(provider, "demo", tool);
 
@@ -68,6 +70,10 @@ class McpToolRegistryTest {
                 .assertNext(result -> {
                     assertThat(result).isPresent();
                     assertThat(result.orElseThrow().structuredContent().toString()).contains("Hello Halo");
+                    assertThat(result.orElseThrow().content().getFirst())
+                            .isInstanceOfSatisfying(
+                                    io.modelcontextprotocol.spec.McpSchema.TextContent.class,
+                                    content -> assertThat(content.text()).isEqualTo("Custom greeting"));
                 })
                 .verifyComplete();
     }
@@ -255,9 +261,15 @@ class McpToolRegistryTest {
                 .thenReturn(Flux.just(developmentProvider));
         when(extensionClient.fetch(Plugin.class, "demo")).thenReturn(Mono.just(plugin));
 
-        assertThat(registry.registeredTools().block())
-                .extracting(tool -> tool.definition().name())
-                .containsExactly("demo/hello");
+        StepVerifier.create(Mono.defer(registry::registeredTools)
+                        .subscribeOn(Schedulers.parallel()))
+                .assertNext(tools -> {
+                    assertThat(tools)
+                            .extracting(tool -> tool.definition().name())
+                            .containsExactly("demo/hello");
+                    assertThat(Schedulers.isInNonBlockingThread()).isFalse();
+                })
+                .verifyComplete();
     }
 
     @Test
@@ -267,7 +279,8 @@ class McpToolRegistryTest {
         var neighboringDirectory = Files.createDirectory(tempDir.resolve("plugin-other"));
 
         assertThat(McpToolRegistry.ownsProvider(
-                pluginDirectory.toUri(), neighboringDirectory.toUri())).isFalse();
+                        pluginDirectory.toUri(), neighboringDirectory.toUri()).block())
+                .isFalse();
     }
 
     @Test

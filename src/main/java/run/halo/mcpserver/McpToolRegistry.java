@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.ClassUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import run.halo.app.core.extension.Plugin;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.plugin.extensionpoint.ExtensionGetter;
@@ -208,31 +209,36 @@ class McpToolRegistry {
         }
         return extensionClient.fetch(Plugin.class, pluginName)
                 .filter(plugin -> plugin.getStatus() != null
-                        && plugin.getStatus().getLoadLocation() != null
-                        && ownsProvider(plugin.getStatus().getLoadLocation(), providerLocation))
+                        && plugin.getStatus().getLoadLocation() != null)
+                .flatMap(plugin -> ownsProvider(
+                        plugin.getStatus().getLoadLocation(), providerLocation))
+                .filter(Boolean::booleanValue)
                 .map(ignored -> pluginName)
                 .switchIfEmpty(Mono.error(new McpToolException(
                         "INVALID_TOOL_NAME",
                         "Contributed tool namespace does not match its provider plugin")));
     }
 
-    static boolean ownsProvider(URI pluginLocation, URI providerLocation) {
+    static Mono<Boolean> ownsProvider(URI pluginLocation, URI providerLocation) {
         var normalizedPlugin = pluginLocation.normalize();
         var normalizedProvider = providerLocation.normalize();
         if (normalizedPlugin.equals(normalizedProvider)) {
-            return true;
+            return Mono.just(true);
         }
         if (!"file".equalsIgnoreCase(normalizedPlugin.getScheme())
                 || !"file".equalsIgnoreCase(normalizedProvider.getScheme())) {
-            return false;
+            return Mono.just(false);
         }
-        try {
-            var pluginPath = Path.of(normalizedPlugin).toRealPath();
-            var providerPath = Path.of(normalizedProvider).toRealPath();
-            return Files.isDirectory(pluginPath) && providerPath.startsWith(pluginPath);
-        } catch (IOException | IllegalArgumentException error) {
-            return false;
-        }
+        return Mono.fromCallable(() -> {
+                    try {
+                        var pluginPath = Path.of(normalizedPlugin).toRealPath();
+                        var providerPath = Path.of(normalizedProvider).toRealPath();
+                        return Files.isDirectory(pluginPath) && providerPath.startsWith(pluginPath);
+                    } catch (IOException | IllegalArgumentException error) {
+                        return false;
+                    }
+                })
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     private void validateSchema(String toolName, String kind, Map<String, Object> schema) {
