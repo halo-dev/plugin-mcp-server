@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.net.URI;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
@@ -39,6 +41,87 @@ class AttachmentToolsTest {
 
     @Mock
     McpAuthorization authorization;
+
+    @Test
+    void advertisesUrlUploadInTheAttachmentCatalog() {
+        var tools = new AttachmentTools(
+                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+
+        var upload = tools.tools().stream()
+                .filter(tool -> tool.specification().tool().name().equals("halo_upload_attachment_from_url"))
+                .findFirst()
+                .orElseThrow();
+        var protocolTool = upload.protocolTool();
+        var schema = protocolTool.inputSchema();
+        var properties = (Map<?, ?>) schema.get("properties");
+
+        assertThat(upload.category()).isEqualTo("ATTACHMENT");
+        assertThat(schema.get("required")).isEqualTo(java.util.List.of("url"));
+        assertThat(properties.get("url")).isNotNull();
+        assertThat(properties.get("filename")).isNotNull();
+        assertThat(protocolTool.annotations().readOnlyHint()).isFalse();
+        assertThat(protocolTool.annotations().destructiveHint()).isFalse();
+        assertThat(protocolTool.annotations().idempotentHint()).isFalse();
+        assertThat(protocolTool.annotations().openWorldHint()).isTrue();
+    }
+
+    @Test
+    void transfersUrlWithConsoleConfigAndReturnsResolvedPermalink() throws Exception {
+        var tools = new AttachmentTools(
+                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        stubAttachmentConfig();
+        var source = URI.create("https://example.com/source.png").toURL();
+        var attachment = new Attachment();
+        attachment.setMetadata(ToolSupport.metadata("stored.png"));
+        when(attachmentService.uploadFromUrl(source, "local", "default", "photo.png"))
+                .thenReturn(Mono.just(attachment));
+        when(attachmentService.getPermalink(attachment))
+                .thenReturn(Mono.just(URI.create("https://example.com/stored.png")));
+
+        StepVerifier.create(tools.uploadFromUrl(Map.of(
+                        "url", source.toString(),
+                        "filename", "photo.png")))
+                .assertNext(payload -> {
+                    assertThat(payload.summary()).contains("photo.png");
+                    assertThat(payload.data().toString()).contains("https://example.com/stored.png");
+                })
+                .verifyComplete();
+
+        verify(attachmentService).uploadFromUrl(source, "local", "default", "photo.png");
+    }
+
+    @Test
+    void omitsFilenameWhenTransferringUrl() throws Exception {
+        var tools = new AttachmentTools(
+                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        stubAttachmentConfig();
+        var source = URI.create("http://example.com/source.png").toURL();
+        var attachment = new Attachment();
+        attachment.setMetadata(ToolSupport.metadata("source.png"));
+        when(attachmentService.uploadFromUrl(eq(source), eq("local"), eq("default"), isNull()))
+                .thenReturn(Mono.just(attachment));
+        when(attachmentService.getPermalink(attachment))
+                .thenReturn(Mono.just(URI.create("https://example.com/source.png")));
+
+        StepVerifier.create(tools.uploadFromUrl(Map.of("url", source.toString())))
+                .assertNext(payload -> assertThat(payload.summary()).contains("source.png"))
+                .verifyComplete();
+
+        verify(attachmentService).uploadFromUrl(eq(source), eq("local"), eq("default"), isNull());
+    }
+
+    @Test
+    void rejectsNonHttpAndRelativeUrlsBeforeTransfer() {
+        var tools = new AttachmentTools(
+                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+
+        for (var url : java.util.List.of("ftp://example.com/a.png", "/relative/a.png")) {
+            assertThatThrownBy(() -> tools.uploadFromUrl(Map.of("url", url)))
+                    .isInstanceOf(McpToolException.class)
+                    .hasMessage("url must be an absolute http or https URL");
+        }
+        verify(attachmentService, never()).uploadFromUrl(any(URL.class), any(), any(), any());
+    }
 
     @Test
     void validatesAttachmentBase64BeforeUpload() {
@@ -300,6 +383,10 @@ class AttachmentToolsTest {
 
     private void stubKeyId(String keyId) {
         when(authorization.keyId()).thenReturn(Mono.just(keyId));
+        stubAttachmentConfig();
+    }
+
+    private void stubAttachmentConfig() {
         var defaults = new ConfigMap();
         defaults.setData(Map.of());
         when(client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG_DEFAULT))

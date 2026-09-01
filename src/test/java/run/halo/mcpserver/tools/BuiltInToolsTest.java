@@ -30,7 +30,7 @@ class BuiltInToolsTest {
                 new AttachmentTools(client, mock(AttachmentService.class), new AttachmentUploadLimiter(), authorization));
 
         var names = tools.names().toList();
-        assertThat(tools.tools()).hasSize(33);
+        assertThat(tools.tools()).hasSize(34);
         assertThat(names)
                 .doesNotHaveDuplicates()
                 .contains(
