@@ -3,6 +3,10 @@ package run.halo.mcpserver.tools;
 import static org.springframework.data.domain.Sort.Order.asc;
 import static org.springframework.data.domain.Sort.Order.desc;
 
+import io.modelcontextprotocol.spec.McpSchema;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URL;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -38,10 +42,17 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
     static final String LIST = "halo_list_attachments";
     static final String GET = "halo_get_attachment";
     static final String UPLOAD = "halo_upload_attachment";
+    static final String UPLOAD_FROM_URL = "halo_upload_attachment_from_url";
     static final String DELETE = "halo_delete_attachment";
 
     private static final int MAX_CONTENT_BYTES = 7 * 1024 * 1024;
     private static final int MAX_ENCODED_CHARS = (MAX_CONTENT_BYTES + 2) / 3 * 4;
+    private static final McpSchema.ToolAnnotations CREATE_OPEN_WORLD = McpSchema.ToolAnnotations.builder()
+            .readOnlyHint(false)
+            .destructiveHint(false)
+            .idempotentHint(false)
+            .openWorldHint(true)
+            .build();
 
     private final ReactiveExtensionClient client;
     private final AttachmentService attachmentService;
@@ -60,7 +71,7 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
 
     @Override
     public List<BuiltInTool> tools() {
-        return List.of(listTool(), getTool(), uploadTool(), deleteTool());
+        return List.of(listTool(), getTool(), uploadTool(), uploadFromUrlTool(), deleteTool());
     }
 
     Mono<ToolPayload> list(Map<String, Object> arguments) {
@@ -100,35 +111,48 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                     .subscribeOn(Schedulers.boundedElastic())
                     .flatMap(bytes -> {
                         var buffer = DefaultDataBufferFactory.sharedInstance.wrap(bytes);
-                        return attachmentService
-                                .upload(
+                        return uploadedAttachment(
+                                attachmentService.upload(
                                         config.policyName(),
                                         config.groupName(),
                                         filename,
                                         Flux.just(buffer),
-                                        mediaType)
-                                .switchIfEmpty(Mono.error(new McpToolException(
-                                        "ATTACHMENT_UNAVAILABLE", "Halo did not create the attachment")))
-                                .flatMap(attachment -> attachmentService
-                                        .getPermalink(attachment)
-                                        .doOnNext(permalink -> {
-                                            if (attachment.getStatus() == null) {
-                                                attachment.setStatus(new Attachment.AttachmentStatus());
-                                            }
-                                            attachment.getStatus().setPermalink(permalink.toString());
-                                        })
-                                        .onErrorResume(error -> {
-                                            log.warn("Failed to resolve permalink for uploaded attachment {}",
-                                                    filename, error);
-                                            return Mono.empty();
-                                        })
-                                        .thenReturn(attachment))
-                                .map(attachment -> payload(
-                                        ContentPayloads.attachment(attachment),
-                                        "Uploaded attachment " + filename));
+                                        mediaType),
+                                filename);
                     })
                     .doFinally(ignored -> reservation.close());
         });
+    }
+
+    Mono<ToolPayload> uploadFromUrl(Map<String, Object> arguments) {
+        var url = httpUrl(requiredString(arguments, "url"));
+        var requestedFilename = optionalString(arguments, "filename", null);
+        var filename = requestedFilename == null ? null : safeFilename(requestedFilename);
+        return attachmentConfig().flatMap(config -> uploadedAttachment(
+                attachmentService.uploadFromUrl(url, config.policyName(), config.groupName(), filename),
+                filename));
+    }
+
+    private Mono<ToolPayload> uploadedAttachment(Mono<Attachment> upload, String filename) {
+        return upload.switchIfEmpty(Mono.error(new McpToolException(
+                        "ATTACHMENT_UNAVAILABLE", "Halo did not create the attachment")))
+                .flatMap(attachment -> attachmentService
+                        .getPermalink(attachment)
+                        .doOnNext(permalink -> {
+                            if (attachment.getStatus() == null) {
+                                attachment.setStatus(new Attachment.AttachmentStatus());
+                            }
+                            attachment.getStatus().setPermalink(permalink.toString());
+                        })
+                        .onErrorResume(error -> {
+                            log.warn("Failed to resolve permalink for uploaded attachment {}", filename, error);
+                            return Mono.empty();
+                        })
+                        .thenReturn(attachment))
+                .map(attachment -> {
+                    var resultName = filename == null ? attachment.getMetadata().getName() : filename;
+                    return payload(ContentPayloads.attachment(attachment), "Uploaded attachment " + resultName);
+                });
     }
 
     private static byte[] decode(String encoded) {
@@ -206,12 +230,7 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                 "ATTACHMENT",
                 objectSchema(
                         map(
-                                "filename", map(
-                                        "type", "string",
-                                        "minLength", 1,
-                                        "maxLength", 255,
-                                        "pattern", "^[^/\\\\\\x00-\\x1F\\x7F]+$",
-                                        "description", "File name without a directory path."),
+                                "filename", filenameSchema(),
                                 "mediaType", stringSchema("IANA media type; defaults to application/octet-stream."),
                                 "contentBase64",
                                         map(
@@ -224,6 +243,24 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                 ContentPayloads.attachmentSchema(),
                 CREATE,
                 this::upload);
+    }
+
+    private BuiltInTool uploadFromUrlTool() {
+        return tool(
+                UPLOAD_FROM_URL,
+                "Upload Halo attachment from URL",
+                "Transfer an absolute HTTP or HTTPS URL using the Console attachment policy and group from Halo system settings.",
+                "从 URL 上传附件",
+                "使用 Halo 系统设置中的 Console 附件策略和分组，将 HTTP 或 HTTPS URL 转存为附件。",
+                "ATTACHMENT",
+                objectSchema(
+                        map(
+                                "url", stringSchema("Absolute HTTP or HTTPS URL."),
+                                "filename", filenameSchema()),
+                        List.of("url")),
+                ContentPayloads.attachmentSchema(),
+                CREATE_OPEN_WORLD,
+                this::uploadFromUrl);
     }
 
     private BuiltInTool deleteTool() {
@@ -258,6 +295,31 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
         } catch (IllegalArgumentException error) {
             throw new McpToolException("INVALID_ARGUMENT", "mediaType is invalid", error);
         }
+    }
+
+    private static URL httpUrl(String value) {
+        try {
+            var uri = URI.create(value);
+            var scheme = uri.getScheme();
+            if (!uri.isAbsolute()
+                    || uri.getHost() == null
+                    || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
+                throw new IllegalArgumentException();
+            }
+            return uri.toURL();
+        } catch (IllegalArgumentException | MalformedURLException error) {
+            throw new McpToolException(
+                    "INVALID_ARGUMENT", "url must be an absolute http or https URL", error);
+        }
+    }
+
+    private static Map<String, Object> filenameSchema() {
+        return map(
+                "type", "string",
+                "minLength", 1,
+                "maxLength", 255,
+                "pattern", "^[^/\\\\\\x00-\\x1F\\x7F]+$",
+                "description", "File name without a directory path.");
     }
 
     private static String safeFilename(String filename) {
