@@ -275,7 +275,7 @@ abstract class ToolSupport {
     }
 
     static Map<String, Object> integerSchema() {
-        return Map.of("type", "integer", "minimum", 1);
+        return nonNegativeIntegerSchema();
     }
 
     static Map<String, Object> integerSchema(int minimum, Integer maximum, int defaultValue) {
@@ -381,8 +381,8 @@ abstract class ToolSupport {
         if (value == null) {
             return null;
         }
-        if (!(value instanceof Number number) || number.longValue() < 1) {
-            throw new McpToolException("INVALID_ARGUMENT", name + " must be a positive integer");
+        if (!(value instanceof Number number) || number.longValue() < 0) {
+            throw new McpToolException("INVALID_ARGUMENT", name + " must be a non-negative integer");
         }
         return number.longValue();
     }
@@ -390,7 +390,7 @@ abstract class ToolSupport {
     static long requiredLong(Map<String, Object> arguments, String name) {
         var value = optionalLong(arguments, name);
         if (value == null) {
-            throw new McpToolException("INVALID_ARGUMENT", name + " must be a positive integer");
+            throw new McpToolException("INVALID_ARGUMENT", name + " must be a non-negative integer");
         }
         return value;
     }

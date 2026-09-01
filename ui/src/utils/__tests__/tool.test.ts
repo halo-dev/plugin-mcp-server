@@ -24,6 +24,7 @@ describe('groupTools', () => {
       tool('halo_list_posts', 'POST'),
       tool('halo_get_post', 'POST'),
       tool('halo_list_comments', 'COMMENT'),
+      tool('halo_list_theme_setting_groups', 'THEME'),
       tool('demo__export', 'PLUGIN', 'PluginDemo'),
     ])
 
@@ -38,10 +39,11 @@ describe('groupTools', () => {
 
     expect(builtInGroup).toMatchObject({
       source: { pluginName: 'PluginMcpServer' },
-      toolCount: 3,
+      toolCount: 4,
       categories: [
         { category: 'POST', label: '文章管理' },
         { category: 'COMMENT', label: '评论管理' },
+        { category: 'THEME', label: '主题设置' },
       ],
     })
     const postCategory = builtInGroup.categories[0]

@@ -18,7 +18,8 @@ public class BuiltInTools {
             CategoryTools categoryTools,
             TagTools tagTools,
             CommentTools commentTools,
-            AttachmentTools attachmentTools) {
+            AttachmentTools attachmentTools,
+            ThemeSettingTools themeSettingTools) {
         this.groups = List.of(
                 contentSearchTools,
                 postTools,
@@ -26,7 +27,8 @@ public class BuiltInTools {
                 categoryTools,
                 tagTools,
                 commentTools,
-                attachmentTools);
+                attachmentTools,
+                themeSettingTools);
     }
 
     public List<BuiltInTool> tools() {
