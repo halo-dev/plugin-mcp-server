@@ -30,7 +30,7 @@ class BuiltInToolsTest {
                 new AttachmentTools(client, mock(AttachmentService.class), new AttachmentUploadLimiter(), authorization));
 
         var names = tools.names().toList();
-        assertThat(tools.tools()).hasSize(29);
+        assertThat(tools.tools()).hasSize(33);
         assertThat(names)
                 .doesNotHaveDuplicates()
                 .contains(
@@ -59,7 +59,7 @@ class BuiltInToolsTest {
     }
 
     @Test
-    void marksOnlyRecycleAndDeleteToolsAsDestructive() {
+    void marksEveryToolThatCanOverwriteOrDeleteStateAsDestructive() {
         var client = mock(ReactiveExtensionClient.class);
         var authorization = mock(McpAuthorization.class);
         var snapshots = new ContentSnapshots(client);
@@ -78,12 +78,21 @@ class BuiltInToolsTest {
                 .toList();
 
         assertThat(destructive).containsExactlyInAnyOrder(
+                PostTools.UPDATE_POST,
+                PostTools.SET_PUBLISH_STATE,
                 PostTools.RECYCLE_POST,
+                SinglePageTools.UPDATE_PAGE,
+                SinglePageTools.SET_PUBLISH_STATE,
                 SinglePageTools.RECYCLE_PAGE,
+                CategoryTools.UPDATE,
+                CategoryTools.DELETE,
+                TagTools.UPDATE,
+                TagTools.DELETE,
+                CommentTools.SET_APPROVAL,
                 CommentTools.DELETE,
+                CommentTools.SET_REPLY_APPROVAL,
                 CommentTools.DELETE_REPLY,
                 AttachmentTools.DELETE);
-        assertThat(destructive).doesNotContain(PostTools.UPDATE_POST, PostTools.SET_PUBLISH_STATE);
     }
 
     @Test

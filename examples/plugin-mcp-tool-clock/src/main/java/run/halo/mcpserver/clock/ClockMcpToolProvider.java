@@ -21,7 +21,7 @@ public class ClockMcpToolProvider implements McpToolProvider {
     @Override
     public Flux<McpToolDefinition> tools() {
         return Flux.just(McpToolDefinition.builder()
-                .name("mcp-tool-clock/current-time")
+                .name("current_time")
                 .title("Current time")
                 .description("Return the current server time in UTC.")
                 .displayTitle("查询服务器时间")

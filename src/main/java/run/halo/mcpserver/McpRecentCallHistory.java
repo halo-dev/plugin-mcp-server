@@ -22,7 +22,7 @@ class McpRecentCallHistory {
 
     static final int CAPACITY = 500;
     private static final Pattern TOOL_NAME_PATTERN =
-            Pattern.compile("[A-Za-z0-9_.:/-]{1,128}");
+            Pattern.compile("[A-Za-z0-9_-]{1,128}");
     private static final Pattern ERROR_CODE_PATTERN =
             Pattern.compile("(?:[A-Z][A-Z0-9_]{0,63}|-?[0-9]{1,10})");
 
@@ -189,15 +189,16 @@ class McpRecentCallHistory {
         if ("<invalid>".equals(toolName)) {
             return McpToolSourceType.UNKNOWN;
         }
-        return toolName.contains("/") ? McpToolSourceType.PLUGIN : McpToolSourceType.BUILT_IN;
+        return McpToolNames.pluginName(toolName).isPresent()
+                ? McpToolSourceType.PLUGIN
+                : McpToolSourceType.BUILT_IN;
     }
 
     private static String sourcePlugin(String toolName) {
         if ("<invalid>".equals(toolName)) {
             return null;
         }
-        var separator = toolName.indexOf('/');
-        return separator > 0 ? toolName.substring(0, separator) : "plugin-mcp-server";
+        return McpToolNames.pluginName(toolName).orElse("mcp-server");
     }
 
     private record CallResult(McpCallOutcome outcome, String errorCode) {}

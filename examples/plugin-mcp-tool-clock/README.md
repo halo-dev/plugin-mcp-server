@@ -1,6 +1,6 @@
 # MCP Tool Clock Plugin
 
-This second provider plugin contributes `mcp-tool-clock/current-time` through
+This second provider plugin contributes `mcp-tool-clock__current_time` through
 the Halo MCP Server API. It is intentionally independent from the demo plugin
 so the runtime verification covers multiple provider plugin class loaders.
 

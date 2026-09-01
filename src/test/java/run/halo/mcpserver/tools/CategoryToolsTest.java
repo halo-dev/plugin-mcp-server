@@ -54,6 +54,18 @@ class CategoryToolsTest {
                 .verify();
     }
 
+    @Test
+    void deletesCategoryOnlyAtTheExpectedVersion() {
+        var category = category("news", null, 3L);
+        when(client.fetch(Category.class, "news")).thenReturn(Mono.just(category));
+        when(client.delete(category)).thenReturn(Mono.just(category));
+        var tools = new CategoryTools(client, authorization);
+
+        StepVerifier.create(tools.delete(Map.of("name", "news", "expectedVersion", 3)))
+                .assertNext(payload -> assertThat(payload.summary()).isEqualTo("Deleted category news"))
+                .verifyComplete();
+    }
+
     private static Category category(String name, String parent, long version) {
         var category = new Category();
         category.setMetadata(ToolSupport.metadata(name));

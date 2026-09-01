@@ -6,10 +6,10 @@ import reactor.core.publisher.Flux;
 /**
  * Cross-plugin entry point for contributing tools to Halo's MCP server.
  *
- * <p>Providers must use their owning plugin ID as the tool namespace, such as {@code
- * my-plugin/lookup-order} for a plugin whose ID is {@code my-plugin}. The API intentionally contains
- * no MCP SDK types so provider plugins remain independent of the server's transport and SDK
- * implementation.
+ * <p>Providers declare lowercase snake_case names local to their plugin, such as {@code
+ * lookup_order}. The MCP server resolves plugin ownership and generates the protocol name. The API
+ * intentionally contains no MCP SDK types so provider plugins remain independent of the server's
+ * transport and SDK implementation.
  */
 public interface McpToolProvider extends ExtensionPoint {
 

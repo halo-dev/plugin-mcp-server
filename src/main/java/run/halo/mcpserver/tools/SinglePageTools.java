@@ -7,6 +7,7 @@ import static run.halo.app.extension.index.query.Queries.equal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -29,6 +30,7 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
     static final String UPDATE_PAGE = "halo_update_single_page";
     static final String SET_PUBLISH_STATE = "halo_set_single_page_publish_state";
     static final String RECYCLE_PAGE = "halo_recycle_single_page";
+    static final String RESTORE_PAGE = "halo_restore_single_page";
 
     private static final int MAX_CONTENT_CHARS = 65_536;
     private static final String DEFAULT_RAW_TYPE = "html";
@@ -51,7 +53,8 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                 createTool(),
                 updateTool(),
                 publishStateTool(),
-                recycleTool());
+                recycleTool(),
+                restoreTool());
     }
 
     Mono<ToolPayload> list(Map<String, Object> arguments) {
@@ -96,39 +99,89 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
             var page = new SinglePage();
             page.setMetadata(metadata(name));
             page.setSpec(spec(arguments, username, title, slug));
-            return client.create(page)
-                    .flatMap(created -> snapshots.createBase(Ref.of(created), content, username)
-                            .flatMap(snapshot -> {
-                                var snapshotName = snapshot.getMetadata().getName();
-                                return updateLatest(client, SinglePage.class, name, "SinglePage", latest -> {
-                                    var pageSpec = latest.getSpec();
-                                    pageSpec.setBaseSnapshot(snapshotName);
-                                    pageSpec.setHeadSnapshot(snapshotName);
-                                    if (Boolean.TRUE.equals(pageSpec.getPublish())) {
-                                        pageSpec.setReleaseSnapshot(snapshotName);
-                                    }
-                                });
-                            }))
+            return Mono.usingWhen(
+                            client.create(page),
+                            created -> snapshots.createBase(Ref.of(created), content, username)
+                                    .flatMap(snapshot -> {
+                                        var snapshotName = snapshot.getMetadata().getName();
+                                        return updateLatest(client, SinglePage.class, name, "SinglePage", latest -> {
+                                            var pageSpec = latest.getSpec();
+                                            pageSpec.setBaseSnapshot(snapshotName);
+                                            pageSpec.setHeadSnapshot(snapshotName);
+                                            if (Boolean.TRUE.equals(pageSpec.getPublish())) {
+                                                pageSpec.setReleaseSnapshot(snapshotName);
+                                            }
+                                        });
+                                    }),
+                            ignored -> Mono.empty(),
+                            (created, ignored) -> rollbackCreated(client, created),
+                            created -> rollbackCreated(client, created))
                     .map(created -> payload(ContentPayloads.singlePage(created), "Created single page " + name));
         });
     }
 
     Mono<ToolPayload> update(Map<String, Object> arguments) {
         var name = resourceName(arguments, "name");
+        if (!arguments.containsKey("raw")) {
+            if (arguments.containsKey("content") || arguments.containsKey("rawType")) {
+                throw new McpToolException(
+                        "INVALID_ARGUMENT", "raw is required when content or rawType is provided");
+            }
+            return updateLatest(
+                            client,
+                            SinglePage.class,
+                            name,
+                            "SinglePage",
+                            page -> applyMetadata(page, arguments))
+                    .map(updated -> payload(
+                            ContentPayloads.singlePage(updated), "Updated single page " + name));
+        }
         var content = content(arguments);
         return authorization.username().flatMap(username -> client.fetch(SinglePage.class, name)
                 .switchIfEmpty(notFound("SinglePage", name))
-                .flatMap(page -> snapshots.update(
+                .flatMap(page -> {
+                    var expectedHead = page.getSpec().getHeadSnapshot();
+                    var expectedRelease = page.getSpec().getReleaseSnapshot();
+                    return snapshots.update(
                                 Ref.of(page),
                                 page.getSpec().getBaseSnapshot(),
-                                page.getSpec().getHeadSnapshot(),
-                                page.getSpec().getReleaseSnapshot(),
+                                expectedHead,
                                 content,
                                 username)
-                        .flatMap(snapshot -> updateLatest(client, SinglePage.class, name, "SinglePage", latest -> {
-                            applyMetadata(latest, arguments);
-                            latest.getSpec().setHeadSnapshot(snapshot.getMetadata().getName());
-                        })))
+                            .flatMap(snapshot -> Mono.usingWhen(
+                                    Mono.just(snapshot),
+                                    ignored -> updateLatestIf(
+                                            client,
+                                            SinglePage.class,
+                                            name,
+                                            "SinglePage",
+                                            latest -> Objects.equals(
+                                                            latest.getSpec().getHeadSnapshot(), expectedHead)
+                                                    && Objects.equals(
+                                                            latest.getSpec().getReleaseSnapshot(), expectedRelease),
+                                            () -> new McpToolException(
+                                                    "CONFLICT",
+                                                    "Single page content changed while it was being updated"),
+                                            latest -> {
+                                                applyMetadata(latest, arguments);
+                                                latest.getSpec().setHeadSnapshot(
+                                                        snapshot.getMetadata().getName());
+                                    }),
+                                    ignored -> Mono.empty(),
+                                    (created, ignored) -> snapshots.rollbackUnlessReferenced(
+                                            created,
+                                            client.fetch(SinglePage.class, name)
+                                                    .map(latest -> {
+                                                        var snapshotName = created.getMetadata().getName();
+                                                        return Objects.equals(
+                                                                        latest.getSpec().getHeadSnapshot(),
+                                                                        snapshotName)
+                                                                || Objects.equals(
+                                                                        latest.getSpec().getReleaseSnapshot(),
+                                                                        snapshotName);
+                                                    })),
+                                    created -> Mono.empty()));
+                })
                 .map(updated -> payload(ContentPayloads.singlePage(updated), "Updated single page " + name)));
     }
 
@@ -143,6 +196,17 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
 
     Mono<ToolPayload> recycle(Map<String, Object> arguments) {
         return updateState(arguments, false, true, "Recycled single page ");
+    }
+
+    Mono<ToolPayload> restore(Map<String, Object> arguments) {
+        var name = resourceName(arguments, "name");
+        return updateLatest(
+                        client,
+                        SinglePage.class,
+                        name,
+                        "SinglePage",
+                        page -> page.getSpec().setDeleted(false))
+                .map(page -> payload(ContentPayloads.singlePage(page), "Restored single page " + name));
     }
 
     private Mono<ToolPayload> updateState(
@@ -214,13 +278,17 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                 "PAGE",
                 objectSchema(
                         map(
-                                "name", stringSchema(),
+                                "name", stringSchema("SinglePage metadata.name (a lowercase DNS label)."),
                                 "title", stringSchema(),
                                 "slug", stringSchema(),
-                                "raw", stringSchema(),
-                                "content", stringSchema(),
-                                "rawType", stringSchemaWithDefault(DEFAULT_RAW_TYPE),
-                                "publish", booleanSchema(false),
+                                "raw", stringSchema("Editable source content stored in the snapshot."),
+                                "content", stringSchema("Rendered content; defaults to raw when omitted."),
+                                "rawType", described(
+                                        stringSchemaWithDefault(DEFAULT_RAW_TYPE),
+                                        "Format identifier for raw, such as html or markdown."),
+                                "publish", described(
+                                        booleanSchema(false),
+                                        "Whether to publish the initial snapshot immediately."),
                                 "visible", enumSchema(Post.VisibleEnum.class, Post.VisibleEnum.PUBLIC.name()),
                                 "allowComment", booleanSchema(true)),
                         List.of("name", "title", "raw")),
@@ -233,21 +301,23 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
         return tool(
                 UPDATE_PAGE,
                 "Update Halo single page",
-                "Update single page metadata and its editable content snapshot.",
+                "Update single page metadata and, when raw is provided, its editable content snapshot.",
                 "更新页面",
-                "更新独立页面标题、别名、可见性、评论设置和编辑内容。",
+                "更新独立页面标题、别名、可见性和评论设置；传入 raw 时同时更新编辑内容。",
                 "PAGE",
                 objectSchema(
                         map(
-                                "name", stringSchema(),
+                                "name", stringSchema("SinglePage metadata.name."),
                                 "title", stringSchema(),
                                 "slug", stringSchema(),
-                                "raw", stringSchema(),
-                                "content", stringSchema(),
-                                "rawType", stringSchemaWithDefault(DEFAULT_RAW_TYPE),
+                                "raw", stringSchema("New editable source; omit for a metadata-only update."),
+                                "content", stringSchema("Rendered content; valid only when raw is provided."),
+                                "rawType", described(
+                                        stringSchemaWithDefault(DEFAULT_RAW_TYPE),
+                                        "Format identifier for raw; valid only when raw is provided."),
                                 "visible", enumSchema(Post.VisibleEnum.class),
                                 "allowComment", booleanSchema()),
-                        List.of("name", "raw")),
+                        List.of("name")),
                 ContentPayloads.singlePageSchema(),
                 UPDATE,
                 this::update);
@@ -278,11 +348,29 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                 "设置独立页面为发布或草稿状态；发布时使用当前编辑版本。",
                 "PAGE",
                 objectSchema(
-                        map("name", stringSchema(), "publish", booleanSchema()),
+                        map(
+                                "name", stringSchema("SinglePage metadata.name."),
+                                "publish", described(
+                                        booleanSchema(),
+                                        "True publishes the current head snapshot; false returns the page to draft.")),
                         List.of("name", "publish")),
                 ContentPayloads.singlePageSchema(),
                 UPDATE,
                 this::setPublishState);
+    }
+
+    private BuiltInTool restoreTool() {
+        return tool(
+                RESTORE_PAGE,
+                "Restore Halo single page",
+                "Restore a single page from the recycle bin.",
+                "恢复页面",
+                "将独立页面从回收站恢复。",
+                "PAGE",
+                objectSchema(map("name", stringSchema()), List.of("name")),
+                ContentPayloads.singlePageSchema(),
+                RESTORE,
+                this::restore);
     }
 
     private static ListOptions contentOptions(Boolean published, boolean recycled) {

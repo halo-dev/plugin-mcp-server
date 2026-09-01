@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import { defineComponent, ref, type Ref } from 'vue'
+import { defineComponent, nextTick, ref, type Ref } from 'vue'
 import McpOverview from '../McpOverview.vue'
 
 const accessKeysData = ref<unknown[] | undefined>(undefined)
@@ -59,6 +59,7 @@ describe('McpOverview', () => {
       { enabled: true },
       { enabled: false },
       { enabled: true, deletionTimestamp: '2026-08-22T08:00:00Z' },
+      { enabled: true, expiresAt: '2020-01-01T00:00:00Z' },
     ]
     toolsData.value = [
       { readOnly: true, destructive: false },
@@ -70,7 +71,7 @@ describe('McpOverview', () => {
     const wrapper = mountComponent()
     const text = wrapper.text()
 
-    expect(text).toContain('3')
+    expect(text).toContain('4')
     expect(text).toContain('1 个已启用')
     expect(text).toContain('只读 1 · 写入 1 · 破坏性 1')
     expect(text).toContain('成功 5 次')
@@ -95,5 +96,22 @@ describe('McpOverview', () => {
 
     expect(wrapper.text()).toContain('暂无调用记录')
     expect(wrapper.text()).not.toContain('0%')
+  })
+
+  it('updates the enabled count after a key expires while the page is open', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-01T00:00:00Z'))
+    accessKeysData.value = [{ enabled: true, expiresAt: '2026-09-01T00:00:30Z' }]
+    toolsData.value = []
+    recentCallsData.value = { total: 0 }
+    const wrapper = mountComponent()
+
+    expect(wrapper.text()).toContain('1 个已启用')
+    await vi.advanceTimersByTimeAsync(60_000)
+    await nextTick()
+    expect(wrapper.text()).toContain('0 个已启用')
+
+    wrapper.unmount()
+    vi.useRealTimers()
   })
 })

@@ -1,10 +1,11 @@
 package run.halo.mcpserver;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -12,16 +13,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.pf4j.PluginManager;
+import org.pf4j.PluginWrapper;
+import org.springframework.aop.support.AopUtils;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
-import run.halo.app.core.extension.Plugin;
-import run.halo.app.extension.Metadata;
-import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.plugin.extensionpoint.ExtensionGetter;
 import run.halo.mcpserver.api.McpToolAnnotations;
 import run.halo.mcpserver.api.McpToolDefinition;
@@ -35,7 +36,10 @@ class McpToolRegistryTest {
     ExtensionGetter extensionGetter;
 
     @Mock
-    ReactiveExtensionClient extensionClient;
+    PluginManager pluginManager;
+
+    @Mock
+    PluginWrapper selfPluginWrapper;
 
     @Mock
     McpToolProvider provider;
@@ -44,13 +48,29 @@ class McpToolRegistryTest {
 
     @BeforeEach
     void setUp() {
-        registry = new McpToolRegistry(extensionGetter, extensionClient, new McpAuthorization());
+        lenient().when(selfPluginWrapper.getPluginManager()).thenReturn(pluginManager);
+        registry = new McpToolRegistry(
+                extensionGetter, new McpAuthorization(), pluginManager, Duration.ofSeconds(5));
+    }
+
+    @Test
+    void springCanCreateTheRegistryWithItsRuntimeDependencies() {
+        try (var context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(ExtensionGetter.class, () -> extensionGetter);
+            context.registerBean(McpAuthorization.class, McpAuthorization::new);
+            context.registerBean(PluginWrapper.class, () -> selfPluginWrapper);
+            context.register(McpToolRegistry.class);
+
+            context.refresh();
+
+            assertThat(context.getBean(McpToolRegistry.class)).isNotNull();
+        }
     }
 
     @Test
     void executesAValidatedContributedTool() {
         var tool = McpToolDefinition.builder()
-                .name("demo/hello")
+                .name("hello")
                 .title("Hello")
                 .description("Returns a greeting")
                 .inputSchema(objectSchema(
@@ -59,14 +79,17 @@ class McpToolRegistryTest {
                         Map.of("message", Map.of("type", "string")), List.of("message")))
                 .annotations(McpToolAnnotations.readOnly("Hello"))
                 .permission(invocation -> Mono.just(true))
-                .handler(invocation -> Mono.just(McpToolResult.success(
-                        Map.of("message", "Hello " + invocation.arguments().get("name")),
-                        "Custom greeting")))
+                .handler(invocation -> {
+                    assertThat(invocation.toolName()).isEqualTo("hello");
+                    return Mono.just(McpToolResult.success(
+                            Map.of("message", "Hello " + invocation.arguments().get("name")),
+                            "Custom greeting"));
+                })
                 .build();
         providerTools(provider, "demo", tool);
 
-        StepVerifier.create(registry.executeIfContributed("demo/hello", Map.of("name", "Halo"))
-                        .contextWrite(context("demo/hello")))
+        StepVerifier.create(registry.executeIfContributed("demo__hello", Map.of("name", "Halo"))
+                        .contextWrite(context("demo__hello")))
                 .assertNext(result -> {
                     assertThat(result).isPresent();
                     assertThat(result.orElseThrow().structuredContent().toString()).contains("Hello Halo");
@@ -82,7 +105,7 @@ class McpToolRegistryTest {
     void validatesArgumentsBeforeExecutingTheProvider() {
         var called = new AtomicBoolean();
         var tool = McpToolDefinition.builder()
-                .name("demo/hello")
+                .name("hello")
                 .inputSchema(objectSchema(
                         Map.of("name", Map.of("type", "string")), List.of("name")))
                 .permission(invocation -> Mono.just(true))
@@ -93,10 +116,10 @@ class McpToolRegistryTest {
                 .build();
         providerTools(provider, "demo", tool);
 
-        StepVerifier.create(registry.executeIfContributed("demo/hello", Map.of("name", 42))
-                        .contextWrite(context("demo/hello")))
+        StepVerifier.create(registry.executeIfContributed("demo__hello", Map.of("name", 42))
+                        .contextWrite(context("demo__hello")))
                 .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
-                        .contains("INVALID_ARGUMENTS"))
+                        .contains("INVALID_ARGUMENT"))
                 .verifyComplete();
         assertThat(called).isFalse();
     }
@@ -104,7 +127,7 @@ class McpToolRegistryTest {
     @Test
     void rejectsStructuredOutputThatDoesNotMatchTheDeclaredSchema() {
         var tool = McpToolDefinition.builder()
-                .name("demo/count")
+                .name("count")
                 .inputSchema(objectSchema(Map.of(), List.of()))
                 .outputSchema(objectSchema(
                         Map.of("count", Map.of("type", "integer")), List.of("count")))
@@ -113,8 +136,8 @@ class McpToolRegistryTest {
                 .build();
         providerTools(provider, "demo", tool);
 
-        StepVerifier.create(registry.executeIfContributed("demo/count", Map.of())
-                        .contextWrite(context("demo/count")))
+        StepVerifier.create(registry.executeIfContributed("demo__count", Map.of())
+                        .contextWrite(context("demo__count")))
                 .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
                         .contains("INVALID_TOOL_RESULT"))
                 .verifyComplete();
@@ -123,34 +146,54 @@ class McpToolRegistryTest {
     @Test
     void turnsEmptyProviderCallbacksIntoStableErrors() {
         var emptyPermission = McpToolDefinition.builder()
-                .name("demo/permission")
+                .name("permission")
                 .inputSchema(objectSchema(Map.of(), List.of()))
                 .permission(invocation -> Mono.empty())
                 .handler(invocation -> Mono.just(McpToolResult.success(Map.of("ok", true))))
                 .build();
         var emptyHandler = McpToolDefinition.builder()
-                .name("demo/handler")
+                .name("handler")
                 .inputSchema(objectSchema(Map.of(), List.of()))
                 .permission(invocation -> Mono.just(true))
                 .handler(invocation -> Mono.empty())
                 .build();
         providerTools(provider, "demo", emptyPermission, emptyHandler);
 
-        StepVerifier.create(registry.executeIfContributed("demo/permission", Map.of())
-                        .contextWrite(context("demo/permission")))
+        StepVerifier.create(registry.executeIfContributed("demo__permission", Map.of())
+                        .contextWrite(context("demo__permission")))
                 .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
                         .contains("INTERNAL"))
                 .verifyComplete();
-        StepVerifier.create(registry.executeIfContributed("demo/handler", Map.of())
-                        .contextWrite(context("demo/handler")))
+        StepVerifier.create(registry.executeIfContributed("demo__handler", Map.of())
+                        .contextWrite(context("demo__handler")))
                 .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
                         .contains("INTERNAL"))
                 .verifyComplete();
     }
 
     @Test
+    void turnsProviderLinkageErrorsIntoStableErrors() {
+        var tool = McpToolDefinition.builder()
+                .name("broken")
+                .inputSchema(objectSchema(Map.of(), List.of()))
+                .permission(invocation -> Mono.just(true))
+                .handler(invocation -> {
+                    throw new NoSuchMethodError("outdated provider API");
+                })
+                .build();
+        providerTools(provider, "demo", tool);
+
+        StepVerifier.create(registry.executeIfContributed("demo__broken", Map.of())
+                        .contextWrite(context("demo__broken")))
+                .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
+                        .contains("INTERNAL"))
+                .expectComplete()
+                .verify(Duration.ofSeconds(1));
+    }
+
+    @Test
     void returnsEmptyForABuiltInTool() {
-        providerTools(provider, "demo", tool("demo/hello"));
+        providerTools(provider, "demo", tool("hello"));
 
         StepVerifier.create(registry.executeIfContributed("halo_search_content", Map.of())
                         .contextWrite(context("halo_search_content")))
@@ -161,20 +204,20 @@ class McpToolRegistryTest {
     @Test
     void rejectsToolWhenKeyOrProviderPermissionDenies() {
         var tool = McpToolDefinition.builder()
-                .name("demo/secret")
+                .name("secret")
                 .inputSchema(objectSchema(Map.of(), List.of()))
                 .permission(invocation -> Mono.just(false))
                 .handler(invocation -> Mono.just(McpToolResult.success(Map.of("ok", true))))
                 .build();
         providerTools(provider, "demo", tool);
 
-        StepVerifier.create(registry.executeIfContributed("demo/secret", Map.of())
-                        .contextWrite(context("demo/secret")))
+        StepVerifier.create(registry.executeIfContributed("demo__secret", Map.of())
+                        .contextWrite(context("demo__secret")))
                 .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
                         .contains("FORBIDDEN"))
                 .verifyComplete();
-        StepVerifier.create(registry.executeIfContributed("demo/secret", Map.of())
-                        .contextWrite(context("demo/other")))
+        StepVerifier.create(registry.executeIfContributed("demo__secret", Map.of())
+                        .contextWrite(context("demo__other")))
                 .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
                         .contains("FORBIDDEN"))
                 .verifyComplete();
@@ -184,7 +227,7 @@ class McpToolRegistryTest {
     void defersTheProviderPermissionCallbackUntilTheKeyAllowlistPasses() {
         var permissionChecks = new AtomicInteger();
         var tool = McpToolDefinition.builder()
-                .name("demo/secret")
+                .name("secret")
                 .inputSchema(objectSchema(Map.of(), List.of()))
                 .permission(invocation -> {
                     permissionChecks.incrementAndGet();
@@ -194,121 +237,152 @@ class McpToolRegistryTest {
                 .build();
         providerTools(provider, "demo", tool);
 
-        StepVerifier.create(registry.executeIfContributed("demo/secret", Map.of())
-                        .contextWrite(context("demo/other")))
+        StepVerifier.create(registry.executeIfContributed("demo__secret", Map.of())
+                        .contextWrite(context("demo__other")))
                 .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
                         .contains("FORBIDDEN"))
                 .verifyComplete();
         assertThat(permissionChecks).hasValue(0);
 
-        StepVerifier.create(registry.executeIfContributed("demo/secret", Map.of())
-                        .contextWrite(context("demo/secret")))
+        StepVerifier.create(registry.executeIfContributed("demo__secret", Map.of())
+                        .contextWrite(context("demo__secret")))
                 .assertNext(result -> assertThat(result.orElseThrow().isError()).isFalse())
                 .verifyComplete();
         assertThat(permissionChecks).hasValue(1);
     }
 
     @Test
+    void isolatesSynchronousProviderCallbacksFromNonBlockingThreads() {
+        var toolsCallbackWasNonBlocking = new AtomicBoolean(true);
+        var permissionCallbackWasNonBlocking = new AtomicBoolean(true);
+        var handlerCallbackWasNonBlocking = new AtomicBoolean(true);
+        var tool = McpToolDefinition.builder()
+                .name("thread")
+                .inputSchema(objectSchema(Map.of(), List.of()))
+                .permission(invocation -> {
+                    permissionCallbackWasNonBlocking.set(Schedulers.isInNonBlockingThread());
+                    return Mono.just(true);
+                })
+                .handler(invocation -> {
+                    handlerCallbackWasNonBlocking.set(Schedulers.isInNonBlockingThread());
+                    return Mono.just(McpToolResult.success(Map.of("ok", true)));
+                })
+                .build();
+        owner(provider, "demo");
+        when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(provider));
+        when(provider.tools()).thenAnswer(ignored -> {
+            toolsCallbackWasNonBlocking.set(Schedulers.isInNonBlockingThread());
+            return Flux.just(tool);
+        });
+
+        StepVerifier.create(registry.executeIfContributed("demo__thread", Map.of())
+                        .contextWrite(context("demo__thread"))
+                        .subscribeOn(Schedulers.parallel()))
+                .assertNext(result -> assertThat(result.orElseThrow().isError()).isFalse())
+                .verifyComplete();
+
+        assertThat(toolsCallbackWasNonBlocking).isFalse();
+        assertThat(permissionCallbackWasNonBlocking).isFalse();
+        assertThat(handlerCallbackWasNonBlocking).isFalse();
+    }
+
+    @Test
     void resolvesProviderListForEachRequest() {
-        var current = new java.util.concurrent.atomic.AtomicReference<McpToolDefinition>(tool("demo/one"));
+        var current = new java.util.concurrent.atomic.AtomicReference<McpToolDefinition>(tool("one"));
         owner(provider, "demo");
         when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(provider));
         when(provider.tools()).thenAnswer(invocation -> Flux.just(current.get()));
 
         assertThat(registry.registeredTools().block())
-                .extracting(tool -> tool.definition().name()).containsExactly("demo/one");
-        current.set(tool("demo/two"));
+                .extracting(RegisteredTool::protocolName).containsExactly("demo__one");
+        current.set(tool("two"));
         assertThat(registry.registeredTools().block())
-                .extracting(tool -> tool.definition().name()).containsExactly("demo/two");
+                .extracting(RegisteredTool::protocolName).containsExactly("demo__two");
     }
 
     @Test
-    void usesTheOwningPluginAsTheRequiredNamespace() {
+    void derivesTheProtocolNameFromTheRuntimeOwner() {
         when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(provider));
-        when(provider.tools()).thenReturn(Flux.just(tool("another-plugin/impersonated")));
-        var impersonated = new Plugin();
-        var metadata = new Metadata();
-        metadata.setName("another-plugin");
-        impersonated.setMetadata(metadata);
-        var status = new Plugin.PluginStatus();
-        status.setLoadLocation(java.net.URI.create("file:///different-plugin.jar"));
-        impersonated.setStatus(status);
-        when(extensionClient.fetch(Plugin.class, "another-plugin"))
-                .thenReturn(Mono.just(impersonated));
+        when(provider.tools()).thenReturn(Flux.just(tool("impersonated")));
+        owner(provider, "demo");
 
         StepVerifier.create(registry.registeredTools())
-                .assertNext(tools -> assertThat(tools).isEmpty())
+                .assertNext(tools -> assertThat(tools).singleElement().satisfies(tool -> {
+                    assertThat(tool.pluginName()).isEqualTo("demo");
+                    assertThat(tool.protocolName()).isEqualTo("demo__impersonated");
+                }))
                 .verifyComplete();
     }
 
     @Test
-    void acceptsAProviderLoadedFromItsDevelopmentPluginDirectory() throws Exception {
-        McpToolProvider developmentProvider = () -> Flux.just(tool("demo/hello"));
-        var providerLocation = developmentProvider.getClass()
-                .getProtectionDomain()
-                .getCodeSource()
-                .getLocation()
-                .toURI()
-                .normalize();
-        var plugin = new Plugin();
-        var metadata = new Metadata();
-        metadata.setName("demo");
-        plugin.setMetadata(metadata);
-        var status = new Plugin.PluginStatus();
-        status.setLoadLocation(Path.of(providerLocation).getParent().toUri());
-        plugin.setStatus(status);
+    void quarantinesAProviderWhenPf4jCannotResolveItsOwner() {
+        McpToolProvider unknownProvider = () -> Flux.just(tool("hello"));
         when(extensionGetter.getEnabledExtensions(McpToolProvider.class))
-                .thenReturn(Flux.just(developmentProvider));
-        when(extensionClient.fetch(Plugin.class, "demo")).thenReturn(Mono.just(plugin));
+                .thenReturn(Flux.just(unknownProvider));
 
-        StepVerifier.create(Mono.defer(registry::registeredTools)
-                        .subscribeOn(Schedulers.parallel()))
-                .assertNext(tools -> {
-                    assertThat(tools)
-                            .extracting(tool -> tool.definition().name())
-                            .containsExactly("demo/hello");
-                    assertThat(Schedulers.isInNonBlockingThread()).isFalse();
-                })
-                .verifyComplete();
-    }
-
-    @Test
-    void rejectsAProviderLoadedFromANeighboringDevelopmentDirectory(@TempDir Path tempDir)
-            throws Exception {
-        var pluginDirectory = Files.createDirectory(tempDir.resolve("plugin"));
-        var neighboringDirectory = Files.createDirectory(tempDir.resolve("plugin-other"));
-
-        assertThat(McpToolRegistry.ownsProvider(
-                        pluginDirectory.toUri(), neighboringDirectory.toUri()).block())
-                .isFalse();
+        assertThat(registry.registeredTools().block()).isEmpty();
     }
 
     @Test
     void quarantinesInvalidSchemasAndConflictingTools() {
         var invalidSchema = McpToolDefinition.builder()
-                .name("demo/invalid")
+                .name("invalid")
                 .inputSchema(Map.of("type", "object", "properties", "not-an-object"))
                 .permission(invocation -> Mono.just(true))
                 .handler(invocation -> Mono.just(McpToolResult.success(Map.of())))
                 .build();
-        providerTools(provider, "demo", invalidSchema);
+        when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(provider));
+        when(provider.tools()).thenReturn(Flux.just(invalidSchema));
         assertThat(registry.registeredTools().block()).isEmpty();
 
-        providerTools(provider, "demo", tool("demo/conflict"), tool("demo/conflict"));
+        providerTools(provider, "demo", tool("conflict"), tool("conflict"));
         assertThat(registry.registeredTools().block()).isEmpty();
     }
 
     @Test
     void isolatesAFailedProviderFromHealthyProviders() {
         McpToolProvider failed = () -> Flux.error(new IllegalStateException("provider secret"));
-        McpToolProvider healthy = () -> Flux.just(tool("healthy/available"));
+        McpToolProvider healthy = () -> Flux.just(tool("available"));
         owner(healthy, "healthy");
         when(extensionGetter.getEnabledExtensions(McpToolProvider.class))
                 .thenReturn(Flux.just(failed, healthy));
 
         assertThat(registry.registeredTools().block())
-                .extracting(tool -> tool.definition().name())
-                .containsExactly("healthy/available");
+                .extracting(RegisteredTool::protocolName)
+                .containsExactly("healthy__available");
+    }
+
+    @Test
+    void isolatesANonTerminatingProviderFromHealthyProviders() {
+        registry = new McpToolRegistry(
+                extensionGetter, new McpAuthorization(), pluginManager, Duration.ofMillis(10));
+        McpToolProvider stalled = Flux::never;
+        McpToolProvider healthy = () -> Flux.just(tool("available"));
+        owner(healthy, "healthy");
+        when(extensionGetter.getEnabledExtensions(McpToolProvider.class))
+                .thenReturn(Flux.just(stalled, healthy));
+
+        StepVerifier.create(registry.registeredTools())
+                .assertNext(tools -> assertThat(tools)
+                        .extracting(RegisteredTool::protocolName)
+                        .containsExactly("healthy__available"))
+                .verifyComplete();
+    }
+
+    @Test
+    void isolatesAProviderThatReturnsTooManyTools() {
+        McpToolProvider excessive = () -> Flux.range(0, 101)
+                .map(index -> tool("tool_" + index));
+        McpToolProvider healthy = () -> Flux.just(tool("available"));
+        owner(healthy, "healthy");
+        when(extensionGetter.getEnabledExtensions(McpToolProvider.class))
+                .thenReturn(Flux.just(excessive, healthy));
+
+        StepVerifier.create(registry.registeredTools())
+                .assertNext(tools -> assertThat(tools)
+                        .extracting(RegisteredTool::protocolName)
+                        .containsExactly("healthy__available"))
+                .verifyComplete();
     }
 
     private void providerTools(
@@ -320,23 +394,9 @@ class McpToolRegistryTest {
     }
 
     private void owner(McpToolProvider toolProvider, String pluginName) {
-        var plugin = new Plugin();
-        var metadata = new Metadata();
-        metadata.setName(pluginName);
-        plugin.setMetadata(metadata);
-        var status = new Plugin.PluginStatus();
-        try {
-            status.setLoadLocation(toolProvider.getClass()
-                    .getProtectionDomain()
-                    .getCodeSource()
-                    .getLocation()
-                    .toURI()
-                    .normalize());
-        } catch (java.net.URISyntaxException error) {
-            throw new AssertionError(error);
-        }
-        plugin.setStatus(status);
-        when(extensionClient.fetch(Plugin.class, pluginName)).thenReturn(Mono.just(plugin));
+        var plugin = mock(PluginWrapper.class);
+        when(plugin.getPluginId()).thenReturn(pluginName);
+        when(pluginManager.whichPlugin(AopUtils.getTargetClass(toolProvider))).thenReturn(plugin);
     }
 
     private static McpToolDefinition tool(String name) {

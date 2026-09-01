@@ -4,6 +4,7 @@ import { useAccessKeys } from '@/composables/useAccessKeys'
 import { useRecentCalls } from '@/composables/useRecentCalls'
 import { useTools } from '@/composables/useTools'
 import { VAlert, VCard } from '@halo-dev/components'
+import { useNow } from '@vueuse/core'
 import { computed } from 'vue'
 import KeyIcon from '~icons/mingcute/key-2-line'
 import ToolIcon from '~icons/mingcute/tool-line'
@@ -12,6 +13,7 @@ import CheckCircleIcon from '~icons/mingcute/check-circle-line'
 
 const { data: keys } = useAccessKeys()
 const { data: tools } = useTools()
+const now = useNow({ interval: 60_000 })
 
 const totalQuery = computed(() => ({ page: 1, size: 1 }))
 const successQuery = computed(() => ({
@@ -23,7 +25,13 @@ const { data: recentTotal } = useRecentCalls(totalQuery)
 const { data: recentSuccess } = useRecentCalls(successQuery)
 
 const enabledKeyCount = computed(
-  () => keys.value?.filter((key) => key.enabled && !key.deletionTimestamp).length ?? 0,
+  () =>
+    keys.value?.filter(
+      (key) =>
+        key.enabled &&
+        !key.deletionTimestamp &&
+        (!key.expiresAt || new Date(key.expiresAt).getTime() > now.value.getTime()),
+    ).length ?? 0,
 )
 
 const toolStats = computed(() => {

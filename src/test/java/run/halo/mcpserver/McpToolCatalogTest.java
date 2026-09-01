@@ -73,7 +73,7 @@ class McpToolCatalogTest {
     @Test
     void usesProviderDisplayCopyOnlyForTheConsoleCatalog() {
         var definition = McpToolDefinition.builder()
-                .name("demo/export")
+                .name("export")
                 .title("Export data")
                 .description("Export plugin data.")
                 .displayTitle("导出数据")
@@ -87,18 +87,21 @@ class McpToolCatalogTest {
                 .build();
         when(builtInTools.tools()).thenReturn(List.of());
         when(registry.registeredTools())
-                .thenReturn(Mono.just(List.of(new RegisteredTool("demo", definition))));
+                .thenReturn(Mono.just(List.of(
+                        new RegisteredTool("demo", "demo__export", definition))));
         when(extensionClient.fetch(run.halo.app.core.extension.Plugin.class, "demo"))
                 .thenReturn(Mono.error(new IllegalStateException("plugin metadata unavailable")));
         var catalog = new McpToolCatalog(builtInTools, registry, extensionClient);
 
         assertThat(catalog.tools().block()).singleElement().satisfies(tool -> {
+            assertThat(tool.name()).isEqualTo("demo__export");
             assertThat(tool.title()).isEqualTo("导出数据");
             assertThat(tool.description()).isEqualTo("导出插件数据。");
             assertThat(tool.inputSchema()).containsEntry("type", "object");
             assertThat(tool.outputSchema()).containsEntry("type", "object");
         });
         assertThat(catalog.protocolTools().block()).singleElement().satisfies(tool -> {
+            assertThat(tool.name()).isEqualTo("demo__export");
             assertThat(tool.title()).isEqualTo("Export data");
             assertThat(tool.description()).isEqualTo("Export plugin data.");
         });

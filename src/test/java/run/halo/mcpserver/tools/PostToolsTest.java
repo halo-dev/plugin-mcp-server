@@ -3,10 +3,12 @@ package run.halo.mcpserver.tools;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -98,6 +100,23 @@ class PostToolsTest {
     }
 
     @Test
+    void removesTheCreatedPostWhenItsInitialSnapshotFails() {
+        var post = post(1L);
+        when(authorization.username()).thenReturn(Mono.just("admin"));
+        when(client.create(any(Post.class))).thenReturn(Mono.just(post));
+        when(client.create(any(Snapshot.class))).thenReturn(Mono.error(new IllegalStateException("snapshot")));
+        when(client.delete(post)).thenReturn(Mono.just(post));
+        var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
+
+        StepVerifier.create(tools.create(Map.of(
+                        "name", "hello-world", "title", "Hello", "raw", "Body")))
+                .expectErrorMessage("snapshot")
+                .verify();
+
+        verify(client).delete(post);
+    }
+
+    @Test
     void retriesPostStateChangeAfterReconcilerVersionConflict() {
         var stalePost = post(3L);
         var latestPost = post(4L);
@@ -140,6 +159,119 @@ class PostToolsTest {
     }
 
     @Test
+    void rejectsAContentUpdateWhenTheHeadChangedConcurrently() {
+        var original = post(3L);
+        original.getSpec().setBaseSnapshot("base");
+        original.getSpec().setHeadSnapshot("head");
+        original.getSpec().setReleaseSnapshot("head");
+        var latest = post(4L);
+        latest.getSpec().setHeadSnapshot("other-head");
+        var base = snapshot("base", "old");
+        var createdSnapshot = new AtomicReference<Snapshot>();
+        when(authorization.username()).thenReturn(Mono.just("admin"));
+        when(client.fetch(Post.class, "hello-world"))
+                .thenReturn(Mono.just(original), Mono.just(latest));
+        when(client.fetch(Snapshot.class, "base")).thenReturn(Mono.just(base));
+        when(client.create(any(Snapshot.class))).thenAnswer(invocation -> {
+            var snapshot = invocation.<Snapshot>getArgument(0);
+            createdSnapshot.set(snapshot);
+            return Mono.just(snapshot);
+        });
+        when(client.delete(any(Snapshot.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
+
+        StepVerifier.create(tools.update(Map.of("name", "hello-world", "raw", "new")))
+                .expectErrorSatisfies(error -> assertThat(error)
+                        .hasMessageContaining("content changed"))
+                .verify();
+
+        verify(client, never()).update(any(Post.class));
+        verify(client).delete(createdSnapshot.get());
+    }
+
+    @Test
+    void rejectsAContentUpdateWhenTheReleaseChangedConcurrently() {
+        var original = post(3L);
+        original.getSpec().setBaseSnapshot("base");
+        original.getSpec().setHeadSnapshot("head");
+        original.getSpec().setReleaseSnapshot("release");
+        var latest = post(4L);
+        latest.getSpec().setHeadSnapshot("head");
+        latest.getSpec().setReleaseSnapshot("head");
+        var createdSnapshot = new AtomicReference<Snapshot>();
+        when(authorization.username()).thenReturn(Mono.just("admin"));
+        when(client.fetch(Post.class, "hello-world"))
+                .thenReturn(Mono.just(original), Mono.just(latest));
+        when(client.fetch(Snapshot.class, "base")).thenReturn(Mono.just(snapshot("base", "old")));
+        when(client.create(any(Snapshot.class))).thenAnswer(invocation -> {
+            var snapshot = invocation.<Snapshot>getArgument(0);
+            createdSnapshot.set(snapshot);
+            return Mono.just(snapshot);
+        });
+        when(client.delete(any(Snapshot.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
+
+        StepVerifier.create(tools.update(Map.of("name", "hello-world", "raw", "new")))
+                .expectErrorSatisfies(error -> assertThat(error).hasMessageContaining("content changed"))
+                .verify();
+
+        verify(client, never()).update(any(Post.class));
+        verify(client).delete(createdSnapshot.get());
+    }
+
+    @Test
+    void keepsASnapshotReferencedBeforeAnUpdateWatcherFails() {
+        var original = post(3L);
+        original.getSpec().setBaseSnapshot("base");
+        original.getSpec().setHeadSnapshot("head");
+        original.getSpec().setReleaseSnapshot("release");
+        var latest = post(4L);
+        latest.getSpec().setHeadSnapshot("head");
+        latest.getSpec().setReleaseSnapshot("release");
+        when(authorization.username()).thenReturn(Mono.just("admin"));
+        when(client.fetch(Post.class, "hello-world"))
+                .thenReturn(Mono.just(original), Mono.just(latest), Mono.just(latest));
+        when(client.fetch(Snapshot.class, "base")).thenReturn(Mono.just(snapshot("base", "old")));
+        when(client.create(any(Snapshot.class)))
+                .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(client.update(any(Post.class))).thenAnswer(invocation -> {
+            var updated = invocation.<Post>getArgument(0);
+            updated.getSpec().setReleaseSnapshot(updated.getSpec().getHeadSnapshot());
+            updated.getSpec().setHeadSnapshot("later-head");
+            return Mono.error(new IllegalStateException("watcher"));
+        });
+        var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
+
+        StepVerifier.create(tools.update(Map.of("name", "hello-world", "raw", "new")))
+                .expectErrorMessage("watcher")
+                .verify();
+
+        verify(client, never()).delete(any(Snapshot.class));
+    }
+
+    @Test
+    void keepsTheNewSnapshotWhenTheContentUpdateIsCancelled() {
+        var original = post(3L);
+        original.getSpec().setBaseSnapshot("base");
+        original.getSpec().setHeadSnapshot("head");
+        original.getSpec().setReleaseSnapshot("head");
+        when(authorization.username()).thenReturn(Mono.just("admin"));
+        when(client.fetch(Post.class, "hello-world"))
+                .thenReturn(Mono.just(original), Mono.never());
+        when(client.fetch(Snapshot.class, "base")).thenReturn(Mono.just(snapshot("base", "old")));
+        when(client.create(any(Snapshot.class)))
+                .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
+
+        StepVerifier.create(tools.update(Map.of("name", "hello-world", "raw", "new")))
+                .thenAwait(Duration.ofMillis(10))
+                .thenCancel()
+                .verify();
+
+        verify(client, never()).delete(any(Snapshot.class));
+    }
+
+    @Test
     void doesNotAdvertiseReconcilerManagedVersionAsPostPrecondition() {
         var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
         var publishTool = tools.tools().stream()
@@ -157,5 +289,15 @@ class PostToolsTest {
         post.getMetadata().setVersion(version);
         post.setSpec(new Post.PostSpec());
         return post;
+    }
+
+    private static Snapshot snapshot(String name, String raw) {
+        var snapshot = new Snapshot();
+        snapshot.setMetadata(ToolSupport.metadata(name));
+        var spec = new Snapshot.SnapShotSpec();
+        spec.setRawPatch(raw);
+        spec.setContentPatch(raw);
+        snapshot.setSpec(spec);
+        return snapshot;
     }
 }

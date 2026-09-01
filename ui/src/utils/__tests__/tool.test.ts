@@ -24,7 +24,7 @@ describe('groupTools', () => {
       tool('halo_list_posts', 'POST'),
       tool('halo_get_post', 'POST'),
       tool('halo_list_comments', 'COMMENT'),
-      tool('demo/export', 'PLUGIN', 'PluginDemo'),
+      tool('demo__export', 'PLUGIN', 'PluginDemo'),
     ])
 
     expect(groups).toHaveLength(2)

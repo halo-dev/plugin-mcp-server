@@ -34,25 +34,15 @@ class ContentSnapshots {
             Ref subjectRef,
             String baseSnapshotName,
             String headSnapshotName,
-            String releaseSnapshotName,
             ContentInput content,
             String username) {
         return client.fetch(Snapshot.class, baseSnapshotName)
                 .switchIfEmpty(ToolSupport.unavailable(subjectRef.getName()))
                 .flatMap(base -> {
-                    if (Objects.equals(headSnapshotName, releaseSnapshotName)) {
-                        var next = snapshot(subjectRef, content, username);
-                        next.getSpec().setParentSnapshotName(headSnapshotName);
-                        applyContent(next, base, content);
-                        return client.create(next);
-                    }
-                    return client.fetch(Snapshot.class, headSnapshotName)
-                            .switchIfEmpty(ToolSupport.unavailable(subjectRef.getName()))
-                            .flatMap(head -> {
-                                applyContent(head, base, content);
-                                Snapshot.addContributor(head, username);
-                                return client.update(head);
-                            });
+                    var next = snapshot(subjectRef, content, username);
+                    next.getSpec().setParentSnapshotName(headSnapshotName);
+                    applyContent(next, base, content);
+                    return client.create(next);
                 });
     }
 
@@ -67,6 +57,17 @@ class ContentSnapshots {
                         : client.fetch(Snapshot.class, snapshotName)
                                 .switchIfEmpty(ToolSupport.unavailable(name))
                                 .map(snapshot -> ContentWrapper.patchSnapshot(snapshot, base)));
+    }
+
+    Mono<Void> rollback(Snapshot snapshot) {
+        return ToolSupport.rollbackCreated(client, snapshot);
+    }
+
+    Mono<Void> rollbackUnlessReferenced(Snapshot snapshot, Mono<Boolean> referencedByOwner) {
+        return referencedByOwner
+                .defaultIfEmpty(false)
+                .flatMap(referenced -> referenced ? Mono.empty() : rollback(snapshot))
+                .onErrorResume(ignored -> Mono.empty());
     }
 
     private static Snapshot snapshot(Ref subjectRef, ContentInput content, String username) {

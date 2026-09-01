@@ -3,10 +3,7 @@ package run.halo.mcpserver;
 import io.modelcontextprotocol.json.schema.JsonSchemaValidator;
 import io.modelcontextprotocol.json.schema.jackson3.DefaultJsonSchemaValidator;
 import io.modelcontextprotocol.spec.McpSchema;
-import java.io.IOException;
-import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,14 +12,15 @@ import java.util.Optional;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.pf4j.PluginManager;
+import org.pf4j.PluginWrapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
-import org.springframework.util.ClassUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
-import run.halo.app.core.extension.Plugin;
-import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.plugin.extensionpoint.ExtensionGetter;
 import run.halo.mcpserver.api.McpToolDefinition;
 import run.halo.mcpserver.api.McpToolException;
@@ -36,27 +34,40 @@ import tools.jackson.databind.json.JsonMapper;
 class McpToolRegistry {
 
     private static final Logger log = LoggerFactory.getLogger(McpToolRegistry.class);
+    private static final Duration DEFAULT_PROVIDER_TIMEOUT = Duration.ofSeconds(5);
+    private static final int MAX_PROVIDER_TOOLS = 100;
 
     private final ExtensionGetter extensionGetter;
-    private final ReactiveExtensionClient extensionClient;
     private final McpAuthorization authorization;
+    private final PluginManager pluginManager;
     private final JsonSchemaValidator schemaValidator;
+    private final Duration providerTimeout;
+
+    @Autowired
+    McpToolRegistry(
+            ExtensionGetter extensionGetter,
+            McpAuthorization authorization,
+            PluginWrapper pluginWrapper) {
+        this(extensionGetter, authorization, pluginWrapper.getPluginManager(), DEFAULT_PROVIDER_TIMEOUT);
+    }
 
     McpToolRegistry(
             ExtensionGetter extensionGetter,
-            ReactiveExtensionClient extensionClient,
-            McpAuthorization authorization) {
+            McpAuthorization authorization,
+            PluginManager pluginManager,
+            Duration providerTimeout) {
         this.extensionGetter = extensionGetter;
-        this.extensionClient = extensionClient;
         this.authorization = authorization;
+        this.pluginManager = pluginManager;
         this.schemaValidator = new DefaultJsonSchemaValidator(JsonMapper.shared());
+        this.providerTimeout = providerTimeout;
     }
 
     Mono<Optional<McpSchema.CallToolResult>> executeIfContributed(
             String name, Map<String, Object> arguments) {
         return registeredTools()
                 .map(tools -> tools.stream()
-                        .filter(tool -> tool.definition().name().equals(name))
+                        .filter(tool -> tool.protocolName().equals(name))
                         .findFirst())
                 .flatMap(tool -> tool
                         .map(value -> gateway(() -> authorization.require(name)
@@ -70,19 +81,19 @@ class McpToolRegistry {
         var inputValidation = schemaValidator.validate(definition.inputSchema(), arguments);
         if (!inputValidation.valid()) {
             return Mono.just(result(McpToolResult.error(
-                    "INVALID_ARGUMENTS", "Tool arguments do not match the declared input schema")));
+                    "INVALID_ARGUMENT", "Tool arguments do not match the declared input schema")));
         }
         var invocation = new McpToolInvocation(definition.name(), arguments);
-        return checked(
-                        definition.permission().check(invocation),
+        return providerCallback(
+                        () -> definition.permission().check(invocation),
                         "Tool permission callback returned no result")
                 .flatMap(allowed -> {
                     if (!allowed) {
                         return Mono.error(new McpToolException(
                                 "FORBIDDEN", "The caller is not authorized to use " + definition.name()));
                     }
-                    return checked(
-                            definition.handler().execute(invocation),
+                    return providerCallback(
+                            () -> definition.handler().execute(invocation),
                             "Tool handler returned no result");
                 })
                 .flatMap(toolResult -> validateResult(definition, toolResult))
@@ -138,28 +149,36 @@ class McpToolRegistry {
     }
 
     private Flux<RegisteredTool> providerTools(McpToolProvider provider) {
-        final Flux<McpToolDefinition> definitions;
-        try {
-            definitions = provider.tools();
-            if (definitions == null) {
-                throw new McpToolException(
-                        "TOOL_PROVIDER_UNAVAILABLE", "A MCP tool provider returned no tool stream");
-            }
-        } catch (Throwable error) {
-            logProviderFailure(provider, error);
-            return Flux.empty();
-        }
-        return definitions
+        return Flux.defer(() -> {
+                    var definitions = provider.tools();
+                    if (definitions == null) {
+                        throw new McpToolException(
+                                "TOOL_PROVIDER_UNAVAILABLE",
+                                "A MCP tool provider returned no tool stream");
+                    }
+                    return definitions;
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .take(MAX_PROVIDER_TOOLS + 1L)
                 .collectList()
+                .timeout(providerTimeout)
                 .flatMapMany(tools -> {
                     try {
                         if (tools.isEmpty()) {
                             return Flux.empty();
                         }
-                        var pluginName = validateProviderTools(tools);
-                        return verifiedProviderOwner(provider, pluginName)
-                                .flatMapMany(ignored -> Flux.fromIterable(tools)
-                                        .map(definition -> new RegisteredTool(pluginName, definition)));
+                        if (tools.size() > MAX_PROVIDER_TOOLS) {
+                            throw new McpToolException(
+                                    "TOOL_PROVIDER_UNAVAILABLE",
+                                    "A MCP tool provider returned too many tools");
+                        }
+                        validateProviderTools(tools);
+                        var pluginName = providerOwner(provider);
+                        return Flux.fromIterable(tools)
+                                .map(definition -> new RegisteredTool(
+                                        pluginName,
+                                        McpToolNames.contributed(pluginName, definition.name()),
+                                        definition));
                     } catch (Throwable error) {
                         logProviderFailure(provider, error);
                         return Flux.empty();
@@ -171,74 +190,38 @@ class McpToolRegistry {
                 });
     }
 
-    private String validateProviderTools(List<McpToolDefinition> definitions) {
-        String pluginName = null;
+    private <T> Mono<T> providerCallback(Supplier<Mono<T>> callback, String emptyResultMessage) {
+        return Mono.defer(() -> {
+                    try {
+                        return checked(callback.get(), emptyResultMessage);
+                    } catch (Throwable error) {
+                        return Mono.error(error);
+                    }
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .timeout(providerTimeout);
+    }
+
+    private void validateProviderTools(List<McpToolDefinition> definitions) {
         for (var definition : definitions) {
             if (definition == null) {
                 throw new McpToolException(
                         "TOOL_PROVIDER_UNAVAILABLE", "A MCP tool provider returned a null tool");
             }
-            var namespace = namespace(definition.name());
-            if (namespace == null || (pluginName != null && !pluginName.equals(namespace))) {
-                throw new McpToolException(
-                        "INVALID_TOOL_NAME",
-                        "A provider must use one plugin ID as the namespace for all of its tools");
-            }
-            pluginName = namespace;
             validateSchema(definition.name(), "input", definition.inputSchema());
             if (definition.outputSchema() != null) {
                 validateSchema(definition.name(), "output", definition.outputSchema());
             }
         }
-        return pluginName;
     }
 
-    private Mono<String> verifiedProviderOwner(McpToolProvider provider, String pluginName) {
-        final URI providerLocation;
-        try {
-            var providerClass = ClassUtils.getUserClass(provider);
-            var codeSource = providerClass.getProtectionDomain().getCodeSource();
-            if (codeSource == null || codeSource.getLocation() == null) {
-                return Mono.error(new McpToolException(
-                        "TOOL_PROVIDER_UNAVAILABLE", "Cannot determine the MCP tool provider location"));
-            }
-            providerLocation = codeSource.getLocation().toURI().normalize();
-        } catch (Exception error) {
-            return Mono.error(new McpToolException(
-                    "TOOL_PROVIDER_UNAVAILABLE", "Cannot determine the MCP tool provider location", error));
+    private String providerOwner(McpToolProvider provider) {
+        var owner = pluginManager.whichPlugin(AopUtils.getTargetClass(provider));
+        if (owner == null || owner.getPluginId() == null || owner.getPluginId().isBlank()) {
+            throw new McpToolException(
+                    "TOOL_PROVIDER_UNAVAILABLE", "Cannot determine the MCP tool provider plugin");
         }
-        return extensionClient.fetch(Plugin.class, pluginName)
-                .filter(plugin -> plugin.getStatus() != null
-                        && plugin.getStatus().getLoadLocation() != null)
-                .flatMap(plugin -> ownsProvider(
-                        plugin.getStatus().getLoadLocation(), providerLocation))
-                .filter(Boolean::booleanValue)
-                .map(ignored -> pluginName)
-                .switchIfEmpty(Mono.error(new McpToolException(
-                        "INVALID_TOOL_NAME",
-                        "Contributed tool namespace does not match its provider plugin")));
-    }
-
-    static Mono<Boolean> ownsProvider(URI pluginLocation, URI providerLocation) {
-        var normalizedPlugin = pluginLocation.normalize();
-        var normalizedProvider = providerLocation.normalize();
-        if (normalizedPlugin.equals(normalizedProvider)) {
-            return Mono.just(true);
-        }
-        if (!"file".equalsIgnoreCase(normalizedPlugin.getScheme())
-                || !"file".equalsIgnoreCase(normalizedProvider.getScheme())) {
-            return Mono.just(false);
-        }
-        return Mono.fromCallable(() -> {
-                    try {
-                        var pluginPath = Path.of(normalizedPlugin).toRealPath();
-                        var providerPath = Path.of(normalizedProvider).toRealPath();
-                        return Files.isDirectory(pluginPath) && providerPath.startsWith(pluginPath);
-                    } catch (IOException | IllegalArgumentException error) {
-                        return false;
-                    }
-                })
-                .subscribeOn(Schedulers.boundedElastic());
+        return owner.getPluginId();
     }
 
     private void validateSchema(String toolName, String kind, Map<String, Object> schema) {
@@ -252,7 +235,7 @@ class McpToolRegistry {
     private List<RegisteredTool> withoutConflicts(List<RegisteredTool> tools) {
         var byName = new LinkedHashMap<String, List<RegisteredTool>>();
         tools.forEach(tool -> byName.computeIfAbsent(
-                tool.definition().name(), ignored -> new ArrayList<>()).add(tool));
+                tool.protocolName(), ignored -> new ArrayList<>()).add(tool));
         var conflicts = byName.entrySet().stream()
                 .filter(entry -> entry.getValue().size() > 1)
                 .map(Map.Entry::getKey)
@@ -293,15 +276,6 @@ class McpToolRegistry {
         return Mono.just(result(McpToolResult.error(toolError.code(), toolError.getMessage())));
     }
 
-    private static String namespace(String toolName) {
-        var separator = toolName.indexOf('/');
-        return separator > 0
-                        && separator < toolName.length() - 1
-                        && toolName.indexOf('/', separator + 1) < 0
-                ? toolName.substring(0, separator)
-                : null;
-    }
-
     private static void logProviderFailure(McpToolProvider provider, Throwable error) {
         log.warn("Ignoring unavailable MCP tool provider {}", provider.getClass().getName(), error);
     }
@@ -313,4 +287,4 @@ class McpToolRegistry {
     }
 }
 
-record RegisteredTool(String pluginName, McpToolDefinition definition) {}
+record RegisteredTool(String pluginName, String protocolName, McpToolDefinition definition) {}

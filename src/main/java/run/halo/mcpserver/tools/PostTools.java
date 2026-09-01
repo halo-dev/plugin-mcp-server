@@ -9,6 +9,7 @@ import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -31,6 +32,7 @@ class PostTools extends ToolSupport implements ToolGroup {
     static final String UPDATE_POST = "halo_update_post";
     static final String SET_PUBLISH_STATE = "halo_set_post_publish_state";
     static final String RECYCLE_POST = "halo_recycle_post";
+    static final String RESTORE_POST = "halo_restore_post";
 
     private static final int MAX_CONTENT_CHARS = 65_536;
     private static final String DEFAULT_RAW_TYPE = "html";
@@ -58,7 +60,8 @@ class PostTools extends ToolSupport implements ToolGroup {
                 createTool(),
                 updateTool(),
                 publishStateTool(),
-                recycleTool());
+                recycleTool(),
+                restoreTool());
     }
 
     Mono<ToolPayload> list(Map<String, Object> arguments) {
@@ -99,19 +102,23 @@ class PostTools extends ToolSupport implements ToolGroup {
             var post = new Post();
             post.setMetadata(metadata(name));
             post.setSpec(spec(arguments, username, title, slug));
-            return client.create(post)
-                    .flatMap(created -> snapshots.createBase(Ref.of(created), content, username)
-                            .flatMap(snapshot -> {
-                                var snapshotName = snapshot.getMetadata().getName();
-                                return updateLatest(client, Post.class, name, "Post", latest -> {
-                                    var postSpec = latest.getSpec();
-                                    postSpec.setBaseSnapshot(snapshotName);
-                                    postSpec.setHeadSnapshot(snapshotName);
-                                    if (Boolean.TRUE.equals(postSpec.getPublish())) {
-                                        postSpec.setReleaseSnapshot(snapshotName);
-                                    }
-                                });
-                            }))
+            return Mono.usingWhen(
+                            client.create(post),
+                            created -> snapshots.createBase(Ref.of(created), content, username)
+                                    .flatMap(snapshot -> {
+                                        var snapshotName = snapshot.getMetadata().getName();
+                                        return updateLatest(client, Post.class, name, "Post", latest -> {
+                                            var postSpec = latest.getSpec();
+                                            postSpec.setBaseSnapshot(snapshotName);
+                                            postSpec.setHeadSnapshot(snapshotName);
+                                            if (Boolean.TRUE.equals(postSpec.getPublish())) {
+                                                postSpec.setReleaseSnapshot(snapshotName);
+                                            }
+                                        });
+                                    }),
+                            ignored -> Mono.empty(),
+                            (created, ignored) -> rollbackCreated(client, created),
+                            created -> rollbackCreated(client, created))
                     .map(created -> payload(ContentPayloads.post(created), "Created post " + name));
         });
     }
@@ -129,17 +136,49 @@ class PostTools extends ToolSupport implements ToolGroup {
         var content = content(arguments);
         return authorization.username().flatMap(username -> client.fetch(Post.class, name)
                 .switchIfEmpty(notFound("Post", name))
-                .flatMap(post -> snapshots.update(
+                .flatMap(post -> {
+                    var expectedHead = post.getSpec().getHeadSnapshot();
+                    var expectedRelease = post.getSpec().getReleaseSnapshot();
+                    return snapshots.update(
                                 Ref.of(post),
                                 post.getSpec().getBaseSnapshot(),
-                                post.getSpec().getHeadSnapshot(),
-                                post.getSpec().getReleaseSnapshot(),
+                                expectedHead,
                                 content,
                                 username)
-                        .flatMap(snapshot -> updateLatest(client, Post.class, name, "Post", latest -> {
-                            applyMetadata(latest, arguments);
-                            latest.getSpec().setHeadSnapshot(snapshot.getMetadata().getName());
-                        })))
+                            .flatMap(snapshot -> Mono.usingWhen(
+                                    Mono.just(snapshot),
+                                    ignored -> updateLatestIf(
+                                            client,
+                                            Post.class,
+                                            name,
+                                            "Post",
+                                            latest -> Objects.equals(
+                                                            latest.getSpec().getHeadSnapshot(), expectedHead)
+                                                    && Objects.equals(
+                                                            latest.getSpec().getReleaseSnapshot(), expectedRelease),
+                                            () -> new McpToolException(
+                                                    "CONFLICT",
+                                                    "Post content changed while it was being updated"),
+                                            latest -> {
+                                                applyMetadata(latest, arguments);
+                                                latest.getSpec().setHeadSnapshot(
+                                                        snapshot.getMetadata().getName());
+                                    }),
+                                    ignored -> Mono.empty(),
+                                    (created, ignored) -> snapshots.rollbackUnlessReferenced(
+                                            created,
+                                            client.fetch(Post.class, name)
+                                                    .map(latest -> {
+                                                        var snapshotName = created.getMetadata().getName();
+                                                        return Objects.equals(
+                                                                        latest.getSpec().getHeadSnapshot(),
+                                                                        snapshotName)
+                                                                || Objects.equals(
+                                                                        latest.getSpec().getReleaseSnapshot(),
+                                                                        snapshotName);
+                                                    })),
+                                    created -> Mono.empty()));
+                })
                 .map(updated -> payload(ContentPayloads.post(updated), "Updated post " + name)));
     }
 
@@ -151,6 +190,12 @@ class PostTools extends ToolSupport implements ToolGroup {
 
     Mono<ToolPayload> recycle(Map<String, Object> arguments) {
         return updateState(arguments, false, true, "Recycled post ");
+    }
+
+    Mono<ToolPayload> restore(Map<String, Object> arguments) {
+        var name = resourceName(arguments, "name");
+        return updateLatest(client, Post.class, name, "Post", post -> post.getSpec().setDeleted(false))
+                .map(post -> payload(ContentPayloads.post(post), "Restored post " + name));
     }
 
     private Mono<ToolPayload> updateState(
@@ -222,13 +267,17 @@ class PostTools extends ToolSupport implements ToolGroup {
                 "POST",
                 objectSchema(
                         map(
-                                "name", stringSchema(),
+                                "name", stringSchema("Post metadata.name (a lowercase DNS label)."),
                                 "title", stringSchema(),
                                 "slug", stringSchema(),
-                                "raw", stringSchema(),
-                                "content", stringSchema(),
-                                "rawType", stringSchemaWithDefault(DEFAULT_RAW_TYPE),
-                                "publish", booleanSchema(false),
+                                "raw", stringSchema("Editable source content stored in the snapshot."),
+                                "content", stringSchema("Rendered content; defaults to raw when omitted."),
+                                "rawType", described(
+                                        stringSchemaWithDefault(DEFAULT_RAW_TYPE),
+                                        "Format identifier for raw, such as html or markdown."),
+                                "publish", described(
+                                        booleanSchema(false),
+                                        "Whether to publish the initial snapshot immediately."),
                                 "visible", enumSchema(Post.VisibleEnum.class, Post.VisibleEnum.PUBLIC.name()),
                                 "allowComment", booleanSchema(true),
                                 "cover", nullableStringSchema(),
@@ -256,12 +305,14 @@ class PostTools extends ToolSupport implements ToolGroup {
                 "POST",
                 objectSchema(
                         map(
-                                "name", stringSchema(),
+                                "name", stringSchema("Post metadata.name."),
                                 "title", stringSchema(),
                                 "slug", stringSchema(),
-                                "raw", stringSchema(),
-                                "content", stringSchema(),
-                                "rawType", stringSchemaWithDefault(DEFAULT_RAW_TYPE),
+                                "raw", stringSchema("New editable source; omit for a metadata-only update."),
+                                "content", stringSchema("Rendered content; valid only when raw is provided."),
+                                "rawType", described(
+                                        stringSchemaWithDefault(DEFAULT_RAW_TYPE),
+                                        "Format identifier for raw; valid only when raw is provided."),
                                 "visible", enumSchema(Post.VisibleEnum.class),
                                 "allowComment", booleanSchema(),
                                 "cover", nullableStringSchema(),
@@ -304,11 +355,29 @@ class PostTools extends ToolSupport implements ToolGroup {
                 "设置文章为发布或草稿状态；发布时使用当前编辑版本。",
                 "POST",
                 objectSchema(
-                        map("name", stringSchema(), "publish", booleanSchema()),
+                        map(
+                                "name", stringSchema("Post metadata.name."),
+                                "publish", described(
+                                        booleanSchema(),
+                                        "True publishes the current head snapshot; false returns the post to draft.")),
                         List.of("name", "publish")),
                 ContentPayloads.postSchema(),
                 UPDATE,
                 this::setPublishState);
+    }
+
+    private BuiltInTool restoreTool() {
+        return tool(
+                RESTORE_POST,
+                "Restore Halo post",
+                "Restore a post from the recycle bin.",
+                "恢复文章",
+                "将文章从回收站恢复。",
+                "POST",
+                objectSchema(map("name", stringSchema()), List.of("name")),
+                ContentPayloads.postSchema(),
+                RESTORE,
+                this::restore);
     }
 
     private static ListOptions contentOptions(Boolean published, boolean recycled) {

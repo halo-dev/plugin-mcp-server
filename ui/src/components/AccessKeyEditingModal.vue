@@ -3,7 +3,7 @@ import { mcpConsoleApiClient, type McpAccessKey, type UpdateMcpAccessKeyRequest 
 import AccessKeyForm from '@/components/AccessKeyForm.vue'
 import { QK_ACCESS_KEYS } from '@/composables/useAccessKeys'
 import { useTools } from '@/composables/useTools'
-import { Toast, VButton, VLoading, VModal, VSpace } from '@halo-dev/components'
+import { Toast, VAlert, VButton, VLoading, VModal, VSpace } from '@halo-dev/components'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useTemplateRef } from 'vue'
 
@@ -19,7 +19,7 @@ const queryClient = useQueryClient()
 const modal = useTemplateRef<InstanceType<typeof VModal>>('modal')
 const form = useTemplateRef<InstanceType<typeof AccessKeyForm>>('form')
 
-const { data: tools, isLoading } = useTools()
+const { data: tools, isLoading, isError, isFetching, refetch } = useTools()
 
 const { mutate, isLoading: submitting } = useMutation({
   mutationFn: async (input: UpdateMcpAccessKeyRequest) => {
@@ -43,6 +43,17 @@ const { mutate, isLoading: submitting } = useMutation({
 <template>
   <VModal ref="modal" title="编辑 MCP 密钥" :width="1000" mount-to-body @close="emit('close')">
     <VLoading v-if="isLoading" />
+    <VAlert
+      v-else-if="isError"
+      type="error"
+      title="工具目录加载失败"
+      description="无法安全编辑密钥权限，请重试。"
+      :closable="false"
+    >
+      <template #actions>
+        <VButton size="sm" :loading="isFetching" @click="refetch()">重试</VButton>
+      </template>
+    </VAlert>
     <AccessKeyForm
       v-else
       ref="form"
@@ -55,7 +66,7 @@ const { mutate, isLoading: submitting } = useMutation({
         <VButton
           type="secondary"
           :loading="submitting"
-          :disabled="submitting"
+          :disabled="submitting || isLoading || isError"
           @click="form?.submit()"
         >
           保存

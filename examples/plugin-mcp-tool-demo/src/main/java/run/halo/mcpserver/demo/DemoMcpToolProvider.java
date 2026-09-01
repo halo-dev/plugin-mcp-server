@@ -26,7 +26,7 @@ public class DemoMcpToolProvider implements McpToolProvider {
 
     private McpToolDefinition hello() {
         return McpToolDefinition.builder()
-                .name("mcp-tool-demo/hello")
+                .name("hello")
                 .title("Say hello")
                 .description("Return a greeting for a supplied name.")
                 .displayTitle("生成问候语")
@@ -46,7 +46,7 @@ public class DemoMcpToolProvider implements McpToolProvider {
 
     private McpToolDefinition wordCount() {
         return McpToolDefinition.builder()
-                .name("mcp-tool-demo/word-count")
+                .name("word_count")
                 .title("Count words")
                 .description("Count words and characters in a supplied text.")
                 .displayTitle("统计字数")

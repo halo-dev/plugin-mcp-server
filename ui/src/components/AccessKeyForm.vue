@@ -33,16 +33,27 @@ const selected = reactive<Record<string, boolean>>(
 )
 
 const groups = computed(() => groupTools(props.tools))
+const availableNames = new Set(props.tools.map((tool) => tool.name))
+const unavailableAllowedTools = shallowRef(
+  (props.accessKey?.allowedTools ?? []).filter((name) => !availableNames.has(name)),
+)
 
 const selectedCount = computed(() => props.tools.filter((tool) => selected[tool.name]).length)
 
 function applyPreset(preset: 'read' | 'content' | 'all' | 'none') {
+  if (preset === 'none') {
+    unavailableAllowedTools.value = []
+  }
   for (const tool of props.tools) {
     selected[tool.name] =
       preset === 'all' ||
       (preset === 'read' && tool.readOnly) ||
       (preset === 'content' && tool.source.type === 'BUILT_IN' && !tool.destructive)
   }
+}
+
+function removeUnavailableTool(name: string) {
+  unavailableAllowedTools.value = unavailableAllowedTools.value.filter((item) => item !== name)
 }
 
 function onSubmit() {
@@ -56,7 +67,10 @@ function onSubmit() {
           .filter(Boolean),
       ),
     ],
-    allowedTools: props.tools.filter((tool) => selected[tool.name]).map((tool) => tool.name),
+    allowedTools: [
+      ...unavailableAllowedTools.value,
+      ...props.tools.filter((tool) => selected[tool.name]).map((tool) => tool.name),
+    ],
     expiresAt: expiresAt.value ? utils.date.toISOString(expiresAt.value) : undefined,
     enabled: enabled.value,
   })
@@ -106,6 +120,23 @@ defineExpose({
           </div>
           <div class=":uno: mt-1 text-xs text-gray-500">
             新增工具不会自动授予现有密钥；「内容管理」预设不含破坏性工具。
+          </div>
+          <div v-if="unavailableAllowedTools.length" class=":uno: mt-2 text-xs text-amber-600">
+            <div class=":uno: mb-1">暂不可用的既有工具授权默认保留，可单独移除：</div>
+            <div
+              v-for="name in unavailableAllowedTools"
+              :key="name"
+              class=":uno: flex items-center gap-2"
+            >
+              <code>{{ name }}</code>
+              <VButton
+                size="sm"
+                :aria-label="`移除暂不可用工具授权 ${name}`"
+                @click="removeUnavailableTool(name)"
+              >
+                移除
+              </VButton>
+            </div>
           </div>
         </div>
         <VSpace>

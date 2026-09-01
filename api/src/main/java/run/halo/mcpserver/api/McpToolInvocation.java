@@ -4,7 +4,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Request-scoped data passed to a contributed tool. */
+/** Request-scoped data passed to a contributed tool. {@link #toolName()} is the local provider name. */
 public final class McpToolInvocation {
 
     private final String toolName;

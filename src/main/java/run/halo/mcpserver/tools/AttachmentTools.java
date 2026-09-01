@@ -6,30 +6,42 @@ import static org.springframework.data.domain.Sort.Order.desc;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import run.halo.app.core.extension.attachment.Attachment;
 import run.halo.app.core.extension.service.AttachmentService;
+import run.halo.app.extension.ConfigMap;
 import run.halo.app.extension.ExtensionUtil;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.PageRequestImpl;
 import run.halo.app.extension.ReactiveExtensionClient;
+import run.halo.app.infra.SystemSetting;
 import run.halo.mcpserver.McpAuthorization;
 import run.halo.mcpserver.api.McpToolException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 @Component
 class AttachmentTools extends ToolSupport implements ToolGroup {
+
+    private static final Logger log = LoggerFactory.getLogger(AttachmentTools.class);
 
     static final String LIST = "halo_list_attachments";
     static final String GET = "halo_get_attachment";
     static final String UPLOAD = "halo_upload_attachment";
     static final String DELETE = "halo_delete_attachment";
 
-    private static final int MAX_CONTENT_BYTES = 8 * 1024 * 1024;
+    private static final int MAX_CONTENT_BYTES = 7 * 1024 * 1024;
+    private static final int MAX_ENCODED_CHARS = (MAX_CONTENT_BYTES + 2) / 3 * 4;
 
     private final ReactiveExtensionClient client;
     private final AttachmentService attachmentService;
@@ -71,26 +83,46 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
 
     Mono<ToolPayload> upload(Map<String, Object> arguments) {
         var filename = safeFilename(requiredString(arguments, "filename"));
-        var policyName = requiredString(arguments, "policyName");
-        var groupName = optionalString(arguments, "groupName", null);
         var encoded = requiredString(arguments, "contentBase64");
-        if (encoded.length() > 12_000_000) {
-            throw new McpToolException("INVALID_ARGUMENT", "contentBase64 exceeds the 8 MiB limit");
+        if (encoded.length() > MAX_ENCODED_CHARS) {
+            throw new McpToolException("INVALID_ARGUMENT", "contentBase64 exceeds the 7 MiB limit");
         }
         var mediaType = mediaType(arguments.get("mediaType"));
-        return authorization.keyId().flatMap(keyId -> {
+        return authorization.keyId().zipWith(attachmentConfig()).flatMap(tuple -> {
+            var keyId = tuple.getT1();
+            var config = tuple.getT2();
             var reservation = uploadLimiter.tryAcquire(keyId, decodedLength(encoded));
             if (reservation == null) {
                 return Mono.error(new McpToolException(
                         "RATE_LIMITED", "Too many concurrent attachment uploads; please retry shortly"));
             }
             return Mono.fromCallable(() -> decode(encoded))
+                    .subscribeOn(Schedulers.boundedElastic())
                     .flatMap(bytes -> {
                         var buffer = DefaultDataBufferFactory.sharedInstance.wrap(bytes);
                         return attachmentService
-                                .upload(policyName, groupName, filename, Flux.just(buffer), mediaType)
+                                .upload(
+                                        config.policyName(),
+                                        config.groupName(),
+                                        filename,
+                                        Flux.just(buffer),
+                                        mediaType)
                                 .switchIfEmpty(Mono.error(new McpToolException(
                                         "ATTACHMENT_UNAVAILABLE", "Halo did not create the attachment")))
+                                .flatMap(attachment -> attachmentService
+                                        .getPermalink(attachment)
+                                        .doOnNext(permalink -> {
+                                            if (attachment.getStatus() == null) {
+                                                attachment.setStatus(new Attachment.AttachmentStatus());
+                                            }
+                                            attachment.getStatus().setPermalink(permalink.toString());
+                                        })
+                                        .onErrorResume(error -> {
+                                            log.warn("Failed to resolve permalink for uploaded attachment {}",
+                                                    filename, error);
+                                            return Mono.empty();
+                                        })
+                                        .thenReturn(attachment))
                                 .map(attachment -> payload(
                                         ContentPayloads.attachment(attachment),
                                         "Uploaded attachment " + filename));
@@ -108,7 +140,7 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
         }
         if (bytes.length == 0 || bytes.length > MAX_CONTENT_BYTES) {
             throw new McpToolException(
-                    "INVALID_ARGUMENT", "Attachment content must be between 1 byte and 8 MiB");
+                    "INVALID_ARGUMENT", "Attachment content must be between 1 byte and 7 MiB");
         }
         return bytes;
     }
@@ -124,7 +156,7 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
 
     Mono<ToolPayload> delete(Map<String, Object> arguments) {
         var name = resourceName(arguments, "name");
-        var expectedVersion = optionalLong(arguments, "expectedVersion");
+        var expectedVersion = requiredLong(arguments, "expectedVersion");
         return client.fetch(Attachment.class, name)
                 .switchIfEmpty(notFound("Attachment", name))
                 .flatMap(attachment -> checkVersion(attachment.getMetadata().getVersion(), expectedVersion)
@@ -168,20 +200,27 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
         return tool(
                 UPLOAD,
                 "Upload Halo attachment",
-                "Upload an attachment from Base64 because MCP tool arguments are JSON (maximum 8 MiB).",
+                "Upload Base64 content with the Console attachment policy and group from Halo system settings (maximum 7 MiB).",
                 "上传附件",
-                "MCP tool 参数是 JSON，因此通过 Base64 内容上传附件，最大支持 8 MiB。",
+                "使用 Halo 系统设置中的 Console 附件策略和分组上传 Base64 内容，最大支持 7 MiB。",
                 "ATTACHMENT",
                 objectSchema(
                         map(
-                                "filename", stringSchema(),
-                                "policyName", stringSchema(),
-                                "groupName", stringSchema(),
-                                "mediaType", stringSchema(),
+                                "filename", map(
+                                        "type", "string",
+                                        "minLength", 1,
+                                        "maxLength", 255,
+                                        "pattern", "^[^/\\\\\\x00-\\x1F\\x7F]+$",
+                                        "description", "File name without a directory path."),
+                                "mediaType", stringSchema("IANA media type; defaults to application/octet-stream."),
                                 "contentBase64",
-                                        stringSchema(
-                                                "Base64-encoded file bytes; do not include a data URL prefix.")),
-                        List.of("filename", "policyName", "contentBase64")),
+                                        map(
+                                                "type", "string",
+                                                "minLength", 1,
+                                                "maxLength", MAX_ENCODED_CHARS,
+                                                "description",
+                                                        "Base64-encoded file bytes; do not include a data URL prefix.")),
+                        List.of("filename", "contentBase64")),
                 ContentPayloads.attachmentSchema(),
                 CREATE,
                 this::upload);
@@ -196,8 +235,12 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                 "删除附件，并由 Halo 的终结器流程清理底层存储文件。",
                 "ATTACHMENT",
                 objectSchema(
-                        map("name", stringSchema(), "expectedVersion", integerSchema()),
-                        List.of("name")),
+                        map(
+                                "name", stringSchema("Attachment metadata.name."),
+                                "expectedVersion", described(
+                                        integerSchema(),
+                                        "Current metadata.version returned by a read or list call.")),
+                        List.of("name", "expectedVersion")),
                 ContentPayloads.attachmentSchema(),
                 DESTRUCTIVE,
                 this::delete);
@@ -224,5 +267,53 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                     "INVALID_ARGUMENT", "filename contains an unsafe path or is too long");
         }
         return filename;
+    }
+
+    private Mono<SystemSetting.Attachment.UploadOptions> attachmentConfig() {
+        var defaults = client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG_DEFAULT)
+                .defaultIfEmpty(new ConfigMap());
+        var overrides = client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG)
+                .defaultIfEmpty(new ConfigMap());
+        return Mono.zip(defaults, overrides)
+                .map(tuple -> mergedAttachmentJson(configData(tuple.getT1()), configData(tuple.getT2())))
+                .flatMap(Mono::justOrEmpty)
+                .flatMap(json -> Mono.fromCallable(() -> JsonMapper.shared()
+                                .readValue(json, SystemSetting.Attachment.class)))
+                .onErrorMap(error -> !(error instanceof McpToolException), error -> new McpToolException(
+                                "ATTACHMENT_CONFIG_UNAVAILABLE",
+                                "Attachment system setting is invalid",
+                                error))
+                .mapNotNull(SystemSetting.Attachment::console)
+                .filter(config -> StringUtils.hasText(config.policyName()))
+                .switchIfEmpty(Mono.error(new McpToolException(
+                        "ATTACHMENT_CONFIG_UNAVAILABLE",
+                        "Attachment system setting is not configured for console")));
+    }
+
+    private static Map<String, String> configData(ConfigMap configMap) {
+        return configMap.getData() == null ? Map.of() : configMap.getData();
+    }
+
+    private static String mergedAttachmentJson(
+            Map<String, String> defaults, Map<String, String> overrides) {
+        var defaultJson = defaults.get(SystemSetting.Attachment.GROUP);
+        var overrideJson = overrides.get(SystemSetting.Attachment.GROUP);
+        if (defaultJson == null || overrideJson == null) {
+            return overrideJson == null ? defaultJson : overrideJson;
+        }
+        var mapper = JsonMapper.shared();
+        return mapper.writeValueAsString(deepMerge(mapper.readTree(defaultJson), mapper.readTree(overrideJson)));
+    }
+
+    private static JsonNode deepMerge(JsonNode target, JsonNode override) {
+        if (!(target instanceof ObjectNode targetObject) || !(override instanceof ObjectNode overrideObject)) {
+            return override;
+        }
+        overrideObject.properties().forEach(entry -> targetObject.set(
+                entry.getKey(),
+                targetObject.has(entry.getKey())
+                        ? deepMerge(targetObject.get(entry.getKey()), entry.getValue())
+                        : entry.getValue()));
+        return targetObject;
     }
 }

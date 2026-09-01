@@ -20,7 +20,7 @@ import run.halo.mcpserver.tools.BuiltInTools;
 class McpToolCatalog {
 
     private static final Logger log = LoggerFactory.getLogger(McpToolCatalog.class);
-    private static final String BUILT_IN_PLUGIN = "plugin-mcp-server";
+    private static final String BUILT_IN_PLUGIN = "mcp-server";
     private final BuiltInTools builtInTools;
     private final McpToolRegistry toolRegistry;
     private final ReactiveExtensionClient extensionClient;
@@ -42,7 +42,7 @@ class McpToolCatalog {
         return contributedTools().flatMap(definitions ->
                 Flux.fromIterable(definitions)
                         .flatMap(tool -> source(tool.pluginName())
-                                .map(source -> descriptor(tool.definition(), source)))
+                                .map(source -> descriptor(tool, source)))
                         .collectList()
                         .map(contributed -> {
                             var tools = new java.util.ArrayList<>(builtIn);
@@ -57,7 +57,6 @@ class McpToolCatalog {
                     .map(BuiltInTool::protocolTool)
                     .toList());
             definitions.stream()
-                    .map(RegisteredTool::definition)
                     .map(McpToolCatalog::protocolTool)
                     .forEach(tools::add);
             return List.copyOf(tools);
@@ -113,9 +112,10 @@ class McpToolCatalog {
                 source);
     }
 
-    private static ToolDescriptor descriptor(McpToolDefinition definition, ToolSource source) {
+    private static ToolDescriptor descriptor(RegisteredTool tool, ToolSource source) {
+        var definition = tool.definition();
         return new ToolDescriptor(
-                definition.name(),
+                tool.protocolName(),
                 definition.displayTitle(),
                 definition.displayDescription(),
                 definition.inputSchema(),
@@ -127,9 +127,10 @@ class McpToolCatalog {
                 source);
     }
 
-    private static McpSchema.Tool protocolTool(McpToolDefinition definition) {
+    private static McpSchema.Tool protocolTool(RegisteredTool tool) {
+        var definition = tool.definition();
         var annotations = definition.annotations();
-        var builder = McpSchema.Tool.builder(definition.name(), definition.inputSchema())
+        var builder = McpSchema.Tool.builder(tool.protocolName(), definition.inputSchema())
                 .title(definition.title())
                 .description(definition.description())
                 .annotations(McpSchema.ToolAnnotations.builder()

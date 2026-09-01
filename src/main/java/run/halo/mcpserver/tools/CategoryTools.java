@@ -26,6 +26,7 @@ class CategoryTools extends ToolSupport implements ToolGroup {
     static final String LIST = "halo_list_categories";
     static final String CREATE = "halo_create_category";
     static final String UPDATE = "halo_update_category";
+    static final String DELETE = "halo_delete_category";
 
     private final ReactiveExtensionClient client;
 
@@ -52,7 +53,7 @@ class CategoryTools extends ToolSupport implements ToolGroup {
                         List.of()),
                 pageOutputSchema(ContentPayloads.categorySchema()),
                 READ_ONLY,
-                this::list), createTool(), updateTool());
+                this::list), createTool(), updateTool(), deleteTool());
     }
 
     Mono<ToolPayload> list(Map<String, Object> arguments) {
@@ -103,6 +104,16 @@ class CategoryTools extends ToolSupport implements ToolGroup {
                 .map(category -> payload(ContentPayloads.category(category), "Updated category " + name));
     }
 
+    Mono<ToolPayload> delete(Map<String, Object> arguments) {
+        var name = resourceName(arguments, "name");
+        var expectedVersion = requiredLong(arguments, "expectedVersion");
+        return client.fetch(Category.class, name)
+                .switchIfEmpty(notFound("Category", name))
+                .flatMap(category -> checkVersion(category.getMetadata().getVersion(), expectedVersion)
+                        .then(client.delete(category)))
+                .map(category -> payload(ContentPayloads.category(category), "Deleted category " + name));
+    }
+
     private BuiltInTool createTool() {
         return tool(
                 CREATE,
@@ -131,6 +142,26 @@ class CategoryTools extends ToolSupport implements ToolGroup {
                 ContentPayloads.categorySchema(),
                 ToolSupport.UPDATE,
                 this::update);
+    }
+
+    private BuiltInTool deleteTool() {
+        return tool(
+                DELETE,
+                "Delete Halo category",
+                "Delete a post category after verifying its current resource version.",
+                "删除分类",
+                "校验资源版本后删除文章分类。",
+                "CATEGORY",
+                objectSchema(
+                        map(
+                                "name", stringSchema("Category metadata.name."),
+                                "expectedVersion", described(
+                                        integerSchema(),
+                                        "Current metadata.version returned by a read or list call.")),
+                        List.of("name", "expectedVersion")),
+                ContentPayloads.categorySchema(),
+                DESTRUCTIVE,
+                this::delete);
     }
 
     private static Map<String, Object> categoryProperties(boolean create) {

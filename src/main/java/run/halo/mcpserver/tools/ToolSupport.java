@@ -10,6 +10,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -28,12 +30,15 @@ import tools.jackson.databind.json.JsonMapper;
 
 abstract class ToolSupport {
 
+    private static final Logger rollbackLog = LoggerFactory.getLogger(ToolSupport.class);
+
     static final int DEFAULT_PAGE_SIZE = 20;
     static final int MAX_PAGE_SIZE = 100;
     static final McpSchema.ToolAnnotations READ_ONLY = annotations(true, false, true, false);
     static final McpSchema.ToolAnnotations CREATE = annotations(false, false, false, false);
-    static final McpSchema.ToolAnnotations UPDATE = annotations(false, false, true, false);
+    static final McpSchema.ToolAnnotations UPDATE = annotations(false, true, true, false);
     static final McpSchema.ToolAnnotations DESTRUCTIVE = annotations(false, true, true, false);
+    static final McpSchema.ToolAnnotations RESTORE = annotations(false, false, true, false);
     private static final JsonMapper JSON_MAPPER = JsonMapper.shared();
 
     private final Logger log = LoggerFactory.getLogger(getClass());
@@ -138,6 +143,41 @@ abstract class ToolSupport {
                         .maxBackoff(Duration.ofMillis(100))
                         .filter(OptimisticLockingFailureException.class::isInstance)
                         .onRetryExhaustedThrow((spec, signal) -> signal.failure()));
+    }
+
+    static <E extends Extension> Mono<E> updateLatestIf(
+            ReactiveExtensionClient client,
+            Class<E> type,
+            String name,
+            String resourceType,
+            Predicate<E> precondition,
+            Supplier<McpToolException> conflict,
+            Consumer<E> mutation) {
+        return Mono.defer(() -> client.fetch(type, name)
+                        .switchIfEmpty(notFound(resourceType, name))
+                        .flatMap(resource -> {
+                            if (!precondition.test(resource)) {
+                                return Mono.error(conflict.get());
+                            }
+                            mutation.accept(resource);
+                            return client.update(resource);
+                        }))
+                .retryWhen(Retry.backoff(3, Duration.ofMillis(25))
+                        .maxBackoff(Duration.ofMillis(100))
+                        .filter(OptimisticLockingFailureException.class::isInstance)
+                        .onRetryExhaustedThrow((spec, signal) -> signal.failure()));
+    }
+
+    static <E extends Extension> Mono<Void> rollbackCreated(
+            ReactiveExtensionClient client, E resource) {
+        return client.delete(resource).then().onErrorResume(error -> {
+            rollbackLog.warn(
+                    "Failed to roll back created {} {}",
+                    resource.getClass().getSimpleName(),
+                    resource.getMetadata().getName(),
+                    error);
+            return Mono.empty();
+        });
     }
 
     static Map<String, Object> objectSchema(Map<String, Object> properties, List<String> required) {
@@ -345,6 +385,14 @@ abstract class ToolSupport {
             throw new McpToolException("INVALID_ARGUMENT", name + " must be a positive integer");
         }
         return number.longValue();
+    }
+
+    static long requiredLong(Map<String, Object> arguments, String name) {
+        var value = optionalLong(arguments, name);
+        if (value == null) {
+            throw new McpToolException("INVALID_ARGUMENT", name + " must be a positive integer");
+        }
+        return value;
     }
 
     static int boundedInt(Map<String, Object> arguments, String name, int defaultValue, int min, int max) {

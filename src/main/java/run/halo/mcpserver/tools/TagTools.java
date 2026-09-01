@@ -24,6 +24,7 @@ class TagTools extends ToolSupport implements ToolGroup {
     static final String LIST = "halo_list_tags";
     static final String CREATE = "halo_create_tag";
     static final String UPDATE = "halo_update_tag";
+    static final String DELETE = "halo_delete_tag";
 
     private final ReactiveExtensionClient client;
 
@@ -49,7 +50,7 @@ class TagTools extends ToolSupport implements ToolGroup {
                         List.of()),
                 pageOutputSchema(ContentPayloads.tagSchema()),
                 READ_ONLY,
-                this::list), createTool(), updateTool());
+                this::list), createTool(), updateTool(), deleteTool());
     }
 
     Mono<ToolPayload> list(Map<String, Object> arguments) {
@@ -90,6 +91,16 @@ class TagTools extends ToolSupport implements ToolGroup {
                 .map(updated -> payload(ContentPayloads.tag(updated), "Updated tag " + name));
     }
 
+    Mono<ToolPayload> delete(Map<String, Object> arguments) {
+        var name = resourceName(arguments, "name");
+        var expectedVersion = requiredLong(arguments, "expectedVersion");
+        return client.fetch(Tag.class, name)
+                .switchIfEmpty(notFound("Tag", name))
+                .flatMap(tag -> checkVersion(tag.getMetadata().getVersion(), expectedVersion)
+                        .then(client.delete(tag)))
+                .map(tag -> payload(ContentPayloads.tag(tag), "Deleted tag " + name));
+    }
+
     private BuiltInTool createTool() {
         return tool(
                 CREATE,
@@ -116,6 +127,26 @@ class TagTools extends ToolSupport implements ToolGroup {
                 ContentPayloads.tagSchema(),
                 ToolSupport.UPDATE,
                 this::update);
+    }
+
+    private BuiltInTool deleteTool() {
+        return tool(
+                DELETE,
+                "Delete Halo tag",
+                "Delete a post tag after verifying its current resource version.",
+                "删除标签",
+                "校验资源版本后删除文章标签。",
+                "TAG",
+                objectSchema(
+                        map(
+                                "name", stringSchema("Tag metadata.name."),
+                                "expectedVersion", described(
+                                        integerSchema(),
+                                        "Current metadata.version returned by a read or list call.")),
+                        List.of("name", "expectedVersion")),
+                ContentPayloads.tagSchema(),
+                DESTRUCTIVE,
+                this::delete);
     }
 
     private static Map<String, Object> tagProperties(boolean includeVersion) {

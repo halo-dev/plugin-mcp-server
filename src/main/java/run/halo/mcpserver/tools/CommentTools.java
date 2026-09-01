@@ -77,7 +77,7 @@ class CommentTools extends ToolSupport implements ToolGroup {
 
     Mono<ToolPayload> delete(Map<String, Object> arguments) {
         var name = resourceName(arguments, "name");
-        var expectedVersion = optionalLong(arguments, "expectedVersion");
+        var expectedVersion = requiredLong(arguments, "expectedVersion");
         return client.fetch(Comment.class, name)
                 .switchIfEmpty(notFound("Comment", name))
                 .flatMap(comment -> checkVersion(comment.getMetadata().getVersion(), expectedVersion)
@@ -116,7 +116,7 @@ class CommentTools extends ToolSupport implements ToolGroup {
 
     Mono<ToolPayload> deleteReply(Map<String, Object> arguments) {
         var name = resourceName(arguments, "name");
-        var expectedVersion = optionalLong(arguments, "expectedVersion");
+        var expectedVersion = requiredLong(arguments, "expectedVersion");
         return client.fetch(Reply.class, name)
                 .switchIfEmpty(notFound("Reply", name))
                 .flatMap(reply -> checkVersion(reply.getMetadata().getVersion(), expectedVersion)
@@ -185,8 +185,12 @@ class CommentTools extends ToolSupport implements ToolGroup {
                 "删除评论，并由 Halo 清理关联回复和评论计数。",
                 "COMMENT",
                 objectSchema(
-                        map("name", stringSchema(), "expectedVersion", integerSchema()),
-                        List.of("name")),
+                        map(
+                                "name", stringSchema("Comment metadata.name."),
+                                "expectedVersion", described(
+                                        integerSchema(),
+                                        "Current metadata.version returned by a read or list call.")),
+                        List.of("name", "expectedVersion")),
                 ContentPayloads.commentSchema(),
                 DESTRUCTIVE,
                 this::delete);
@@ -241,8 +245,12 @@ class CommentTools extends ToolSupport implements ToolGroup {
                 "删除评论回复，并由 Halo 更新关联计数。",
                 "COMMENT",
                 objectSchema(
-                        map("name", stringSchema(), "expectedVersion", integerSchema()),
-                        List.of("name")),
+                        map(
+                                "name", stringSchema("Reply metadata.name."),
+                                "expectedVersion", described(
+                                        integerSchema(),
+                                        "Current metadata.version returned by a read or list call.")),
+                        List.of("name", "expectedVersion")),
                 ContentPayloads.replySchema(),
                 DESTRUCTIVE,
                 this::deleteReply);

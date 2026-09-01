@@ -13,6 +13,6 @@ public record McpToolAnnotations(
     }
 
     public static McpToolAnnotations defaults(String title) {
-        return new McpToolAnnotations(false, false, false, true, title);
+        return new McpToolAnnotations(false, true, false, true, title);
     }
 }

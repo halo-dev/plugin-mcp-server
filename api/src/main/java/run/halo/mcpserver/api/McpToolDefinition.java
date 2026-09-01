@@ -22,10 +22,10 @@ public final class McpToolDefinition {
         if (builder.name == null || builder.name.isBlank()) {
             throw new IllegalArgumentException("Tool name must not be blank");
         }
-        if (builder.name.length() > 128
-                || !builder.name.matches("[A-Za-z0-9_.:/-]+")) {
+        if (builder.name.length() > 63
+                || !builder.name.matches("[a-z][a-z0-9_]*")) {
             throw new IllegalArgumentException(
-                    "Tool name must contain only letters, numbers, '.', '_', ':', '/', or '-'");
+                    "Tool name must be a lowercase snake_case local name with at most 63 characters");
         }
         this.name = builder.name;
         this.title = builder.title;

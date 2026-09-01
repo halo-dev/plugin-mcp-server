@@ -105,6 +105,19 @@ class McpAccessKeyServiceTest {
     }
 
     @Test
+    void rotationPreservesDisabledState() {
+        var created = service.create("Disabled", "admin", Set.of(), Set.of(), null).block();
+        created.accessKey().getSpec().setEnabled(false);
+        var id = created.accessKey().getMetadata().getName();
+        when(client.fetch(McpAccessKey.class, id)).thenReturn(Mono.just(created.accessKey()));
+
+        var rotated = service.rotate(id).block();
+
+        assertThat(rotated.accessKey().getSpec().isEnabled()).isFalse();
+        assertThat(service.authenticate(rotated.token(), null).block()).isNull();
+    }
+
+    @Test
     void authenticatesOnlyFromAnAllowedIpRange() {
         var created = service.create(
                         "Restricted",

@@ -111,7 +111,7 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
             McpStatelessServerHandler handler,
             McpSchema.CallToolRequest call,
             String toolName) {
-        if (!toolName.contains("/")) {
+        if (McpToolNames.pluginName(toolName).isEmpty()) {
             return delegatedRequest(context, request, handler);
         }
         return registry.executeIfContributed(toolName, arguments(call.arguments()))

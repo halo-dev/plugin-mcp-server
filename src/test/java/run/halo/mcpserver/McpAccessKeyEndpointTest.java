@@ -2,6 +2,7 @@ package run.halo.mcpserver;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -62,6 +63,8 @@ class McpAccessKeyEndpointTest {
     @Test
     void mapsInvalidIpRangesToBadRequestWhenUpdating() {
         when(toolCatalog.availableNames()).thenReturn(reactor.core.publisher.Mono.just(Set.of()));
+        when(accessKeyService.allowedTools("test-key"))
+                .thenReturn(reactor.core.publisher.Mono.just(Set.of()));
         when(accessKeyService.update(any(), any(), any(), any(), any(), anyBoolean()))
                 .thenReturn(reactor.core.publisher.Mono.error(
                         new IllegalArgumentException("Invalid IP address or CIDR: invalid")));
@@ -76,6 +79,58 @@ class McpAccessKeyEndpointTest {
                           "displayName": "Test key",
                           "allowedTools": [],
                           "allowedIpRanges": ["invalid"],
+                          "enabled": true
+                        }
+                        """)
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
+
+    @Test
+    void preservesExistingUnavailableToolsButRejectsNewUnknownTools() {
+        when(toolCatalog.availableNames())
+                .thenReturn(reactor.core.publisher.Mono.just(Set.of("halo_get_post")));
+        when(accessKeyService.allowedTools("test-key"))
+                .thenReturn(reactor.core.publisher.Mono.just(Set.of("unavailable__tool")));
+        var updated = new McpAccessKey();
+        updated.setMetadata(new Metadata());
+        updated.getMetadata().setName("test-key");
+        updated.getSpec().setAllowedTools(Set.of("halo_get_post", "unavailable__tool"));
+        when(accessKeyService.update(any(), any(), any(), any(), any(), anyBoolean()))
+                .thenReturn(reactor.core.publisher.Mono.just(updated));
+
+        var client = WebTestClient.bindToRouterFunction(endpoint.endpoint()).build();
+        client.put()
+                .uri("/keys/test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "displayName": "Test key",
+                          "allowedTools": ["halo_get_post", "unavailable__tool"],
+                          "allowedIpRanges": [],
+                          "enabled": true
+                        }
+                        """)
+                .exchange()
+                .expectStatus()
+                .isOk();
+        verify(accessKeyService).update(
+                "test-key",
+                "Test key",
+                Set.of("halo_get_post", "unavailable__tool"),
+                Set.of(),
+                null,
+                true);
+
+        client.put()
+                .uri("/keys/test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "displayName": "Test key",
+                          "allowedTools": ["new-unknown__tool"],
+                          "allowedIpRanges": [],
                           "enabled": true
                         }
                         """)

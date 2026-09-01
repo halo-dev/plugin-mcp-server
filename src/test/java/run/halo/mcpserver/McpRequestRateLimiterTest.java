@@ -28,14 +28,14 @@ class McpRequestRateLimiterTest {
         var limiter = new McpRequestRateLimiter(() -> 0L);
 
         for (var i = 0; i < McpRequestRateLimiter.TOOL_CALLS_PER_MINUTE; i++) {
-            assertThat(limiter.allowTool("key-one", "demo/one")).isTrue();
+            assertThat(limiter.allowTool("key-one", "demo__one")).isTrue();
         }
-        assertThat(limiter.allowTool("key-one", "demo/one")).isFalse();
-        assertThat(limiter.allowTool("key-one", "demo/two")).isTrue();
-        assertThat(limiter.allowTool("key-two", "demo/one")).isTrue();
+        assertThat(limiter.allowTool("key-one", "demo__one")).isFalse();
+        assertThat(limiter.allowTool("key-one", "demo__two")).isTrue();
+        assertThat(limiter.allowTool("key-two", "demo__one")).isTrue();
 
         limiter.clear();
-        assertThat(limiter.allowTool("key-one", "demo/one")).isTrue();
+        assertThat(limiter.allowTool("key-one", "demo__one")).isTrue();
     }
 
     @Test

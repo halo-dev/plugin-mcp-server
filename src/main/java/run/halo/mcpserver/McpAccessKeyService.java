@@ -96,12 +96,15 @@ class McpAccessKeyService {
         });
     }
 
+    Mono<Set<String>> allowedTools(String id) {
+        return get(id).map(accessKey -> copyTools(accessKey.getSpec().getAllowedTools()));
+    }
+
     Mono<CreatedKey> rotate(String id) {
         var secret = randomSecret();
         var token = token(id, secret);
         return get(id).flatMap(accessKey -> encode(secret).flatMap(hash -> {
             accessKey.getSpec().setKeyHash(hash);
-            accessKey.getSpec().setEnabled(true);
             if (accessKey.getStatus() == null) {
                 accessKey.setStatus(new McpAccessKey.Status());
             }

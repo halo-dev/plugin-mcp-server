@@ -52,4 +52,19 @@ class TagToolsTest {
                 .isInstanceOf(McpToolException.class)
                 .hasMessageContaining("hex color");
     }
+
+    @Test
+    void deletesTagOnlyAtTheExpectedVersion() {
+        var tag = new Tag();
+        tag.setMetadata(ToolSupport.metadata("java"));
+        tag.getMetadata().setVersion(2L);
+        tag.setSpec(new Tag.TagSpec());
+        when(client.fetch(Tag.class, "java")).thenReturn(Mono.just(tag));
+        when(client.delete(tag)).thenReturn(Mono.just(tag));
+        var tools = new TagTools(client, authorization);
+
+        StepVerifier.create(tools.delete(Map.of("name", "java", "expectedVersion", 2)))
+                .assertNext(payload -> assertThat(payload.summary()).isEqualTo("Deleted tag java"))
+                .verifyComplete();
+    }
 }

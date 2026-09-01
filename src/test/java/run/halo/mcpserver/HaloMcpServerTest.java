@@ -1,6 +1,7 @@
 package run.halo.mcpserver;
 
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
@@ -10,6 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.pf4j.PluginManager;
+import org.pf4j.PluginWrapper;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -40,6 +44,9 @@ class HaloMcpServerTest {
     McpToolProvider provider;
 
     @Mock
+    PluginManager pluginManager;
+
+    @Mock
     BuiltInTools builtInTools;
 
     HaloMcpServer server;
@@ -58,7 +65,8 @@ class HaloMcpServerTest {
         lenient().when(builtInTools.tools()).thenReturn(java.util.List.of(searchTool, getPostTool));
         when(builtInTools.specifications()).thenReturn(java.util.List.of(
                 searchTool.specification(), getPostTool.specification()));
-        var registry = new McpToolRegistry(extensionGetter, extensionClient, authorization);
+        var registry = new McpToolRegistry(
+                extensionGetter, authorization, pluginManager, Duration.ofSeconds(5));
         var catalog = new McpToolCatalog(builtInTools, registry, extensionClient);
         recentCallHistory = new McpRecentCallHistory();
         rateLimiter = new McpRequestRateLimiter();
@@ -78,7 +86,7 @@ class HaloMcpServerTest {
                 java.util.Set.of(
                         "halo_search_content",
                         "halo_get_post",
-                        "demo/hello"));
+                        "demo__hello"));
         client = WebTestClient.bindToRouterFunction(server.routerFunction())
                 .webFilter((exchange, chain) -> chain.filter(exchange)
                         .contextWrite(org.springframework.security.core.context.ReactiveSecurityContextHolder
@@ -223,7 +231,7 @@ class HaloMcpServerTest {
     @Test
     void listsAndCallsAContributedToolDirectly() {
         var definition = McpToolDefinition.builder()
-                .name("demo/hello")
+                .name("hello")
                 .title("Hello")
                 .description("Returns a greeting")
                 .inputSchema(java.util.Map.of(
@@ -235,24 +243,9 @@ class HaloMcpServerTest {
                 .build();
         when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(provider));
         when(provider.tools()).thenReturn(Flux.just(definition));
-        var plugin = new run.halo.app.core.extension.Plugin();
-        var metadata = new run.halo.app.extension.Metadata();
-        metadata.setName("demo");
-        plugin.setMetadata(metadata);
-        var pluginStatus = new run.halo.app.core.extension.Plugin.PluginStatus();
-        try {
-            pluginStatus.setLoadLocation(provider.getClass()
-                    .getProtectionDomain()
-                    .getCodeSource()
-                    .getLocation()
-                    .toURI()
-                    .normalize());
-        } catch (java.net.URISyntaxException error) {
-            throw new AssertionError(error);
-        }
-        plugin.setStatus(pluginStatus);
-        when(extensionClient.fetch(run.halo.app.core.extension.Plugin.class, "demo"))
-                .thenReturn(Mono.just(plugin));
+        var plugin = mock(PluginWrapper.class);
+        when(plugin.getPluginId()).thenReturn("demo");
+        when(pluginManager.whichPlugin(AopUtils.getTargetClass(provider))).thenReturn(plugin);
 
         client.post()
                 .uri("/mcp")
@@ -265,7 +258,7 @@ class HaloMcpServerTest {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.result.tools.length()").isEqualTo(3)
-                .jsonPath("$.result.tools[2].name").isEqualTo("demo/hello");
+                .jsonPath("$.result.tools[2].name").isEqualTo("demo__hello");
 
         client.post()
                 .uri("/mcp")
@@ -276,7 +269,7 @@ class HaloMcpServerTest {
                           "jsonrpc":"2.0",
                           "id":4,
                           "method":"tools/call",
-                          "params":{"name":"demo/hello","arguments":{"name":"Halo"}}
+                          "params":{"name":"demo__hello","arguments":{"name":"Halo"}}
                         }
                         """)
                 .exchange()
@@ -288,7 +281,7 @@ class HaloMcpServerTest {
         var page = recentCallHistory.list(new McpRecentCallQuery(1, 20, null, null, null));
         org.assertj.core.api.Assertions.assertThat(page.total()).isEqualTo(1);
         org.assertj.core.api.Assertions.assertThat(page.items().getFirst().toolName())
-                .isEqualTo("demo/hello");
+                .isEqualTo("demo__hello");
         org.assertj.core.api.Assertions.assertThat(page.items().getFirst().sourceType())
                 .isEqualTo(McpToolSourceType.PLUGIN);
     }

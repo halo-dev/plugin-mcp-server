@@ -27,7 +27,7 @@ Use the pinned pnpm version from `ui/package.json`.
 
 Use Java 21, four-space indentation, `PascalCase` classes, and `camelCase` methods. Keep reactive APIs non-blocking and return `Mono` or `Flux` where appropriate. Java tests use the `*Test.java` suffix.
 
-Vue components use `<script setup lang="ts">`, PascalCase filenames, and two-space indentation. Run `pnpm format` for Prettier fixes and `pnpm lint` for Oxlint/ESLint fixes. Built-in tools use `snake_case` names such as `halo_search_content`; contributed tools must use `plugin-name/tool-name`.
+Vue components use `<script setup lang="ts">`, PascalCase filenames, and two-space indentation. Run `pnpm format` for Prettier fixes and `pnpm lint` for Oxlint/ESLint fixes. Built-in tools use `snake_case` names such as `halo_search_content`; contributed providers declare local `snake_case` names and the registry adds their plugin prefix.
 
 This plugin is unreleased. Change current contracts directly; do not add compatibility code, legacy endpoints, aliases, migrations, fallback branches, or deprecated APIs.
 

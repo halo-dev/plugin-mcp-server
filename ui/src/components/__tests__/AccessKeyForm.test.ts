@@ -1,4 +1,4 @@
-import type { McpAccessKey } from '@/api'
+import type { McpAccessKey, McpTool } from '@/api'
 import { mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
@@ -25,9 +25,9 @@ const FormKitStub = defineComponent({
   `,
 })
 
-function mountForm(accessKey?: McpAccessKey) {
+function mountForm(accessKey?: McpAccessKey, tools: McpTool[] = []) {
   return mount(AccessKeyForm, {
-    props: { accessKey, tools: [] },
+    props: { accessKey, tools },
     global: {
       stubs: {
         FormKit: FormKitStub,
@@ -68,5 +68,42 @@ describe('AccessKeyForm', () => {
     expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({
       allowedIpRanges: ['203.0.113.10', '2001:db8::/32'],
     })
+  })
+
+  it('preserves existing permissions for tools missing from the current catalog', async () => {
+    const wrapper = mountForm({
+      name: 'key-1',
+      displayName: 'Automation',
+      keyPrefix: 'hmcp_test',
+      ownerName: 'admin',
+      enabled: true,
+      allowedIpRanges: [],
+      allowedTools: ['unavailable__tool'],
+    })
+
+    await wrapper.get('form').trigger('submit')
+
+    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({
+      allowedTools: ['unavailable__tool'],
+    })
+    expect(wrapper.text()).toContain('暂不可用的既有工具授权默认保留')
+  })
+
+  it('clears permissions for tools missing from the current catalog', async () => {
+    const wrapper = mountForm({
+      name: 'key-1',
+      displayName: 'Automation',
+      keyPrefix: 'hmcp_test',
+      ownerName: 'admin',
+      enabled: true,
+      allowedIpRanges: [],
+      allowedTools: ['unavailable__tool'],
+    })
+
+    const clear = wrapper.findAll('button').find((button) => button.text() === '清空')
+    await clear?.trigger('click')
+    await wrapper.get('form').trigger('submit')
+
+    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({ allowedTools: [] })
   })
 })

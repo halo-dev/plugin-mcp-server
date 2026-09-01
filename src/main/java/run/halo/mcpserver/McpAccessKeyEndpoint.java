@@ -162,7 +162,9 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
         var name = request.pathVariable("name");
         return request.bodyToMono(UpdateKeyRequest.class)
                 .switchIfEmpty(Mono.error(new ServerWebInputException("Request body is required")))
-                .flatMap(body -> validateTools(body.allowedTools()).thenReturn(body))
+                .flatMap(body -> accessKeyService.allowedTools(name)
+                        .flatMap(existing -> validateTools(body.allowedTools(), existing))
+                        .thenReturn(body))
                 .flatMap(body -> accessKeyService.update(
                         name,
                         body.displayName(),
@@ -246,10 +248,15 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
     }
 
     private Mono<Void> validateTools(Set<String> requestedTools) {
+        return validateTools(requestedTools, Set.of());
+    }
+
+    private Mono<Void> validateTools(Set<String> requestedTools, Set<String> allowedUnavailableTools) {
         var requested = tools(requestedTools);
         return toolCatalog.availableNames().flatMap(available -> {
             var unknown = new LinkedHashSet<>(requested);
             unknown.removeAll(available);
+            unknown.removeAll(allowedUnavailableTools);
             if (!unknown.isEmpty()) {
                 return Mono.error(new ServerWebInputException("Unknown MCP tools: " + unknown));
             }

@@ -90,10 +90,9 @@ spec:
 
 ## 实现 Provider
 
-实现 `McpToolProvider`，但不要直接给 Provider 类添加 `@Component`。工具名必须全局唯一，
-格式为 `<插件 metadata.name>/<工具名>`，并且一个 Provider 中的所有工具必须使用同一个
-插件命名空间。MCP Server 会根据 Provider 类实际所在的插件加载路径校验命名空间归属，
-冒用其他插件命名空间的 Provider 会被忽略。
+实现 `McpToolProvider`，但不要直接给 Provider 类添加 `@Component`。Provider 只声明插件内
+唯一且不超过 63 个字符的 snake_case 本地名称，例如 `export`。MCP Server 会根据 Provider 类的插件类加载器
+确定归属，并生成满足客户端约束的全局协议名称；Provider 不需要声明插件前缀。
 
 每个工具都必须提供合法的 JSON Schema 对象类型输入 Schema、权限回调和响应式 Handler。
 如果声明了 `outputSchema`，成功结果的 `structuredContent` 必须满足该 Schema。
@@ -103,7 +102,7 @@ public final class ExportToolProvider implements McpToolProvider {
     @Override
     public Flux<McpToolDefinition> tools() {
         return Flux.just(McpToolDefinition.builder()
-            .name("my-plugin/export")
+            .name("export")
             .title("Export data")
             .description("Export plugin data.")
             .displayTitle("导出数据")
@@ -120,6 +119,11 @@ public final class ExportToolProvider implements McpToolProvider {
     }
 }
 ```
+
+Provider 只声明本地 `snake_case` 名称。MCP Server 会根据 Provider 的实际所属插件生成协议名，
+格式为 `<encoded-plugin-id>__<local-name>`；例如插件 `my-plugin` 中的 `export` 会暴露为
+`my-plugin__export`。编码后的插件 ID 同样不能超过 63 个字符，因此最终协议名始终不超过
+128 个字符。插件无需也不能自行拼接插件名前缀。
 
 访问密钥的工具白名单会在 Provider 权限回调之前校验。如果白名单已经足够，可以让回调
 返回 `true`；如果插件还有自己的领域权限，需要在回调中继续检查。预期内的失败应返回

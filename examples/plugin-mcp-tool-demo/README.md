@@ -3,8 +3,8 @@
 This is a separate Halo plugin that contributes two tools through the
 `run.halo.mcpserver.api.McpToolProvider` extension point:
 
-- `mcp-tool-demo/hello`
-- `mcp-tool-demo/word-count`
+- `mcp-tool-demo__hello` (local name: `hello`)
+- `mcp-tool-demo__word_count` (local name: `word_count`)
 
 The MCP integration is optional. The API artifact is used only at compile time,
 and the provider bean is created only when MCP Server is available. The plugin
