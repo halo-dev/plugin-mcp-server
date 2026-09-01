@@ -3,6 +3,10 @@ package run.halo.mcpserver;
 import io.modelcontextprotocol.json.schema.JsonSchemaValidator;
 import io.modelcontextprotocol.json.schema.jackson3.DefaultJsonSchemaValidator;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,6 +20,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.ClassUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import run.halo.app.core.extension.Plugin;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.plugin.extensionpoint.ExtensionGetter;
@@ -189,7 +194,7 @@ class McpToolRegistry {
     }
 
     private Mono<String> verifiedProviderOwner(McpToolProvider provider, String pluginName) {
-        final java.net.URI providerLocation;
+        final URI providerLocation;
         try {
             var providerClass = ClassUtils.getUserClass(provider);
             var codeSource = providerClass.getProtectionDomain().getCodeSource();
@@ -204,12 +209,36 @@ class McpToolRegistry {
         }
         return extensionClient.fetch(Plugin.class, pluginName)
                 .filter(plugin -> plugin.getStatus() != null
-                        && plugin.getStatus().getLoadLocation() != null
-                        && providerLocation.equals(plugin.getStatus().getLoadLocation().normalize()))
+                        && plugin.getStatus().getLoadLocation() != null)
+                .flatMap(plugin -> ownsProvider(
+                        plugin.getStatus().getLoadLocation(), providerLocation))
+                .filter(Boolean::booleanValue)
                 .map(ignored -> pluginName)
                 .switchIfEmpty(Mono.error(new McpToolException(
                         "INVALID_TOOL_NAME",
                         "Contributed tool namespace does not match its provider plugin")));
+    }
+
+    static Mono<Boolean> ownsProvider(URI pluginLocation, URI providerLocation) {
+        var normalizedPlugin = pluginLocation.normalize();
+        var normalizedProvider = providerLocation.normalize();
+        if (normalizedPlugin.equals(normalizedProvider)) {
+            return Mono.just(true);
+        }
+        if (!"file".equalsIgnoreCase(normalizedPlugin.getScheme())
+                || !"file".equalsIgnoreCase(normalizedProvider.getScheme())) {
+            return Mono.just(false);
+        }
+        return Mono.fromCallable(() -> {
+                    try {
+                        var pluginPath = Path.of(normalizedPlugin).toRealPath();
+                        var providerPath = Path.of(normalizedProvider).toRealPath();
+                        return Files.isDirectory(pluginPath) && providerPath.startsWith(pluginPath);
+                    } catch (IOException | IllegalArgumentException error) {
+                        return false;
+                    }
+                })
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     private void validateSchema(String toolName, String kind, Map<String, Object> schema) {
@@ -242,8 +271,12 @@ class McpToolRegistry {
         var builder = McpSchema.CallToolResult.builder()
                 .structuredContent(result.structuredContent())
                 .isError(result.error());
-        if (result.textContent() != null) {
-            builder.addTextContent(result.textContent());
+        var textContent = result.textContent();
+        if (textContent == null && result.structuredContent() != null) {
+            textContent = JsonMapper.shared().writeValueAsString(result.structuredContent());
+        }
+        if (textContent != null) {
+            builder.addTextContent(textContent);
         }
         return builder.build();
     }
