@@ -2,6 +2,8 @@ apiVersion: plugin.halo.run/v1alpha1
 kind: Plugin
 metadata:
   name: mcp-server
+  annotations:
+    store.halo.run/app-id: app-ybv96zol
 spec:
   enabled: true
   requires: ">=2.26.0"
