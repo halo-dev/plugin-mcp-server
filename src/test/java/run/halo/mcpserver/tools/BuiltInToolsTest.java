@@ -35,7 +35,7 @@ class BuiltInToolsTest {
                 new ThemeSettingTools(client, authorization));
 
         var names = tools.names().toList();
-        assertThat(tools.tools()).hasSize(36);
+        assertThat(tools.tools()).hasSize(37);
         assertThat(names)
                 .doesNotHaveDuplicates()
                 .contains(
