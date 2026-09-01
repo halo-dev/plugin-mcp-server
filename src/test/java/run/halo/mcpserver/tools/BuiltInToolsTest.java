@@ -35,7 +35,7 @@ class BuiltInToolsTest {
                 new ThemeSettingTools(client, authorization));
 
         var names = tools.names().toList();
-        assertThat(tools.tools()).hasSize(37);
+        assertThat(tools.tools()).hasSize(39);
         assertThat(names)
                 .doesNotHaveDuplicates()
                 .contains(
@@ -45,7 +45,9 @@ class BuiltInToolsTest {
                         CommentTools.SET_REPLY_APPROVAL,
                         ThemeSettingTools.LIST_GROUPS,
                         ThemeSettingTools.GET_GROUP,
-                        ThemeSettingTools.UPDATE_GROUP)
+                        ThemeSettingTools.UPDATE_GROUP,
+                        ThemeSettingTools.LIST_TEMPLATES,
+                        ThemeSettingTools.GET_TEMPLATE)
                 .doesNotContain(
                         "halo_publish_post",
                         "halo_unpublish_post",

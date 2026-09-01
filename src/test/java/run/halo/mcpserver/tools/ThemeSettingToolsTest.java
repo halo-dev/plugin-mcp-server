@@ -1,18 +1,24 @@
 package run.halo.mcpserver.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -37,7 +43,11 @@ class ThemeSettingToolsTest {
     @Mock
     McpAuthorization authorization;
 
+    @TempDir
+    Path tempDir;
+
     ThemeSettingTools tools;
+    Theme activeTheme;
 
     @BeforeEach
     void setUp() {
@@ -57,6 +67,7 @@ class ThemeSettingToolsTest {
         var expectedVersion = (Map<?, ?>) properties.get("expectedVersion");
 
         assertThat(expectedVersion.get("minimum")).isEqualTo(0);
+        assertThat(expectedVersion.get("maximum")).isEqualTo(Long.MAX_VALUE);
     }
 
     @Test
@@ -110,6 +121,96 @@ class ThemeSettingToolsTest {
         var result = data(tools.getGroup(Map.of("group", "basics")).block());
 
         assertThat(result.get("values")).isEqualTo(Map.of());
+    }
+
+    @Test
+    void listsHtmlTemplatesRecursivelyWithoutFollowingLinks() throws IOException {
+        var templates = Files.createDirectories(themeRoot().resolve("templates"));
+        Files.writeString(templates.resolve("index.html"), "<html></html>");
+        Files.createDirectories(templates.resolve("modules"));
+        Files.writeString(templates.resolve("modules/layout.html"), "<main></main>");
+        Files.writeString(templates.resolve("style.css"), "body {}");
+        var outside = tempDir.resolve("outside.html");
+        Files.writeString(outside, "<p>outside</p>");
+        Files.createSymbolicLink(templates.resolve("outside.html"), outside);
+
+        var result = data(tools.listTemplates(Map.of()).block());
+
+        assertThat(result)
+                .containsEntry("themeName", "theme-hao")
+                .containsEntry("templates", List.of("index.html", "modules/layout.html"));
+    }
+
+    @Test
+    void mapsLazyTemplateWalkFailuresToAToolError() throws IOException {
+        var templates = Files.createDirectories(themeRoot().resolve("templates"));
+        var denied = Files.createDirectories(templates.resolve("denied"));
+        Files.writeString(denied.resolve("hidden.html"), "<p>hidden</p>");
+        var permissions = Files.getPosixFilePermissions(denied);
+        try {
+            Files.setPosixFilePermissions(denied, Set.of());
+            org.junit.jupiter.api.Assumptions.assumeFalse(Files.isReadable(denied));
+
+            StepVerifier.create(tools.listTemplates(Map.of()))
+                    .expectErrorSatisfies(error -> assertToolError(
+                            error, "THEME_TEMPLATE_UNAVAILABLE", "Failed to list active theme templates"))
+                    .verify();
+        } finally {
+            Files.setPosixFilePermissions(denied, permissions);
+        }
+    }
+
+    @Test
+    void readsAnHtmlTemplateRelativeToTheTemplatesDirectory() throws IOException {
+        var templates = Files.createDirectories(themeRoot().resolve("templates/modules"));
+        var html = "<section th:if=\"${theme.config.layout.enabled}\"></section>";
+        Files.writeString(templates.resolve("layout.html"), html);
+
+        var result = data(tools.getTemplate(Map.of(
+                        "themeName", "theme-hao", "path", "modules/layout.html"))
+                .block());
+
+        assertThat(result)
+                .containsEntry("themeName", "theme-hao")
+                .containsEntry("path", "modules/layout.html")
+                .containsEntry("html", html);
+    }
+
+    @Test
+    void rejectsAStaleThemeAndUnsafeTemplatePaths() throws IOException {
+        Files.createDirectories(themeRoot().resolve("templates"));
+
+        StepVerifier.create(tools.getTemplate(Map.of(
+                        "themeName", "theme-other", "path", "index.html")))
+                .expectErrorSatisfies(error -> assertToolError(error, "CONFLICT", "active theme changed"))
+                .verify();
+        assertThatThrownBy(() -> tools.getTemplate(Map.of(
+                        "themeName", "theme-hao", "path", "../theme.yaml")))
+                .satisfies(error -> assertToolError(error, "INVALID_ARGUMENT", "relative HTML path"));
+        assertThatThrownBy(() -> tools.getTemplate(Map.of(
+                        "themeName", "theme-hao", "path", tempDir.resolve("outside.html").toString())))
+                .satisfies(error -> assertToolError(error, "INVALID_ARGUMENT", "relative HTML path"));
+    }
+
+    @Test
+    void rejectsTemplateSymlinkEscapesAndOversizedFiles() throws IOException {
+        var templates = Files.createDirectories(themeRoot().resolve("templates"));
+        var outside = tempDir.resolve("outside.html");
+        Files.writeString(outside, "<p>outside</p>");
+        Files.createSymbolicLink(templates.resolve("outside.html"), outside);
+
+        StepVerifier.create(tools.getTemplate(Map.of(
+                        "themeName", "theme-hao", "path", "outside.html")))
+                .expectErrorSatisfies(error -> assertToolError(error, "INVALID_ARGUMENT", "outside templates"))
+                .verify();
+
+        Files.write(
+                templates.resolve("large.html"),
+                new byte[ThemeSettingTools.MAX_TEMPLATE_BYTES + 1]);
+        StepVerifier.create(tools.getTemplate(Map.of(
+                        "themeName", "theme-hao", "path", "large.html")))
+                .expectErrorSatisfies(error -> assertToolError(error, "TEMPLATE_TOO_LARGE", "256 KiB"))
+                .verify();
     }
 
     @Test
@@ -214,15 +315,23 @@ class ThemeSettingToolsTest {
                         SystemSetting.SYSTEM_CONFIG,
                         1L,
                         Map.of(SystemSetting.Theme.GROUP, "{\"active\":\"theme-hao\"}"))));
-        var theme = new Theme();
-        theme.setMetadata(metadata("theme-hao", 3L));
+        activeTheme = new Theme();
+        activeTheme.setMetadata(metadata("theme-hao", 3L));
         var spec = new Theme.ThemeSpec();
         spec.setDisplayName("Hao");
         spec.setVersion("1.2.3");
         spec.setSettingName("theme-hao-setting");
         spec.setConfigMapName("theme-hao-config");
-        theme.setSpec(spec);
-        when(client.fetch(Theme.class, "theme-hao")).thenReturn(Mono.just(theme));
+        activeTheme.setSpec(spec);
+        when(client.fetch(Theme.class, "theme-hao")).thenReturn(Mono.just(activeTheme));
+    }
+
+    private Path themeRoot() throws IOException {
+        var root = Files.createDirectories(tempDir.resolve("theme-hao"));
+        var status = new Theme.ThemeStatus();
+        status.setLocation(root.toString());
+        activeTheme.setStatus(status);
+        return root;
     }
 
     private static Setting setting(Setting.SettingForm... forms) {

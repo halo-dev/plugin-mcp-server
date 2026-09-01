@@ -1,6 +1,7 @@
 package run.halo.mcpserver.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -8,6 +9,8 @@ import static org.mockito.Mockito.when;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -15,6 +18,10 @@ import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import run.halo.mcpserver.McpAuthorization;
+import run.halo.mcpserver.api.McpToolException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 
 class ToolSupportTest {
 
@@ -64,6 +71,38 @@ class ToolSupportTest {
                             .isEqualTo(Map.of("items", List.of(Map.of("title", "Hello"))));
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void validatesLongArgumentsWithoutNumericTruncation() {
+        assertThat(ToolSupport.requiredLong(Map.of("version", BigInteger.ZERO), "version"))
+                .isZero();
+        assertThat(ToolSupport.requiredLong(
+                        Map.of("version", BigInteger.valueOf(Long.MAX_VALUE)), "version"))
+                .isEqualTo(Long.MAX_VALUE);
+
+        assertThatThrownBy(() -> ToolSupport.requiredLong(
+                        Map.of("version", new BigInteger("18446744073709551616")), "version"))
+                .isInstanceOfSatisfying(
+                        McpToolException.class,
+                        error -> assertThat(error.code()).isEqualTo("INVALID_ARGUMENT"));
+        assertThatThrownBy(() -> ToolSupport.requiredLong(
+                        Map.of("version", new BigDecimal("1.5")), "version"))
+                .isInstanceOfSatisfying(
+                        McpToolException.class,
+                        error -> assertThat(error.code()).isEqualTo("INVALID_ARGUMENT"));
+    }
+
+    @Test
+    void rejectsFractionRoundedByTheProtocolJsonMapper() throws JacksonException {
+        var arguments = JsonMapper.shared().readValue(
+                "{\"version\":1.0000000000000000000001}",
+                new TypeReference<Map<String, Object>>() {});
+
+        assertThatThrownBy(() -> ToolSupport.requiredLong(arguments, "version"))
+                .isInstanceOfSatisfying(
+                        McpToolException.class,
+                        error -> assertThat(error.code()).isEqualTo("INVALID_ARGUMENT"));
     }
 
     private static final class TestToolSupport extends ToolSupport {
