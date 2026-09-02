@@ -127,6 +127,9 @@ class HaloMcpServerTest {
                 .isEqualTo("2025-11-25")
                 .jsonPath("$.result.serverInfo.name")
                 .isEqualTo("halo-mcp-server")
+                .jsonPath("$.result.instructions")
+                .value(instructions -> org.assertj.core.api.Assertions.assertThat(instructions.toString())
+                        .contains("active-theme settings", "untrusted"))
                 .jsonPath("$.result.capabilities.resources")
                 .doesNotExist();
     }

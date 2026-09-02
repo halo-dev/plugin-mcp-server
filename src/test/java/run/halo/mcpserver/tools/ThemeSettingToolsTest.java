@@ -71,6 +71,35 @@ class ThemeSettingToolsTest {
     }
 
     @Test
+    void marksThemeProvidedSettingDataAsUntrusted() {
+        reset(client);
+        var list = tools.tools().stream()
+                .filter(tool -> tool.protocolTool().name().equals(ThemeSettingTools.LIST_GROUPS))
+                .findFirst()
+                .orElseThrow();
+        var get = tools.tools().stream()
+                .filter(tool -> tool.protocolTool().name().equals(ThemeSettingTools.GET_GROUP))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(list.protocolTool().description()).containsIgnoringCase("untrusted");
+        assertThat(get.protocolTool().description()).containsIgnoringCase("untrusted");
+
+        var listProperties = (Map<?, ?>) list.protocolTool().outputSchema().get("properties");
+        var groups = (Map<?, ?>) listProperties.get("groups");
+        var groupItems = (Map<?, ?>) groups.get("items");
+        var groupProperties = (Map<?, ?>) groupItems.get("properties");
+        var label = (Map<?, ?>) groupProperties.get("label");
+        assertThat(label.get("description").toString()).containsIgnoringCase("untrusted");
+
+        var getProperties = (Map<?, ?>) get.protocolTool().outputSchema().get("properties");
+        for (var property : List.of("label", "formSchema", "values")) {
+            var schema = (Map<?, ?>) getProperties.get(property);
+            assertThat(schema.get("description").toString()).containsIgnoringCase("untrusted");
+        }
+    }
+
+    @Test
     void listsActiveThemeSettingGroupsWithoutLoadingConfig() {
         when(client.fetch(Setting.class, "theme-hao-setting"))
                 .thenReturn(Mono.just(setting(
