@@ -27,17 +27,27 @@ class BuiltInToolsTest {
                 new CategoryTools(client, authorization),
                 new TagTools(client, authorization),
                 new CommentTools(client, authorization),
-                new AttachmentTools(client, mock(AttachmentService.class), new AttachmentUploadLimiter(), authorization));
+                new AttachmentTools(
+                        client,
+                        mock(AttachmentService.class),
+                        new AttachmentUploadLimiter(),
+                        authorization),
+                new ThemeSettingTools(client, authorization));
 
         var names = tools.names().toList();
-        assertThat(tools.tools()).hasSize(34);
+        assertThat(tools.tools()).hasSize(39);
         assertThat(names)
                 .doesNotHaveDuplicates()
                 .contains(
                         PostTools.SET_PUBLISH_STATE,
                         SinglePageTools.SET_PUBLISH_STATE,
                         CommentTools.SET_APPROVAL,
-                        CommentTools.SET_REPLY_APPROVAL)
+                        CommentTools.SET_REPLY_APPROVAL,
+                        ThemeSettingTools.LIST_GROUPS,
+                        ThemeSettingTools.GET_GROUP,
+                        ThemeSettingTools.UPDATE_GROUP,
+                        ThemeSettingTools.LIST_TEMPLATES,
+                        ThemeSettingTools.GET_TEMPLATE)
                 .doesNotContain(
                         "halo_publish_post",
                         "halo_unpublish_post",
@@ -49,7 +59,7 @@ class BuiltInToolsTest {
                         "halo_unapprove_reply");
         assertThat(tools.tools())
                 .extracting(BuiltInTool::category)
-                .contains("CONTENT_SEARCH", "POST", "PAGE", "CATEGORY", "TAG", "COMMENT", "ATTACHMENT");
+                .contains("CONTENT_SEARCH", "POST", "PAGE", "CATEGORY", "TAG", "COMMENT", "ATTACHMENT", "THEME");
         assertThat(tools.tools())
                 .allSatisfy(tool -> {
                     assertThat(tool.displayTitle()).containsPattern("[\\p{IsHan}]");
@@ -70,7 +80,12 @@ class BuiltInToolsTest {
                 new CategoryTools(client, authorization),
                 new TagTools(client, authorization),
                 new CommentTools(client, authorization),
-                new AttachmentTools(client, mock(AttachmentService.class), new AttachmentUploadLimiter(), authorization));
+                new AttachmentTools(
+                        client,
+                        mock(AttachmentService.class),
+                        new AttachmentUploadLimiter(),
+                        authorization),
+                new ThemeSettingTools(client, authorization));
 
         var destructive = tools.tools().stream()
                 .filter(tool -> Boolean.TRUE.equals(tool.protocolTool().annotations().destructiveHint()))
@@ -92,7 +107,8 @@ class BuiltInToolsTest {
                 CommentTools.DELETE,
                 CommentTools.SET_REPLY_APPROVAL,
                 CommentTools.DELETE_REPLY,
-                AttachmentTools.DELETE);
+                AttachmentTools.DELETE,
+                ThemeSettingTools.UPDATE_GROUP);
     }
 
     @Test
@@ -107,7 +123,12 @@ class BuiltInToolsTest {
                 new CategoryTools(client, authorization),
                 new TagTools(client, authorization),
                 new CommentTools(client, authorization),
-                new AttachmentTools(client, mock(AttachmentService.class), new AttachmentUploadLimiter(), authorization));
+                new AttachmentTools(
+                        client,
+                        mock(AttachmentService.class),
+                        new AttachmentUploadLimiter(),
+                        authorization),
+                new ThemeSettingTools(client, authorization));
         var schemaValidator = new DefaultJsonSchemaValidator();
 
         assertThat(tools.tools()).allSatisfy(tool -> {

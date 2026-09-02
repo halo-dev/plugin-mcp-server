@@ -127,6 +127,9 @@ class HaloMcpServerTest {
                 .isEqualTo("2025-11-25")
                 .jsonPath("$.result.serverInfo.name")
                 .isEqualTo("halo-mcp-server")
+                .jsonPath("$.result.instructions")
+                .value(instructions -> org.assertj.core.api.Assertions.assertThat(instructions.toString())
+                        .contains("active-theme settings", "untrusted"))
                 .jsonPath("$.result.capabilities.resources")
                 .doesNotExist();
     }
@@ -226,6 +229,30 @@ class HaloMcpServerTest {
                 .isEqualTo(McpCallOutcome.SUCCESS);
         org.assertj.core.api.Assertions.assertThat(page.items().getFirst().toString())
                 .doesNotContain("must-not-be-recorded");
+    }
+
+    @Test
+    void preservesUntypedFloatingPointPrecisionAtTheProtocolBoundary() {
+        client.post()
+                .uri("/mcp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
+                .bodyValue("""
+                        {
+                          "jsonrpc":"2.0",
+                          "id":6,
+                          "method":"tools/call",
+                          "params":{
+                            "name":"halo_get_post",
+                            "arguments":{"expectedVersion":1.0000000000000000000001}
+                          }
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(body -> org.assertj.core.api.Assertions.assertThat(body)
+                        .contains("\"expectedVersion\":1.0000000000000000000001"));
     }
 
     @Test
@@ -357,7 +384,7 @@ class HaloMcpServerTest {
                 .tool(tool)
                 .callHandler((context, request) -> Mono.just(
                         io.modelcontextprotocol.spec.McpSchema.CallToolResult.builder()
-                                .structuredContent(java.util.Map.of())
+                                .structuredContent(request.arguments())
                                 .build()))
                 .build();
         return new BuiltInTool(specification, "TEST", title, title);

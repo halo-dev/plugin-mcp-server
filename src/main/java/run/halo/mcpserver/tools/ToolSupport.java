@@ -2,6 +2,7 @@ package run.halo.mcpserver.tools;
 
 import io.modelcontextprotocol.server.McpStatelessServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -275,7 +276,7 @@ abstract class ToolSupport {
     }
 
     static Map<String, Object> integerSchema() {
-        return Map.of("type", "integer", "minimum", 1);
+        return Map.of("type", "integer", "minimum", 0, "maximum", Long.MAX_VALUE);
     }
 
     static Map<String, Object> integerSchema(int minimum, Integer maximum, int defaultValue) {
@@ -381,16 +382,29 @@ abstract class ToolSupport {
         if (value == null) {
             return null;
         }
-        if (!(value instanceof Number number) || number.longValue() < 1) {
-            throw new McpToolException("INVALID_ARGUMENT", name + " must be a positive integer");
+        if (!(value instanceof Number number)) {
+            throw new McpToolException(
+                    "INVALID_ARGUMENT", name + " must be a non-negative 64-bit integer");
         }
-        return number.longValue();
+        final long result;
+        try {
+            result = new BigDecimal(number.toString()).longValueExact();
+        } catch (NumberFormatException | ArithmeticException error) {
+            throw new McpToolException(
+                    "INVALID_ARGUMENT", name + " must be a non-negative 64-bit integer", error);
+        }
+        if (result < 0) {
+            throw new McpToolException(
+                    "INVALID_ARGUMENT", name + " must be a non-negative 64-bit integer");
+        }
+        return result;
     }
 
     static long requiredLong(Map<String, Object> arguments, String name) {
         var value = optionalLong(arguments, name);
         if (value == null) {
-            throw new McpToolException("INVALID_ARGUMENT", name + " must be a positive integer");
+            throw new McpToolException(
+                    "INVALID_ARGUMENT", name + " must be a non-negative 64-bit integer");
         }
         return value;
     }
