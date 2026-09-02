@@ -13,6 +13,7 @@ import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Mono;
 import run.halo.app.plugin.PluginContext;
 import run.halo.mcpserver.tools.BuiltInTools;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
@@ -29,7 +30,9 @@ class HaloMcpServer {
             McpRequestRateLimiter rateLimiter,
             McpRecentCallHistory recentCallHistory,
             PluginContext pluginContext) {
-        var jsonMapper = JsonMapper.shared();
+        var jsonMapper = JsonMapper.builder()
+                .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+                .build();
         var mcpJsonMapper = new JacksonMcpJsonMapper(jsonMapper);
         this.transport = WebFluxStatelessServerTransport.builder()
                 .jsonMapper(mcpJsonMapper)

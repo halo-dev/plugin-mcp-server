@@ -2,7 +2,7 @@ package run.halo.mcpserver.tools;
 
 import io.modelcontextprotocol.server.McpStatelessServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
-import java.math.BigInteger;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -388,7 +388,7 @@ abstract class ToolSupport {
         }
         final long result;
         try {
-            result = new BigInteger(number.toString()).longValueExact();
+            result = new BigDecimal(number.toString()).longValueExact();
         } catch (NumberFormatException | ArithmeticException error) {
             throw new McpToolException(
                     "INVALID_ARGUMENT", name + " must be a non-negative 64-bit integer", error);

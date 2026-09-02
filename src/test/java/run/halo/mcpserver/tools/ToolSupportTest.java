@@ -19,9 +19,6 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import run.halo.mcpserver.McpAuthorization;
 import run.halo.mcpserver.api.McpToolException;
-import tools.jackson.core.JacksonException;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.json.JsonMapper;
 
 class ToolSupportTest {
 
@@ -80,6 +77,10 @@ class ToolSupportTest {
         assertThat(ToolSupport.requiredLong(
                         Map.of("version", BigInteger.valueOf(Long.MAX_VALUE)), "version"))
                 .isEqualTo(Long.MAX_VALUE);
+        assertThat(ToolSupport.requiredLong(Map.of("version", new BigDecimal("8.0")), "version"))
+                .isEqualTo(8L);
+        assertThat(ToolSupport.requiredLong(Map.of("version", new BigDecimal("8e0")), "version"))
+                .isEqualTo(8L);
 
         assertThatThrownBy(() -> ToolSupport.requiredLong(
                         Map.of("version", new BigInteger("18446744073709551616")), "version"))
@@ -91,15 +92,8 @@ class ToolSupportTest {
                 .isInstanceOfSatisfying(
                         McpToolException.class,
                         error -> assertThat(error.code()).isEqualTo("INVALID_ARGUMENT"));
-    }
-
-    @Test
-    void rejectsFractionRoundedByTheProtocolJsonMapper() throws JacksonException {
-        var arguments = JsonMapper.shared().readValue(
-                "{\"version\":1.0000000000000000000001}",
-                new TypeReference<Map<String, Object>>() {});
-
-        assertThatThrownBy(() -> ToolSupport.requiredLong(arguments, "version"))
+        assertThatThrownBy(() -> ToolSupport.requiredLong(
+                        Map.of("version", new BigDecimal("1.0000000000000000000001")), "version"))
                 .isInstanceOfSatisfying(
                         McpToolException.class,
                         error -> assertThat(error.code()).isEqualTo("INVALID_ARGUMENT"));

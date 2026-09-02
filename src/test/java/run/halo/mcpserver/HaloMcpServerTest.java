@@ -229,6 +229,30 @@ class HaloMcpServerTest {
     }
 
     @Test
+    void preservesUntypedFloatingPointPrecisionAtTheProtocolBoundary() {
+        client.post()
+                .uri("/mcp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
+                .bodyValue("""
+                        {
+                          "jsonrpc":"2.0",
+                          "id":6,
+                          "method":"tools/call",
+                          "params":{
+                            "name":"halo_get_post",
+                            "arguments":{"expectedVersion":1.0000000000000000000001}
+                          }
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(body -> org.assertj.core.api.Assertions.assertThat(body)
+                        .contains("\"expectedVersion\":1.0000000000000000000001"));
+    }
+
+    @Test
     void listsAndCallsAContributedToolDirectly() {
         var definition = McpToolDefinition.builder()
                 .name("hello")
@@ -357,7 +381,7 @@ class HaloMcpServerTest {
                 .tool(tool)
                 .callHandler((context, request) -> Mono.just(
                         io.modelcontextprotocol.spec.McpSchema.CallToolResult.builder()
-                                .structuredContent(java.util.Map.of())
+                                .structuredContent(request.arguments())
                                 .build()))
                 .build();
         return new BuiltInTool(specification, "TEST", title, title);
