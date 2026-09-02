@@ -8,7 +8,7 @@ const categoryLabels: Record<string, string> = {
   TAG: '标签',
   COMMENT: '评论管理',
   ATTACHMENT: '附件管理',
-  THEME: '主题设置',
+  THEME: '主题',
   PLUGIN: '插件工具',
 }
 

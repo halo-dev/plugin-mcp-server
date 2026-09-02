@@ -43,7 +43,7 @@ describe('groupTools', () => {
       categories: [
         { category: 'POST', label: '文章管理' },
         { category: 'COMMENT', label: '评论管理' },
-        { category: 'THEME', label: '主题设置' },
+        { category: 'THEME', label: '主题' },
       ],
     })
     const postCategory = builtInGroup.categories[0]
