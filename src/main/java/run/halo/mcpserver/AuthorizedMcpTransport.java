@@ -95,14 +95,15 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
             }
             var toolName = call.name() == null ? "" : call.name();
             var rateLimitTool = authentication.allowsAllTools()
-                    ? McpKeyAuthenticationToken.ALL_TOOLS
-                    : authentication.allows(toolName) ? toolName : "<unauthorized>";
-            return recentCallHistory.observe(
+                    ? catalog.hasProtocolTool(toolName)
+                            .map(available -> available ? toolName : "<unauthorized>")
+                    : Mono.just(authentication.allows(toolName) ? toolName : "<unauthorized>");
+            return rateLimitTool.flatMap(name -> recentCallHistory.observe(
                     authentication,
                     toolName,
-                    () -> rateLimiter.allowTool(authentication.keyId(), rateLimitTool)
+                    () -> rateLimiter.allowTool(authentication.keyId(), name)
                             ? executeTool(context, request, handler, call, toolName)
-                            : Mono.just(rateLimited(request)));
+                            : Mono.just(rateLimited(request))));
         });
     }
 

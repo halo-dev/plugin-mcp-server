@@ -76,12 +76,14 @@ class AuthorizedMcpTransportTest {
     }
 
     @Test
-    void wildcardCallsShareOneRateLimitBucket() {
+    void wildcardCallsKeepAvailableToolBucketsAndShareTheUnauthorizedBucket() {
         var fixture = fixture();
+        when(fixture.catalog().hasProtocolTool(any())).thenAnswer(invocation -> Mono.just(
+                Set.of("known_one", "known_two").contains(invocation.getArgument(0))));
         var authentication = new McpKeyAuthenticationToken(
                 "key-id", "Automation", "hmcp_key", "admin", Set.of("*"));
 
-        for (var toolName : List.of("missing_one", "missing_two")) {
+        for (var toolName : List.of("known_one", "known_two", "missing_one", "missing_two")) {
             var request = new McpSchema.JSONRPCRequest(
                     "tools/call", 4, Map.of("name", toolName, "arguments", Map.of()));
             fixture.handler()
@@ -90,7 +92,9 @@ class AuthorizedMcpTransportTest {
                     .block();
         }
 
-        verify(fixture.rateLimiter(), times(2)).allowTool("key-id", "*");
+        verify(fixture.rateLimiter()).allowTool("key-id", "known_one");
+        verify(fixture.rateLimiter()).allowTool("key-id", "known_two");
+        verify(fixture.rateLimiter(), times(2)).allowTool("key-id", "<unauthorized>");
     }
 
     @Test

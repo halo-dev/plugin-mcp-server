@@ -53,15 +53,16 @@ class HaloMcpServerTest {
     McpRecentCallHistory recentCallHistory;
     WebTestClient client;
     McpRequestRateLimiter rateLimiter;
+    McpAuthorization authorization;
 
     @BeforeEach
     void setUp() {
         when(pluginContext.getVersion()).thenReturn("1.0.0");
         lenient().when(extensionGetter.getEnabledExtensions(run.halo.mcpserver.api.McpToolProvider.class))
                 .thenReturn(Flux.empty());
-        var authorization = new McpAuthorization();
-        var searchTool = builtInTool("halo_search_content", "Search content");
-        var getPostTool = builtInTool("halo_get_post", "Read post");
+        authorization = new McpAuthorization();
+        var searchTool = builtInTool("halo_search_content", "Search content", authorization);
+        var getPostTool = builtInTool("halo_get_post", "Read post", authorization);
         lenient().when(builtInTools.tools()).thenReturn(java.util.List.of(searchTool, getPostTool));
         when(builtInTools.specifications()).thenReturn(java.util.List.of(
                 searchTool.specification(), getPostTool.specification()));
@@ -337,25 +338,40 @@ class HaloMcpServerTest {
                                 .withAuthentication(authentication)))
                 .build();
 
-        for (var toolName : java.util.List.of("halo_get_post", "demo__hello")) {
-            wildcardClient.post()
-                    .uri("/mcp")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
-                    .bodyValue("""
-                            {
-                              "jsonrpc":"2.0",
-                              "id":11,
-                              "method":"tools/call",
-                              "params":{"name":"%s","arguments":{}}
-                            }
-                            """.formatted(toolName))
-                    .exchange()
-                    .expectStatus().isOk()
-                    .expectBody()
-                    .jsonPath("$.error").doesNotExist()
-                    .jsonPath("$.result").exists();
-        }
+        wildcardClient.post()
+                .uri("/mcp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
+                .bodyValue("""
+                        {
+                          "jsonrpc":"2.0",
+                          "id":11,
+                          "method":"tools/call",
+                          "params":{"name":"halo_get_post","arguments":{"marker":"built-in"}}
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.result.structuredContent.marker").isEqualTo("built-in");
+
+        wildcardClient.post()
+                .uri("/mcp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
+                .bodyValue("""
+                        {
+                          "jsonrpc":"2.0",
+                          "id":12,
+                          "method":"tools/call",
+                          "params":{"name":"demo__hello","arguments":{}}
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.result.structuredContent.message").isEqualTo("Hello")
+                .jsonPath("$.result.isError").isEqualTo(false);
     }
 
     @Test
@@ -412,7 +428,8 @@ class HaloMcpServerTest {
                         .assertThat(body.toString()).doesNotContain("storage password"));
     }
 
-    private static BuiltInTool builtInTool(String name, String title) {
+    private static BuiltInTool builtInTool(
+            String name, String title, McpAuthorization authorization) {
         var tool = io.modelcontextprotocol.spec.McpSchema.Tool.builder(
                         name,
                         java.util.Map.of("type", "object", "properties", java.util.Map.of()))
@@ -427,10 +444,10 @@ class HaloMcpServerTest {
                 .build();
         var specification = io.modelcontextprotocol.server.McpStatelessServerFeatures.AsyncToolSpecification.builder()
                 .tool(tool)
-                .callHandler((context, request) -> Mono.just(
+                .callHandler((context, request) -> authorization.authorize(name, () -> Mono.just(
                         io.modelcontextprotocol.spec.McpSchema.CallToolResult.builder()
                                 .structuredContent(request.arguments())
-                                .build()))
+                                .build())))
                 .build();
         return new BuiltInTool(specification, "TEST", title, title);
     }

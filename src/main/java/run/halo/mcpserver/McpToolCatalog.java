@@ -63,6 +63,14 @@ class McpToolCatalog {
         });
     }
 
+    Mono<Boolean> hasProtocolTool(String name) {
+        if (builtInTools.tools().stream().anyMatch(tool -> tool.protocolTool().name().equals(name))) {
+            return Mono.just(true);
+        }
+        return contributedTools().map(tools ->
+                tools.stream().anyMatch(tool -> tool.protocolName().equals(name)));
+    }
+
     private Mono<List<RegisteredTool>> contributedTools() {
         return toolRegistry.registeredTools().onErrorResume(error -> {
             log.warn("Ignoring unavailable contributed MCP tools", error);
