@@ -101,6 +101,12 @@ Inspector 的协议版本请选择 `legacy` 或 `auto`。
 其他 Halo 插件可以通过协议无关的 API 贡献 MCP 工具，接入方式参阅
 [插件工具 Provider 接入指南](./dev/dev.md)。
 
+## 已接入插件
+
+- [Docsme 文档管理](https://www.halo.run/store/apps/app-yffxw)：让 AI Agent 管理文档
+- [Image Stream](https://www.halo.run/store/apps/app-JxVVb)：让 AI Agent 在 Unsplash、Pixabay、Pexels 搜索并转存无版权图片
+- [瞬间](https://www.halo.run/store/apps/app-SnwWD)：让 AI Agent 管理瞬间内容
+
 ## 许可证
 
 [GPL-3.0](./LICENSE) © Halo
