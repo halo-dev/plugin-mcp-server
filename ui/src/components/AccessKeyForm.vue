@@ -3,7 +3,7 @@ import type { McpAccessKey, McpTool, UpdateMcpAccessKeyRequest } from '@/api'
 import McpToolCard from '@/components/McpToolCard.vue'
 import { groupTools } from '@/utils/tool'
 import { submitForm } from '@formkit/core'
-import { VButton, VSpace, VTag } from '@halo-dev/components'
+import { VAlert, VButton, VSpace, VTag } from '@halo-dev/components'
 import { utils } from '@halo-dev/ui-shared'
 import { computed, reactive, shallowRef } from 'vue'
 
@@ -16,6 +16,7 @@ const emit = defineEmits<{
   submit: [input: UpdateMcpAccessKeyRequest]
 }>()
 
+const ALL_TOOLS = '*'
 const formId = `mcp-access-key-form-${props.accessKey?.name ?? 'new'}`
 const displayName = shallowRef(props.accessKey?.displayName ?? '')
 const expiresAt = shallowRef(
@@ -23,6 +24,7 @@ const expiresAt = shallowRef(
 )
 const enabled = shallowRef(props.accessKey?.enabled ?? true)
 const allowedIpRanges = shallowRef((props.accessKey?.allowedIpRanges ?? []).join('\n'))
+const allowAllTools = shallowRef(props.accessKey?.allowedTools.includes(ALL_TOOLS) ?? false)
 const selected = reactive<Record<string, boolean>>(
   Object.fromEntries(
     props.tools.map((tool) => [
@@ -35,7 +37,9 @@ const selected = reactive<Record<string, boolean>>(
 const groups = computed(() => groupTools(props.tools))
 const availableNames = new Set(props.tools.map((tool) => tool.name))
 const unavailableAllowedTools = shallowRef(
-  (props.accessKey?.allowedTools ?? []).filter((name) => !availableNames.has(name)),
+  (props.accessKey?.allowedTools ?? []).filter(
+    (name) => name !== ALL_TOOLS && !availableNames.has(name),
+  ),
 )
 
 const selectedCount = computed(() => props.tools.filter((tool) => selected[tool.name]).length)
@@ -67,10 +71,12 @@ function onSubmit() {
           .filter(Boolean),
       ),
     ],
-    allowedTools: [
-      ...unavailableAllowedTools.value,
-      ...props.tools.filter((tool) => selected[tool.name]).map((tool) => tool.name),
-    ],
+    allowedTools: allowAllTools.value
+      ? [ALL_TOOLS]
+      : [
+          ...unavailableAllowedTools.value,
+          ...props.tools.filter((tool) => selected[tool.name]).map((tool) => tool.name),
+        ],
     expiresAt: expiresAt.value ? utils.date.toISOString(expiresAt.value) : undefined,
     enabled: enabled.value,
   })
@@ -108,8 +114,22 @@ defineExpose({
       :placeholder="'203.0.113.10\n203.0.113.0/24\n2001:db8::/32'"
       :rows="5"
     />
+    <FormKit
+      v-model="allowAllTools"
+      type="switch"
+      name="allowAllTools"
+      label="自动允许所有工具"
+      help="启用后，当前及后续新增的工具都会自动生效。"
+    />
+    <VAlert
+      v-if="allowAllTools"
+      type="warning"
+      title="此密钥将自动获得当前及未来新增的全部工具权限"
+      description="包括第三方插件提供的工具，以及可能修改或删除数据的高风险工具。新增工具不会再次请求确认，请仅用于完全可信的客户端，并建议同时限制访问 IP 和过期时间。"
+      :closable="false"
+    />
 
-    <div class=":uno: mt-5 border-t border-gray-100 pt-5">
+    <div v-if="!allowAllTools" class=":uno: mt-5 border-t border-gray-100 pt-5">
       <div class=":uno: mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div class=":uno: flex items-center gap-2 text-sm text-gray-900 font-medium">

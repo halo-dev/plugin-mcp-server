@@ -1,6 +1,5 @@
 package run.halo.mcpserver;
 
-import java.util.Set;
 import java.util.function.Supplier;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.context.SecurityContext;
@@ -47,9 +46,5 @@ public class McpAuthorization {
 
     public Mono<String> username() {
         return authentication().map(McpKeyAuthenticationToken::getName);
-    }
-
-    Mono<Set<String>> allowedTools() {
-        return authentication().map(McpKeyAuthenticationToken::allowedTools);
     }
 }

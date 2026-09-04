@@ -65,6 +65,19 @@ class McpAccessKeyServiceTest {
     }
 
     @Test
+    void wildcardAllowsCurrentAndFutureTools() {
+        var created = service.create("Automation", "admin", Set.of("*"), Set.of(), null).block();
+        when(client.fetch(McpAccessKey.class, created.accessKey().getMetadata().getName()))
+                .thenReturn(Mono.just(created.accessKey()));
+
+        var authentication = service.authenticate(created.token(), null).block();
+
+        assertThat(authentication).isNotNull();
+        assertThat(authentication.allows("halo_search_content")).isTrue();
+        assertThat(authentication.allows("FuturePlugin__future_tool")).isTrue();
+    }
+
+    @Test
     void rejectsDisabledAndExpiredKeys() {
         var created = service.create(
                         "Expired", "admin", Set.of(), Set.of(), Instant.now().minusSeconds(1))

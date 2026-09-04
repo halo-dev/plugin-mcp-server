@@ -11,6 +11,7 @@ import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpStatelessServerHandler;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,28 @@ class AuthorizedMcpTransportTest {
                 .block();
 
         assertInternalErrorIsSanitized(response, 2);
+    }
+
+    @Test
+    void wildcardListsEveryCurrentlyAvailableTool() {
+        var fixture = fixture();
+        var first = McpSchema.Tool.builder("halo_first", Map.of("type", "object")).build();
+        var addedLater = McpSchema.Tool.builder("PluginExample__added_later", Map.of("type", "object"))
+                .build();
+        when(fixture.catalog().protocolTools()).thenReturn(Mono.just(List.of(first, addedLater)));
+        var request = new McpSchema.JSONRPCRequest("tools/list", 3, Map.of());
+        var authentication = new McpKeyAuthenticationToken(
+                "key-id", "Automation", "hmcp_key", "admin", Set.of("*"));
+
+        var response = fixture.handler()
+                .handleRequest(McpTransportContext.EMPTY, request)
+                .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication))
+                .block();
+
+        assertThat(response.result()).isInstanceOf(McpSchema.ListToolsResult.class);
+        var result = (McpSchema.ListToolsResult) response.result();
+        assertThat(result.tools()).extracting(McpSchema.Tool::name)
+                .containsExactly("halo_first", "PluginExample__added_later");
     }
 
     @Test
@@ -99,7 +122,7 @@ class AuthorizedMcpTransportTest {
         transport.setMcpHandler(sdkHandler);
         var captor = ArgumentCaptor.forClass(McpStatelessServerHandler.class);
         verify(delegate).setMcpHandler(captor.capture());
-        return new Fixture(captor.getValue(), sdkHandler);
+        return new Fixture(captor.getValue(), sdkHandler, catalog);
     }
 
     private static void assertInternalErrorIsSanitized(
@@ -112,5 +135,8 @@ class AuthorizedMcpTransportTest {
         assertThat(response.toString()).doesNotContain("database password");
     }
 
-    private record Fixture(McpStatelessServerHandler handler, McpStatelessServerHandler sdkHandler) {}
+    private record Fixture(
+            McpStatelessServerHandler handler,
+            McpStatelessServerHandler sdkHandler,
+            McpToolCatalog catalog) {}
 }

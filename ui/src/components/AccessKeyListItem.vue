@@ -113,7 +113,13 @@ function handleDelete() {
     <template #end>
       <VEntityField>
         <template #description>
-          <VTag>{{ mcpAccessKey.allowedTools.length }} 个工具</VTag>
+          <VTag>
+            {{
+              mcpAccessKey.allowedTools.includes('*')
+                ? '全部工具（自动）'
+                : `${mcpAccessKey.allowedTools.length} 个工具`
+            }}
+          </VTag>
         </template>
       </VEntityField>
       <VEntityField>

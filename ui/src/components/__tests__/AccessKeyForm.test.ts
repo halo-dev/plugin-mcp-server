@@ -17,8 +17,10 @@ const FormKitStub = defineComponent({
   name: 'FormKit',
   props: {
     type: String,
+    name: String,
+    modelValue: [String, Boolean],
   },
-  emits: ['submit'],
+  emits: ['submit', 'update:modelValue'],
   template: `
     <form v-if="type === 'form'" @submit.prevent="$emit('submit')"><slot :index="0" /></form>
     <div v-else><slot :index="0" /></div>
@@ -33,6 +35,7 @@ function mountForm(accessKey?: McpAccessKey, tools: McpTool[] = []) {
         FormKit: FormKitStub,
         McpToolCard: true,
         VButton: true,
+        VAlert: true,
         VSpace: true,
         VTag: true,
       },
@@ -50,6 +53,35 @@ describe('AccessKeyForm', () => {
       allowedIpRanges: [],
       allowedTools: [],
     })
+  })
+
+  it('hides tool selection and submits the wildcard when all tools are automatic', async () => {
+    const wrapper = mountForm(undefined, [
+      {
+        name: 'halo_get_post',
+        category: 'POST',
+        readOnly: true,
+        destructive: false,
+        available: true,
+        inputSchema: {},
+        source: {
+          type: 'BUILT_IN',
+          pluginName: 'mcp-server',
+          displayName: 'MCP Server',
+        },
+      },
+    ])
+    const switchInput = wrapper
+      .findAllComponents(FormKitStub)
+      .find((input) => input.props('name') === 'allowAllTools')
+
+    switchInput?.vm.$emit('update:modelValue', true)
+    await wrapper.vm.$nextTick()
+    await wrapper.get('form').trigger('submit')
+
+    expect(wrapper.text()).toContain('未来新增的全部工具权限')
+    expect(wrapper.findComponent({ name: 'McpToolCard' }).exists()).toBe(false)
+    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({ allowedTools: ['*'] })
   })
 
   it('normalizes each line from the IP allowlist textarea before submitting', async () => {

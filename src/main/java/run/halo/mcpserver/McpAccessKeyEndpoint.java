@@ -255,6 +255,7 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
         var requested = tools(requestedTools);
         return toolCatalog.availableNames().flatMap(available -> {
             var unknown = new LinkedHashSet<>(requested);
+            unknown.remove(McpKeyAuthenticationToken.ALL_TOOLS);
             unknown.removeAll(available);
             unknown.removeAll(allowedUnavailableTools);
             if (!unknown.isEmpty()) {

@@ -105,6 +105,13 @@ describe('AccessKeyListItem', () => {
     expect(mountListItem({ ...accessKey, allowedIpRanges: [] }).text()).toContain('IP 不限制')
   })
 
+  it('shows automatic access instead of a tool count for the wildcard', () => {
+    const wrapper = mountListItem({ ...accessKey, allowedTools: ['*'] })
+
+    expect(wrapper.text()).toContain('全部工具（自动）')
+    expect(wrapper.text()).not.toContain('1 个工具')
+  })
+
   it('uses the expiration text to indicate an expired access key', () => {
     dateIsBefore.mockReturnValue(true)
 

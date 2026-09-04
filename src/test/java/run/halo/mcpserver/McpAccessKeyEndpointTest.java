@@ -140,6 +140,42 @@ class McpAccessKeyEndpointTest {
     }
 
     @Test
+    void acceptsTheAllToolsWildcard() {
+        when(toolCatalog.availableNames()).thenReturn(reactor.core.publisher.Mono.just(Set.of()));
+        when(accessKeyService.allowedTools("test-key"))
+                .thenReturn(reactor.core.publisher.Mono.just(Set.of()));
+        var updated = new McpAccessKey();
+        updated.setMetadata(new Metadata());
+        updated.getMetadata().setName("test-key");
+        updated.getSpec().setAllowedTools(Set.of("*"));
+        when(accessKeyService.update(any(), any(), any(), any(), any(), anyBoolean()))
+                .thenReturn(reactor.core.publisher.Mono.just(updated));
+
+        WebTestClient.bindToRouterFunction(endpoint.endpoint())
+                .build()
+                .put()
+                .uri("/keys/test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "displayName": "Test key",
+                          "allowedTools": ["*"],
+                          "allowedIpRanges": [],
+                          "enabled": true
+                        }
+                        """)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.allowedTools[0]")
+                .isEqualTo("*");
+
+        verify(accessKeyService).update(
+                "test-key", "Test key", Set.of("*"), Set.of(), null, true);
+    }
+
+    @Test
     void listsRecentCallsWithFilters() {
         var call = new McpRecentCall(
                 1,

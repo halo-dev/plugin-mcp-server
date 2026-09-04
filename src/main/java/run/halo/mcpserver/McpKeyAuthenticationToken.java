@@ -7,6 +7,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 final class McpKeyAuthenticationToken extends AbstractAuthenticationToken {
 
+    static final String ALL_TOOLS = "*";
+
     private final String keyId;
     private final String keyDisplayName;
     private final String keyPrefix;
@@ -45,7 +47,7 @@ final class McpKeyAuthenticationToken extends AbstractAuthenticationToken {
     }
 
     boolean allows(String toolName) {
-        return allowedTools.contains(toolName);
+        return allowedTools.contains(ALL_TOOLS) || allowedTools.contains(toolName);
     }
 
     @Override
