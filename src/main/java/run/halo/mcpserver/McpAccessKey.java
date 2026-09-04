@@ -19,6 +19,9 @@ import run.halo.app.extension.GVK;
         singular = "mcpaccesskey")
 public class McpAccessKey extends AbstractExtension {
 
+    static final String ALLOWED_TOOLS_DESCRIPTION =
+            "Allowed MCP tool names. Use '*' to automatically allow all current and future tools.";
+
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
     private Spec spec = new Spec();
 
@@ -33,6 +36,7 @@ public class McpAccessKey extends AbstractExtension {
         private String ownerName;
         private boolean enabled = true;
         private Instant expiresAt;
+        @Schema(description = ALLOWED_TOOLS_DESCRIPTION)
         private Set<String> allowedTools = new LinkedHashSet<>();
         @Schema(description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
         private Set<String> allowedIpRanges = new LinkedHashSet<>();

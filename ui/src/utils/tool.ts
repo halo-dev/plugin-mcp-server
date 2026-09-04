@@ -1,5 +1,7 @@
 import type { McpTool } from '@/api'
 
+export const ALL_TOOLS = '*'
+
 const categoryLabels: Record<string, string> = {
   CONTENT_SEARCH: '内容搜索',
   POST: '文章管理',

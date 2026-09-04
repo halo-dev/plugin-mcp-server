@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { McpAccessKey, McpTool, UpdateMcpAccessKeyRequest } from '@/api'
 import McpToolCard from '@/components/McpToolCard.vue'
-import { groupTools } from '@/utils/tool'
+import { ALL_TOOLS, groupTools } from '@/utils/tool'
 import { submitForm } from '@formkit/core'
 import { VAlert, VButton, VSpace, VTag } from '@halo-dev/components'
 import { utils } from '@halo-dev/ui-shared'
@@ -16,7 +16,6 @@ const emit = defineEmits<{
   submit: [input: UpdateMcpAccessKeyRequest]
 }>()
 
-const ALL_TOOLS = '*'
 const formId = `mcp-access-key-form-${props.accessKey?.name ?? 'new'}`
 const displayName = shallowRef(props.accessKey?.displayName ?? '')
 const expiresAt = shallowRef(

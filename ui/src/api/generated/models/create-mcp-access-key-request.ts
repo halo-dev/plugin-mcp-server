@@ -27,7 +27,7 @@ export interface CreateMcpAccessKeyRequest {
      */
     'allowedIpRanges': Array<string>;
     /**
-     * 
+     * Allowed MCP tool names. Use \'*\' to automatically allow all current and future tools.
      * @type {Array<string>}
      * @memberof CreateMcpAccessKeyRequest
      */

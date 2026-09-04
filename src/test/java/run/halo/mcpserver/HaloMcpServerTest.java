@@ -314,6 +314,51 @@ class HaloMcpServerTest {
     }
 
     @Test
+    void wildcardCallsBuiltInAndContributedTools() {
+        var definition = McpToolDefinition.builder()
+                .name("hello")
+                .title("Hello")
+                .description("Returns a greeting")
+                .inputSchema(java.util.Map.of("type", "object"))
+                .permission(invocation -> Mono.just(true))
+                .handler(invocation -> Mono.just(McpToolResult.success(
+                        java.util.Map.of("message", "Hello"))))
+                .build();
+        when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(provider));
+        when(provider.tools()).thenReturn(Flux.just(definition));
+        var plugin = mock(PluginWrapper.class);
+        when(plugin.getPluginId()).thenReturn("demo");
+        when(pluginManager.whichPlugin(AopUtils.getTargetClass(provider))).thenReturn(plugin);
+        var authentication = new McpKeyAuthenticationToken(
+                "wildcard-key", "Automation", "hmcp_key", "admin", java.util.Set.of("*"));
+        var wildcardClient = WebTestClient.bindToRouterFunction(server.routerFunction())
+                .webFilter((exchange, chain) -> chain.filter(exchange)
+                        .contextWrite(org.springframework.security.core.context.ReactiveSecurityContextHolder
+                                .withAuthentication(authentication)))
+                .build();
+
+        for (var toolName : java.util.List.of("halo_get_post", "demo__hello")) {
+            wildcardClient.post()
+                    .uri("/mcp")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
+                    .bodyValue("""
+                            {
+                              "jsonrpc":"2.0",
+                              "id":11,
+                              "method":"tools/call",
+                              "params":{"name":"%s","arguments":{}}
+                            }
+                            """.formatted(toolName))
+                    .exchange()
+                    .expectStatus().isOk()
+                    .expectBody()
+                    .jsonPath("$.error").doesNotExist()
+                    .jsonPath("$.result").exists();
+        }
+    }
+
+    @Test
     void getIsNotSupportedAndOtherPathsAreNotExposed() {
         client.get().uri("/mcp").exchange().expectStatus().isEqualTo(405);
         client.post().uri("/other").exchange().expectStatus().isNotFound();

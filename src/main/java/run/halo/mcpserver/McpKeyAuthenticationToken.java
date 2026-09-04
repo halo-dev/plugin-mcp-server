@@ -42,12 +42,12 @@ final class McpKeyAuthenticationToken extends AbstractAuthenticationToken {
         return keyPrefix;
     }
 
-    Set<String> allowedTools() {
-        return allowedTools;
+    boolean allowsAllTools() {
+        return allowedTools.contains(ALL_TOOLS);
     }
 
     boolean allows(String toolName) {
-        return allowedTools.contains(ALL_TOOLS) || allowedTools.contains(toolName);
+        return allowsAllTools() || allowedTools.contains(toolName);
     }
 
     @Override

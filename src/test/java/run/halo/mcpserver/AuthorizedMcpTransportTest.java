@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -75,6 +76,24 @@ class AuthorizedMcpTransportTest {
     }
 
     @Test
+    void wildcardCallsShareOneRateLimitBucket() {
+        var fixture = fixture();
+        var authentication = new McpKeyAuthenticationToken(
+                "key-id", "Automation", "hmcp_key", "admin", Set.of("*"));
+
+        for (var toolName : List.of("missing_one", "missing_two")) {
+            var request = new McpSchema.JSONRPCRequest(
+                    "tools/call", 4, Map.of("name", toolName, "arguments", Map.of()));
+            fixture.handler()
+                    .handleRequest(McpTransportContext.EMPTY, request)
+                    .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication))
+                    .block();
+        }
+
+        verify(fixture.rateLimiter(), times(2)).allowTool("key-id", "*");
+    }
+
+    @Test
     void acceptsInitializedNotificationWithoutDelegatingToMissingSdkHandler() {
         var fixture = fixture();
         var notification = new McpSchema.JSONRPCNotification("notifications/initialized", Map.of());
@@ -102,6 +121,8 @@ class AuthorizedMcpTransportTest {
         var delegate = mock(WebFluxStatelessServerTransport.class);
         var catalog = mock(McpToolCatalog.class);
         var registry = mock(McpToolRegistry.class);
+        var rateLimiter = mock(McpRequestRateLimiter.class);
+        when(rateLimiter.allowTool(any(), any())).thenReturn(true);
         var authorization = new McpAuthorization();
         var transport = new AuthorizedMcpTransport(
                 delegate,
@@ -109,7 +130,7 @@ class AuthorizedMcpTransportTest {
                 catalog,
                 registry,
                 authorization,
-                new McpRequestRateLimiter(),
+                rateLimiter,
                 new McpRecentCallHistory());
         var sdkHandler = mock(McpStatelessServerHandler.class);
         when(sdkHandler.handleNotification(any(), any())).thenReturn(Mono.empty());
@@ -122,7 +143,7 @@ class AuthorizedMcpTransportTest {
         transport.setMcpHandler(sdkHandler);
         var captor = ArgumentCaptor.forClass(McpStatelessServerHandler.class);
         verify(delegate).setMcpHandler(captor.capture());
-        return new Fixture(captor.getValue(), sdkHandler, catalog);
+        return new Fixture(captor.getValue(), sdkHandler, catalog, rateLimiter);
     }
 
     private static void assertInternalErrorIsSanitized(
@@ -138,5 +159,6 @@ class AuthorizedMcpTransportTest {
     private record Fixture(
             McpStatelessServerHandler handler,
             McpStatelessServerHandler sdkHandler,
-            McpToolCatalog catalog) {}
+            McpToolCatalog catalog,
+            McpRequestRateLimiter rateLimiter) {}
 }

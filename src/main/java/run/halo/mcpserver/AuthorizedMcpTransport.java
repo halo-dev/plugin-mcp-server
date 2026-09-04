@@ -94,12 +94,13 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
                         () -> Mono.just(protocolError(request, -32602, "Invalid tools/call parameters")));
             }
             var toolName = call.name() == null ? "" : call.name();
+            var rateLimitTool = authentication.allowsAllTools()
+                    ? McpKeyAuthenticationToken.ALL_TOOLS
+                    : authentication.allows(toolName) ? toolName : "<unauthorized>";
             return recentCallHistory.observe(
                     authentication,
                     toolName,
-                    () -> rateLimiter.allowTool(
-                                    authentication.keyId(),
-                                    authentication.allows(toolName) ? toolName : "<unauthorized>")
+                    () -> rateLimiter.allowTool(authentication.keyId(), rateLimitTool)
                             ? executeTool(context, request, handler, call, toolName)
                             : Mono.just(rateLimited(request)));
         });

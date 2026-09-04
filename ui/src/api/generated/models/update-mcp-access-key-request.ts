@@ -27,7 +27,7 @@ export interface UpdateMcpAccessKeyRequest {
      */
     'allowedIpRanges': Array<string>;
     /**
-     * 
+     * Allowed MCP tool names. Use \'*\' to automatically allow all current and future tools.
      * @type {Array<string>}
      * @memberof UpdateMcpAccessKeyRequest
      */
