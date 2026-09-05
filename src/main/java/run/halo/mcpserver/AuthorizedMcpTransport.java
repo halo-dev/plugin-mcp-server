@@ -69,10 +69,10 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
     }
 
     private Mono<McpSchema.JSONRPCResponse> listTools(McpSchema.JSONRPCRequest request) {
-        return authorization.allowedTools()
+        return authorization.authentication()
                 .zipWith(catalog.protocolTools())
                 .map(tuple -> tuple.getT2().stream()
-                        .filter(tool -> tuple.getT1().contains(tool.name()))
+                        .filter(tool -> tuple.getT1().allows(tool.name()))
                         .toList())
                 .map(tools -> McpSchema.JSONRPCResponse.result(
                         request.id(), McpSchema.ListToolsResult.builder(tools).build()))
@@ -94,14 +94,16 @@ final class AuthorizedMcpTransport implements McpStatelessServerTransport {
                         () -> Mono.just(protocolError(request, -32602, "Invalid tools/call parameters")));
             }
             var toolName = call.name() == null ? "" : call.name();
-            return recentCallHistory.observe(
+            var rateLimitTool = authentication.allowsAllTools()
+                    ? catalog.hasProtocolTool(toolName)
+                            .map(available -> available ? toolName : "<unauthorized>")
+                    : Mono.just(authentication.allows(toolName) ? toolName : "<unauthorized>");
+            return rateLimitTool.flatMap(name -> recentCallHistory.observe(
                     authentication,
                     toolName,
-                    () -> rateLimiter.allowTool(
-                                    authentication.keyId(),
-                                    authentication.allows(toolName) ? toolName : "<unauthorized>")
+                    () -> rateLimiter.allowTool(authentication.keyId(), name)
                             ? executeTool(context, request, handler, call, toolName)
-                            : Mono.just(rateLimited(request)));
+                            : Mono.just(rateLimited(request))));
         });
     }
 

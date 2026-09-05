@@ -287,8 +287,10 @@
           "allowedTools" : {
             "uniqueItems" : true,
             "type" : "array",
+            "description" : "Allowed MCP tool names. Use '*' to automatically allow all current and future tools.",
             "items" : {
-              "type" : "string"
+              "type" : "string",
+              "description" : "Allowed MCP tool names. Use '*' to automatically allow all current and future tools."
             }
           },
           "displayName" : {
@@ -349,8 +351,10 @@
           "allowedTools" : {
             "uniqueItems" : true,
             "type" : "array",
+            "description" : "Allowed MCP tool names. Use '*' to automatically allow all current and future tools.",
             "items" : {
-              "type" : "string"
+              "type" : "string",
+              "description" : "Allowed MCP tool names. Use '*' to automatically allow all current and future tools."
             }
           },
           "creationTimestamp" : {
@@ -616,8 +620,10 @@
           "allowedTools" : {
             "uniqueItems" : true,
             "type" : "array",
+            "description" : "Allowed MCP tool names. Use '*' to automatically allow all current and future tools.",
             "items" : {
-              "type" : "string"
+              "type" : "string",
+              "description" : "Allowed MCP tool names. Use '*' to automatically allow all current and future tools."
             }
           },
           "displayName" : {

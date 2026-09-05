@@ -13,6 +13,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import run.halo.app.extension.Metadata;
@@ -137,6 +139,83 @@ class McpAccessKeyEndpointTest {
                 .exchange()
                 .expectStatus()
                 .isBadRequest();
+    }
+
+    @Test
+    void acceptsTheAllToolsWildcard() {
+        when(toolCatalog.availableNames()).thenReturn(reactor.core.publisher.Mono.just(Set.of()));
+        when(accessKeyService.allowedTools("test-key"))
+                .thenReturn(reactor.core.publisher.Mono.just(Set.of()));
+        var updated = new McpAccessKey();
+        updated.setMetadata(new Metadata());
+        updated.getMetadata().setName("test-key");
+        updated.getSpec().setAllowedTools(Set.of("*"));
+        when(accessKeyService.update(any(), any(), any(), any(), any(), anyBoolean()))
+                .thenReturn(reactor.core.publisher.Mono.just(updated));
+
+        WebTestClient.bindToRouterFunction(endpoint.endpoint())
+                .build()
+                .put()
+                .uri("/keys/test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "displayName": "Test key",
+                          "allowedTools": ["*"],
+                          "allowedIpRanges": [],
+                          "enabled": true
+                        }
+                        """)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.allowedTools[0]")
+                .isEqualTo("*");
+
+        verify(accessKeyService).update(
+                "test-key", "Test key", Set.of("*"), Set.of(), null, true);
+    }
+
+    @Test
+    void createsAKeyWithTheAllToolsWildcard() {
+        when(toolCatalog.availableNames()).thenReturn(reactor.core.publisher.Mono.just(Set.of()));
+        var key = new McpAccessKey();
+        key.setMetadata(new Metadata());
+        key.getMetadata().setName("test-key");
+        key.getSpec().setDisplayName("Automation");
+        key.getSpec().setKeyPrefix("hmcp_test");
+        key.getSpec().setOwnerName("admin");
+        key.getSpec().setAllowedTools(Set.of("*"));
+        when(accessKeyService.create("Automation", "admin", Set.of("*"), Set.of(), null))
+                .thenReturn(reactor.core.publisher.Mono.just(
+                        new McpAccessKeyService.CreatedKey(key, "secret")));
+
+        var authentication = new UsernamePasswordAuthenticationToken("admin", "n/a");
+        WebTestClient.bindToRouterFunction(endpoint.endpoint())
+                .webFilter((exchange, chain) -> chain.filter(exchange)
+                        .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication)))
+                .build()
+                .post()
+                .uri("/keys")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "displayName": "Automation",
+                          "allowedTools": ["*"],
+                          "allowedIpRanges": []
+                        }
+                        """)
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody()
+                .jsonPath("$.key.allowedTools[0]")
+                .isEqualTo("*")
+                .jsonPath("$.token")
+                .isEqualTo("secret");
+
+        verify(accessKeyService).create("Automation", "admin", Set.of("*"), Set.of(), null);
     }
 
     @Test

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { mcpConsoleApiClient, type McpAccessKey } from '@/api'
 import { QK_ACCESS_KEYS } from '@/composables/useAccessKeys'
+import { ALL_TOOLS } from '@/utils/tool'
 import {
   Dialog,
   Toast,
@@ -113,7 +114,13 @@ function handleDelete() {
     <template #end>
       <VEntityField>
         <template #description>
-          <VTag>{{ mcpAccessKey.allowedTools.length }} 个工具</VTag>
+          <VTag>
+            {{
+              mcpAccessKey.allowedTools.includes(ALL_TOOLS)
+                ? '全部工具（自动）'
+                : `${mcpAccessKey.allowedTools.length} 个工具`
+            }}
+          </VTag>
         </template>
       </VEntityField>
       <VEntityField>

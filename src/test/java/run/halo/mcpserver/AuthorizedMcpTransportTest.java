@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,6 +12,7 @@ import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpStatelessServerHandler;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -52,6 +54,50 @@ class AuthorizedMcpTransportTest {
     }
 
     @Test
+    void wildcardListsEveryCurrentlyAvailableTool() {
+        var fixture = fixture();
+        var first = McpSchema.Tool.builder("halo_first", Map.of("type", "object")).build();
+        var addedLater = McpSchema.Tool.builder("PluginExample__added_later", Map.of("type", "object"))
+                .build();
+        when(fixture.catalog().protocolTools()).thenReturn(Mono.just(List.of(first, addedLater)));
+        var request = new McpSchema.JSONRPCRequest("tools/list", 3, Map.of());
+        var authentication = new McpKeyAuthenticationToken(
+                "key-id", "Automation", "hmcp_key", "admin", Set.of("*"));
+
+        var response = fixture.handler()
+                .handleRequest(McpTransportContext.EMPTY, request)
+                .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication))
+                .block();
+
+        assertThat(response.result()).isInstanceOf(McpSchema.ListToolsResult.class);
+        var result = (McpSchema.ListToolsResult) response.result();
+        assertThat(result.tools()).extracting(McpSchema.Tool::name)
+                .containsExactly("halo_first", "PluginExample__added_later");
+    }
+
+    @Test
+    void wildcardCallsKeepAvailableToolBucketsAndShareTheUnauthorizedBucket() {
+        var fixture = fixture();
+        when(fixture.catalog().hasProtocolTool(any())).thenAnswer(invocation -> Mono.just(
+                Set.of("known_one", "known_two").contains(invocation.getArgument(0))));
+        var authentication = new McpKeyAuthenticationToken(
+                "key-id", "Automation", "hmcp_key", "admin", Set.of("*"));
+
+        for (var toolName : List.of("known_one", "known_two", "missing_one", "missing_two")) {
+            var request = new McpSchema.JSONRPCRequest(
+                    "tools/call", 4, Map.of("name", toolName, "arguments", Map.of()));
+            fixture.handler()
+                    .handleRequest(McpTransportContext.EMPTY, request)
+                    .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication))
+                    .block();
+        }
+
+        verify(fixture.rateLimiter()).allowTool("key-id", "known_one");
+        verify(fixture.rateLimiter()).allowTool("key-id", "known_two");
+        verify(fixture.rateLimiter(), times(2)).allowTool("key-id", "<unauthorized>");
+    }
+
+    @Test
     void acceptsInitializedNotificationWithoutDelegatingToMissingSdkHandler() {
         var fixture = fixture();
         var notification = new McpSchema.JSONRPCNotification("notifications/initialized", Map.of());
@@ -79,6 +125,8 @@ class AuthorizedMcpTransportTest {
         var delegate = mock(WebFluxStatelessServerTransport.class);
         var catalog = mock(McpToolCatalog.class);
         var registry = mock(McpToolRegistry.class);
+        var rateLimiter = mock(McpRequestRateLimiter.class);
+        when(rateLimiter.allowTool(any(), any())).thenReturn(true);
         var authorization = new McpAuthorization();
         var transport = new AuthorizedMcpTransport(
                 delegate,
@@ -86,7 +134,7 @@ class AuthorizedMcpTransportTest {
                 catalog,
                 registry,
                 authorization,
-                new McpRequestRateLimiter(),
+                rateLimiter,
                 new McpRecentCallHistory());
         var sdkHandler = mock(McpStatelessServerHandler.class);
         when(sdkHandler.handleNotification(any(), any())).thenReturn(Mono.empty());
@@ -99,7 +147,7 @@ class AuthorizedMcpTransportTest {
         transport.setMcpHandler(sdkHandler);
         var captor = ArgumentCaptor.forClass(McpStatelessServerHandler.class);
         verify(delegate).setMcpHandler(captor.capture());
-        return new Fixture(captor.getValue(), sdkHandler);
+        return new Fixture(captor.getValue(), sdkHandler, catalog, rateLimiter);
     }
 
     private static void assertInternalErrorIsSanitized(
@@ -112,5 +160,9 @@ class AuthorizedMcpTransportTest {
         assertThat(response.toString()).doesNotContain("database password");
     }
 
-    private record Fixture(McpStatelessServerHandler handler, McpStatelessServerHandler sdkHandler) {}
+    private record Fixture(
+            McpStatelessServerHandler handler,
+            McpStatelessServerHandler sdkHandler,
+            McpToolCatalog catalog,
+            McpRequestRateLimiter rateLimiter) {}
 }

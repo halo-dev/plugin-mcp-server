@@ -255,6 +255,7 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
         var requested = tools(requestedTools);
         return toolCatalog.availableNames().flatMap(available -> {
             var unknown = new LinkedHashSet<>(requested);
+            unknown.remove(McpKeyAuthenticationToken.ALL_TOOLS);
             unknown.removeAll(available);
             unknown.removeAll(allowedUnavailableTools);
             if (!unknown.isEmpty()) {
@@ -302,7 +303,10 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
     @Schema(name = "CreateMcpAccessKeyRequest")
     record CreateKeyRequest(
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Set<String> allowedTools,
+            @Schema(
+                            requiredMode = Schema.RequiredMode.REQUIRED,
+                            description = McpAccessKey.ALLOWED_TOOLS_DESCRIPTION)
+                    Set<String> allowedTools,
             @Schema(
                             requiredMode = Schema.RequiredMode.REQUIRED,
                             description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
@@ -312,7 +316,10 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
     @Schema(name = "UpdateMcpAccessKeyRequest")
     record UpdateKeyRequest(
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Set<String> allowedTools,
+            @Schema(
+                            requiredMode = Schema.RequiredMode.REQUIRED,
+                            description = McpAccessKey.ALLOWED_TOOLS_DESCRIPTION)
+                    Set<String> allowedTools,
             @Schema(
                             requiredMode = Schema.RequiredMode.REQUIRED,
                             description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
@@ -328,7 +335,10 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String ownerName,
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean enabled,
             Instant expiresAt,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Set<String> allowedTools,
+            @Schema(
+                            requiredMode = Schema.RequiredMode.REQUIRED,
+                            description = McpAccessKey.ALLOWED_TOOLS_DESCRIPTION)
+                    Set<String> allowedTools,
             @Schema(
                             requiredMode = Schema.RequiredMode.REQUIRED,
                             description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
