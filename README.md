@@ -1,7 +1,6 @@
 # Halo MCP Server
 
-Halo 的 [Model Context Protocol（MCP）](https://modelcontextprotocol.io/) 服务端插件，
-让 Codex、Claude Code、Cursor、VS Code 等 AI 客户端通过受控的访问密钥管理 Halo 网站。
+Halo 的 [Model Context Protocol（MCP）](https://modelcontextprotocol.io/) 服务端插件，让 Codex、Claude Code、Cursor、VS Code 等 AI 客户端通过受控的访问密钥管理 Halo 网站。
 
 ![](./images/preview.png)
 
@@ -98,8 +97,7 @@ Inspector 的协议版本请选择 `legacy` 或 `auto`。
 
 ## 插件开发
 
-其他 Halo 插件可以通过协议无关的 API 贡献 MCP 工具，接入方式参阅
-[插件工具 Provider 接入指南](./dev/dev.md)。
+其他 Halo 插件可以通过协议无关的 API 贡献 MCP 工具，接入方式参阅[插件工具 Provider 接入指南](./dev/dev.md)。
 
 ## 已接入插件
 
