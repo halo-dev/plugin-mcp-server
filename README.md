@@ -104,7 +104,8 @@ Inspector 的协议版本请选择 `legacy` 或 `auto`。
 - [Docsme 文档管理](https://www.halo.run/store/apps/app-yffxw)：让 AI Agent 管理文档
 - [Image Stream](https://www.halo.run/store/apps/app-JxVVb)：让 AI Agent 在 Unsplash、Pixabay、Pexels 搜索并转存无版权图片
 - [瞬间](https://www.halo.run/store/apps/app-SnwWD)：让 AI Agent 管理瞬间内容
-- [联系表单](https://www.halo.run/store/apps/app-gSebd)：使用 Agent 处理运营数据
+- [联系表单](https://www.halo.run/store/apps/app-gSebd)：使用 AI Agent 处理运营数据
+- [微信公众号同步](https://www.halo.run/store/apps/app-nahksfoe)：使用 AI Agent 处理微信公众号文章发布
 
 ## 许可证
 
