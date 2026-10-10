@@ -128,7 +128,7 @@ class McpToolCatalog {
                 definition.displayDescription(),
                 definition.inputSchema(),
                 definition.outputSchema(),
-                "PLUGIN",
+                definition.category(),
                 definition.annotations().readOnlyHint(),
                 definition.annotations().destructiveHint(),
                 true,

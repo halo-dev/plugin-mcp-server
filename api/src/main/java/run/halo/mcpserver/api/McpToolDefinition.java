@@ -12,6 +12,7 @@ public final class McpToolDefinition {
     private final String description;
     private final String displayTitle;
     private final String displayDescription;
+    private final String category;
     private final Map<String, Object> inputSchema;
     private final Map<String, Object> outputSchema;
     private final McpToolAnnotations annotations;
@@ -32,6 +33,8 @@ public final class McpToolDefinition {
         this.description = Objects.requireNonNullElse(builder.description, "");
         this.displayTitle = builder.displayTitle == null ? this.title : builder.displayTitle;
         this.displayDescription = Objects.requireNonNullElse(builder.displayDescription, this.description);
+        this.category = builder.category == null || builder.category.isBlank()
+                ? "PLUGIN" : builder.category.trim();
         this.inputSchema = copySchema(builder.inputSchema);
         this.outputSchema = builder.outputSchema == null ? null : copySchema(builder.outputSchema);
         this.annotations = Objects.requireNonNullElse(
@@ -70,6 +73,11 @@ public final class McpToolDefinition {
         return displayDescription;
     }
 
+    /** Business category within the plugin in Halo's management UI. Defaults to PLUGIN. */
+    public String category() {
+        return category;
+    }
+
     public Map<String, Object> inputSchema() {
         return inputSchema;
     }
@@ -100,6 +108,7 @@ public final class McpToolDefinition {
         private String description;
         private String displayTitle;
         private String displayDescription;
+        private String category;
         private Map<String, Object> inputSchema;
         private Map<String, Object> outputSchema;
         private McpToolAnnotations annotations;
@@ -128,6 +137,11 @@ public final class McpToolDefinition {
 
         public Builder displayDescription(String displayDescription) {
             this.displayDescription = displayDescription;
+            return this;
+        }
+
+        public Builder category(String category) {
+            this.category = category;
             return this;
         }
 
