@@ -78,6 +78,7 @@ class McpToolCatalogTest {
                 .description("Export plugin data.")
                 .displayTitle("导出数据")
                 .displayDescription("导出插件数据。")
+                .category("数据管理")
                 .inputSchema(Map.of("type", "object", "properties", Map.of()))
                 .outputSchema(Map.of(
                         "type", "object",
@@ -97,6 +98,7 @@ class McpToolCatalogTest {
             assertThat(tool.name()).isEqualTo("demo__export");
             assertThat(tool.title()).isEqualTo("导出数据");
             assertThat(tool.description()).isEqualTo("导出插件数据。");
+            assertThat(tool.category()).isEqualTo("数据管理");
             assertThat(tool.inputSchema()).containsEntry("type", "object");
             assertThat(tool.outputSchema()).containsEntry("type", "object");
         });
@@ -105,6 +107,35 @@ class McpToolCatalogTest {
             assertThat(tool.title()).isEqualTo("Export data");
             assertThat(tool.description()).isEqualTo("Export plugin data.");
         });
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"  ", "\u3000", "\u2000\u2003"})
+    void defaultsUnspecifiedCategoriesToPlugin(String category) {
+        var definition = McpToolDefinition.builder()
+                .name("export")
+                .category(category)
+                .inputSchema(Map.of("type", "object", "properties", Map.of()))
+                .permission(invocation -> Mono.just(true))
+                .handler(invocation -> Mono.empty())
+                .build();
+        assertThat(definition.category()).isEqualTo("PLUGIN");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "  数据管理  ", "\u3000数据管理\u3000", "\u2000数据管理\u2003"
+    })
+    void trimsCustomCategory(String category) {
+        var definition = McpToolDefinition.builder()
+                .name("export")
+                .category(category)
+                .inputSchema(Map.of("type", "object", "properties", Map.of()))
+                .permission(invocation -> Mono.just(true))
+                .handler(invocation -> Mono.empty())
+                .build();
+        assertThat(definition.category()).isEqualTo("数据管理");
     }
 
     @Test

@@ -14,7 +14,10 @@ const categoryLabels: Record<string, string> = {
   PLUGIN: '插件工具',
 }
 
-export function toolCategoryLabel(category: string) {
+export function toolCategoryLabel(category: string, sourceType: McpTool['source']['type']) {
+  if (sourceType === 'PLUGIN' && category !== 'PLUGIN') {
+    return category
+  }
   return categoryLabels[category] ?? category
 }
 
@@ -55,7 +58,7 @@ export function groupTools(tools: McpTool[]): ToolSourceGroup[] {
     source: group.source,
     categories: [...group.categories].map(([category, categoryTools]) => ({
       category,
-      label: toolCategoryLabel(category),
+      label: toolCategoryLabel(category, group.source.type),
       tools: categoryTools,
     })),
     toolCount: [...group.categories.values()].reduce(

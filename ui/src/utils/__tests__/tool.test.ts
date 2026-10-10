@@ -19,6 +19,37 @@ function tool(name: string, category: string, pluginName = 'PluginMcpServer'): M
 }
 
 describe('groupTools', () => {
+  it.each(['POST', 'THEME', 'CATEGORY', 'constructor', '__proto__'])(
+    'preserves the contributed category label %s',
+    (category) => {
+      const groups = groupTools([tool('demo__export', category, 'PluginDemo')])
+
+      expect(groups[0]?.categories[0]?.label).toBe(category)
+    },
+  )
+
+  it('groups contributed tools by their custom categories within each plugin', () => {
+    const groups = groupTools([
+      tool('PluginLinks__list_links', '友链管理', 'PluginLinks'),
+      tool('PluginLinks__create_link', '友链管理', 'PluginLinks'),
+      tool('PluginLinks__list_feed_items', '订阅阅读', 'PluginLinks'),
+      tool('other__list_links', '友链管理', 'OtherPlugin'),
+    ])
+
+    const links = groups.find(({ source }) => source.pluginName === 'PluginLinks')
+    expect(links?.toolCount).toBe(3)
+    expect(links?.categories).toHaveLength(2)
+    expect(links?.categories.find(({ category }) => category === '友链管理')).toMatchObject({
+      label: '友链管理',
+      tools: [{ name: 'PluginLinks__list_links' }, { name: 'PluginLinks__create_link' }],
+    })
+    expect(links?.categories.find(({ category }) => category === '订阅阅读')).toMatchObject({
+      label: '订阅阅读',
+      tools: [{ name: 'PluginLinks__list_feed_items' }],
+    })
+    expect(groups.find(({ source }) => source.pluginName === 'OtherPlugin')?.toolCount).toBe(1)
+  })
+
   it('groups tools by source and business category', () => {
     const groups = groupTools([
       tool('halo_list_posts', 'POST'),

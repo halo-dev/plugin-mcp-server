@@ -107,6 +107,7 @@ public final class ExportToolProvider implements McpToolProvider {
             .description("Export plugin data.")
             .displayTitle("导出数据")
             .displayDescription("导出插件数据。")
+            .category("数据管理")
             .inputSchema(Map.of(
                 "type", "object",
                 "properties", Map.of(),
@@ -133,6 +134,17 @@ Provider 只声明本地 `snake_case` 名称。MCP Server 会根据 Provider 的
 `title` 和 `description` 会发送给 MCP 客户端，应该面向 Agent 编写。可选的 `displayTitle`
 和 `displayDescription` 只用于 Halo 的 MCP 管理界面，因此插件可以提供中文管理文案，而不
 改变协议描述；省略时，管理界面会回退到协议字段。
+
+### 插件内工具分类
+
+可通过 `.category("数据管理")` 设置工具在插件内的业务分类。管理页面与访问密钥的工具选择器
+均按「所属插件 → 分类」展示；自定义分类字符串直接作为显示名称，可使用中文。
+省略、空字符串或纯空白值使用默认分类 `PLUGIN`（界面显示「插件工具」），自定义值会去除首尾空白。
+同一插件的多个 Provider 可以使用相同分类；仅拆分 Provider 不会自动生成分类。
+
+分类只影响管理界面，不改变协议工具名、输入输出 Schema 或访问密钥的逐工具授权。
+此字段属于当前开发分支新增 API，已发布的 `api:1.0.0` 不包含它；使用分类的 Provider
+需要搭配包含该字段的 MCP Server，并使用本地 API JAR 或包含该改动的 SNAPSHOT 编译。
 
 ## 按条件注册 Provider
 
