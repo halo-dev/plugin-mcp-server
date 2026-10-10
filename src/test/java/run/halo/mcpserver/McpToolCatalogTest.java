@@ -111,7 +111,7 @@ class McpToolCatalogTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.NullAndEmptySource
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"  "})
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"  ", "\u3000", "\u2000\u2003"})
     void defaultsUnspecifiedCategoriesToPlugin(String category) {
         var definition = McpToolDefinition.builder()
                 .name("export")
@@ -123,11 +123,14 @@ class McpToolCatalogTest {
         assertThat(definition.category()).isEqualTo("PLUGIN");
     }
 
-    @Test
-    void trimsCustomCategory() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "  数据管理  ", "\u3000数据管理\u3000", "\u2000数据管理\u2003"
+    })
+    void trimsCustomCategory(String category) {
         var definition = McpToolDefinition.builder()
                 .name("export")
-                .category("  数据管理  ")
+                .category(category)
                 .inputSchema(Map.of("type", "object", "properties", Map.of()))
                 .permission(invocation -> Mono.just(true))
                 .handler(invocation -> Mono.empty())

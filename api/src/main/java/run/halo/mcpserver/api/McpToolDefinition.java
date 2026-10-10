@@ -34,7 +34,7 @@ public final class McpToolDefinition {
         this.displayTitle = builder.displayTitle == null ? this.title : builder.displayTitle;
         this.displayDescription = Objects.requireNonNullElse(builder.displayDescription, this.description);
         this.category = builder.category == null || builder.category.isBlank()
-                ? "PLUGIN" : builder.category.trim();
+                ? "PLUGIN" : builder.category.strip();
         this.inputSchema = copySchema(builder.inputSchema);
         this.outputSchema = builder.outputSchema == null ? null : copySchema(builder.outputSchema);
         this.annotations = Objects.requireNonNullElse(

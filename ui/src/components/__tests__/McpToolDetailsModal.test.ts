@@ -51,6 +51,19 @@ function mountModal(outputSchema?: Record<string, unknown>) {
 }
 
 describe('McpToolDetailsModal', () => {
+  it('preserves a plugin category that matches a built-in category', async () => {
+    const wrapper = mountModal()
+    const tool = wrapper.props('tool')
+    await wrapper.setProps({
+      tool: {
+        ...tool,
+        source: { type: 'PLUGIN', pluginName: 'PluginDemo', displayName: 'Demo' },
+      },
+    })
+
+    expect(wrapper.findAll('dd')[1]?.text()).toBe('POST')
+  })
+
   it('renders diagnostic metadata and input/output schemas', () => {
     const wrapper = mountModal({ type: 'object', properties: { items: { type: 'array' } } })
 

@@ -55,7 +55,9 @@ const modal = useTemplateRef<InstanceType<typeof VModal>>('modal')
         </div>
         <div>
           <dt class=":uno: text-xs text-gray-500">分类</dt>
-          <dd class=":uno: mt-1 text-sm text-gray-800">{{ toolCategoryLabel(tool.category) }}</dd>
+          <dd class=":uno: mt-1 text-sm text-gray-800">
+            {{ toolCategoryLabel(tool.category, tool.source.type) }}
+          </dd>
         </div>
       </dl>
 
