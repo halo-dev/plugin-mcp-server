@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { McpAccessKey, McpTool, UpdateMcpAccessKeyRequest } from '@/api'
 import McpToolCard from '@/components/McpToolCard.vue'
-import { ALL_TOOLS, groupTools } from '@/utils/tool'
+import { ALL_TOOLS, groupTools, type ToolCategoryGroup } from '@/utils/tool'
 import { submitForm } from '@formkit/core'
 import { VAlert, VButton, VSpace, VTag } from '@halo-dev/components'
 import { utils } from '@halo-dev/ui-shared'
@@ -42,6 +42,20 @@ const unavailableAllowedTools = shallowRef(
 )
 
 const selectedCount = computed(() => props.tools.filter((tool) => selected[tool.name]).length)
+
+function isCategoryFullySelected(category: ToolCategoryGroup) {
+  return category.tools.every((tool) => selected[tool.name])
+}
+
+function isCategoryPartiallySelected(category: ToolCategoryGroup) {
+  return !isCategoryFullySelected(category) && category.tools.some((tool) => selected[tool.name])
+}
+
+function toggleCategory(category: ToolCategoryGroup, checked: boolean) {
+  for (const tool of category.tools) {
+    selected[tool.name] = checked
+  }
+}
 
 function applyPreset(preset: 'read' | 'content' | 'all' | 'none') {
   if (preset === 'none') {
@@ -174,8 +188,18 @@ defineExpose({
           </div>
           <div class=":uno: flex flex-col gap-4">
             <div v-for="category in group.categories" :key="category.category">
-              <div class=":uno: mb-2 flex items-center gap-2 text-xs text-gray-500 font-medium">
-                <span>{{ category.label }}</span>
+              <div class=":uno: mb-3 flex items-center gap-2 text-xs text-gray-500 font-medium">
+                <label class=":uno: flex cursor-pointer items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    class=":uno: h-3.5 w-3.5 accent-[rgb(var(--colors-primary))]"
+                    :checked="isCategoryFullySelected(category)"
+                    :indeterminate.prop="isCategoryPartiallySelected(category)"
+                    :aria-label="`选择${category.label}分组全部工具`"
+                    @change="toggleCategory(category, ($event.target as HTMLInputElement).checked)"
+                  />
+                  <span>{{ category.label }}</span>
+                </label>
                 <span>{{ category.tools.length }}</span>
               </div>
               <div class=":uno: grid grid-cols-1 gap-3 sm:grid-cols-2">
