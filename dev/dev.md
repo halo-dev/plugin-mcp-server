@@ -14,7 +14,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly "run.halo.mcpserver:api:1.0.0"
+    compileOnly "run.halo.mcpserver:api:1.3.0"
 }
 ```
 
@@ -23,8 +23,8 @@ dependencies {
 
 ```groovy
 dependencies {
-    testCompileOnly "run.halo.mcpserver:api:1.0.0"
-    testRuntimeOnly "run.halo.mcpserver:api:1.0.0"
+    testCompileOnly "run.halo.mcpserver:api:1.3.0"
+    testRuntimeOnly "run.halo.mcpserver:api:1.3.0"
 }
 ```
 
@@ -37,10 +37,10 @@ dependencies {
 ```
 
 然后在 Provider 插件中引用生成的 JAR。请把路径替换为实际位置；当前 `main` 分支默认生成
-`api-1.0.0-SNAPSHOT.jar`：
+`api-1.3.0-SNAPSHOT.jar`：
 
 ```groovy
-def mcpServerApiJar = files('/path/to/plugin-mcp-server/api/build/libs/api-1.0.0-SNAPSHOT.jar')
+def mcpServerApiJar = files('/path/to/plugin-mcp-server/api/build/libs/api-1.3.0-SNAPSHOT.jar')
 
 dependencies {
     compileOnly mcpServerApiJar
@@ -67,14 +67,14 @@ repositories {
 }
 
 dependencies {
-    compileOnly "run.halo.mcpserver:api:1.0.0-SNAPSHOT"
-    testCompileOnly "run.halo.mcpserver:api:1.0.0-SNAPSHOT"
-    testRuntimeOnly "run.halo.mcpserver:api:1.0.0-SNAPSHOT"
+    compileOnly "run.halo.mcpserver:api:1.3.0-SNAPSHOT"
+    testCompileOnly "run.halo.mcpserver:api:1.3.0-SNAPSHOT"
+    testRuntimeOnly "run.halo.mcpserver:api:1.3.0-SNAPSHOT"
 }
 ```
 
 `main` 分支推送后会发布 `gradle.properties` 中的 SNAPSHOT 版本；推送 `v*` 标签后会发布
-标签对应的正式版本，例如 `v1.0.0` 会发布 `run.halo.mcpserver:api:1.0.0`。
+标签对应的正式版本，例如 `v1.3.0` 会发布 `run.halo.mcpserver:api:1.3.0`。
 
 ## 声明可选插件依赖
 
@@ -85,7 +85,7 @@ Server 存在时正确安排插件加载和重载顺序，同时不会阻止 Pro
 spec:
     requires: ">=2.26.0"
     pluginDependencies:
-        mcp-server?: ">=1.0.0 & <2.0.0"
+        mcp-server?: ">=1.3.0 & <2.0.0"
 ```
 
 ## 实现 Provider
@@ -143,8 +143,8 @@ Provider 只声明本地 `snake_case` 名称。MCP Server 会根据 Provider 的
 同一插件的多个 Provider 可以使用相同分类；仅拆分 Provider 不会自动生成分类。
 
 分类只影响管理界面，不改变协议工具名、输入输出 Schema 或访问密钥的逐工具授权。
-此字段属于当前开发分支新增 API，已发布的 `api:1.0.0` 不包含它；使用分类的 Provider
-需要搭配包含该字段的 MCP Server，并使用本地 API JAR 或包含该改动的 SNAPSHOT 编译。
+此字段自 `api:1.3.0` 起提供；使用分类的 Provider 需要搭配 MCP Server 1.3.0 或更高版本，
+并在可选插件依赖中声明相应的最低版本。
 
 ## 按条件注册 Provider
 

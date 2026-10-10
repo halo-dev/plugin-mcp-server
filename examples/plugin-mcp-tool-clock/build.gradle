@@ -14,7 +14,7 @@ dependencies {
     compileOnly platform('run.halo.tools.platform:plugin:2.26.0')
     compileOnly 'run.halo.app:api'
     compileOnly 'io.projectreactor:reactor-core'
-    compileOnly files('../../api/build/libs/api-1.0.0-SNAPSHOT.jar')
+    compileOnly files('../../api/build/libs/api-1.3.0-SNAPSHOT.jar')
 }
 
 java {
