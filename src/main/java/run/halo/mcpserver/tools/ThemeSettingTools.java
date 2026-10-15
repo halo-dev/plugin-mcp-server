@@ -81,7 +81,7 @@ class ThemeSettingTools extends ToolSupport implements ToolGroup {
     }
 
     Mono<ToolPayload> updateGroup(Map<String, Object> arguments) {
-        var themeName = resourceName(arguments, "themeName");
+        var themeName = requiredString(arguments, "themeName");
         var group = requiredString(arguments, "group");
         var patch = requiredPatch(arguments);
         var expectedVersion = requiredLong(arguments, "expectedVersion");
@@ -119,7 +119,7 @@ class ThemeSettingTools extends ToolSupport implements ToolGroup {
     }
 
     Mono<ToolPayload> getTemplate(Map<String, Object> arguments) {
-        var themeName = resourceName(arguments, "themeName");
+        var themeName = requiredString(arguments, "themeName");
         var path = relativeHtmlPath(requiredString(arguments, "path"));
         return activeTheme().flatMap(theme -> {
             requireActiveTheme(theme, themeName);
