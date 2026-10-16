@@ -6,7 +6,7 @@ plugins {
 group 'run.halo.mcpserver.ui'
 
 node {
-    pnpmVersion = '10'
+    pnpmVersion = '12.11.2'
 }
 
 tasks.register('pnpmBuild', PnpmTask) {
