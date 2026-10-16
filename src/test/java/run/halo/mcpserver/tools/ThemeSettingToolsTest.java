@@ -19,6 +19,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -189,18 +191,21 @@ class ThemeSettingToolsTest {
         }
     }
 
-    @Test
-    void readsAnHtmlTemplateRelativeToTheTemplatesDirectory() throws IOException {
+    @ParameterizedTest
+    @ValueSource(strings = {"theme-hao", "theme-echoCraft"})
+    void readsAnHtmlTemplateRelativeToTheTemplatesDirectory(String themeName) throws IOException {
+        reset(client);
+        stubActiveTheme(themeName);
         var templates = Files.createDirectories(themeRoot().resolve("templates/modules"));
         var html = "<section th:if=\"${theme.config.layout.enabled}\"></section>";
         Files.writeString(templates.resolve("layout.html"), html);
 
         var result = data(tools.getTemplate(Map.of(
-                        "themeName", "theme-hao", "path", "modules/layout.html"))
+                        "themeName", themeName, "path", "modules/layout.html"))
                 .block());
 
         assertThat(result)
-                .containsEntry("themeName", "theme-hao")
+                .containsEntry("themeName", themeName)
                 .containsEntry("path", "modules/layout.html")
                 .containsEntry("html", html);
     }
@@ -242,8 +247,11 @@ class ThemeSettingToolsTest {
                 .verify();
     }
 
-    @Test
-    void mergePatchesOnlyTheRequestedGroup() {
+    @ParameterizedTest
+    @ValueSource(strings = {"theme-hao", "theme-echoCraft"})
+    void mergePatchesOnlyTheRequestedGroup(String themeName) {
+        reset(client);
+        stubActiveTheme(themeName);
         when(client.fetch(Setting.class, "theme-hao-setting"))
                 .thenReturn(Mono.just(setting(form("basics", "Basic", Map.of()))));
         var configMap = configMap(
@@ -265,7 +273,7 @@ class ThemeSettingToolsTest {
         var patch = Map.<String, Object>of("nested", nestedPatch, "items", List.of(4));
 
         var result = data(tools.updateGroup(Map.of(
-                        "themeName", "theme-hao",
+                        "themeName", themeName,
                         "group", "basics",
                         "patch", patch,
                         "expectedVersion", 0L))
@@ -281,7 +289,9 @@ class ThemeSettingToolsTest {
         assertThat(savedGroup.get("nested").get("add").asInt()).isEqualTo(3);
         assertThat(savedGroup.get("items").size()).isEqualTo(1);
         assertThat(savedGroup.get("items").get(0).asInt()).isEqualTo(4);
-        assertThat(result).containsEntry("configVersion", 1L);
+        assertThat(result)
+                .containsEntry("themeName", themeName)
+                .containsEntry("configVersion", 1L);
         assertThat(result.get("values")).isEqualTo(Map.of(
                 "nested", Map.of("keep", 1, "add", 3), "items", List.of(4)));
     }
@@ -338,21 +348,55 @@ class ThemeSettingToolsTest {
         verify(client, never()).update(any(ConfigMap.class));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"", " "})
+    void rejectsBlankThemeNames(String themeName) {
+        reset(client);
+
+        assertThatThrownBy(() -> tools.updateGroup(Map.of("themeName", themeName)))
+                .satisfies(error -> assertToolError(error, "INVALID_ARGUMENT", "non-empty string"));
+        assertThatThrownBy(() -> tools.getTemplate(Map.of("themeName", themeName)))
+                .satisfies(error -> assertToolError(error, "INVALID_ARGUMENT", "non-empty string"));
+    }
+
+    @Test
+    void rejectsThemeNamesWithDifferentCase() {
+        reset(client);
+        stubActiveTheme("theme-echoCraft");
+
+        StepVerifier.create(tools.updateGroup(Map.of(
+                        "themeName", "theme-echocraft",
+                        "group", "basics",
+                        "patch", Map.of(),
+                        "expectedVersion", 0L)))
+                .expectErrorSatisfies(error -> assertToolError(error, "CONFLICT", "active theme changed"))
+                .verify();
+        StepVerifier.create(tools.getTemplate(Map.of(
+                        "themeName", "theme-echocraft", "path", "index.html")))
+                .expectErrorSatisfies(error -> assertToolError(error, "CONFLICT", "active theme changed"))
+                .verify();
+        verify(client, never()).update(any(ConfigMap.class));
+    }
+
     private void stubActiveTheme() {
+        stubActiveTheme("theme-hao");
+    }
+
+    private void stubActiveTheme(String themeName) {
         when(client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG))
                 .thenReturn(Mono.just(configMap(
                         SystemSetting.SYSTEM_CONFIG,
                         1L,
-                        Map.of(SystemSetting.Theme.GROUP, "{\"active\":\"theme-hao\"}"))));
+                        Map.of(SystemSetting.Theme.GROUP, "{\"active\":\"" + themeName + "\"}"))));
         activeTheme = new Theme();
-        activeTheme.setMetadata(metadata("theme-hao", 3L));
+        activeTheme.setMetadata(metadata(themeName, 3L));
         var spec = new Theme.ThemeSpec();
         spec.setDisplayName("Hao");
         spec.setVersion("1.2.3");
         spec.setSettingName("theme-hao-setting");
         spec.setConfigMapName("theme-hao-config");
         activeTheme.setSpec(spec);
-        when(client.fetch(Theme.class, "theme-hao")).thenReturn(Mono.just(activeTheme));
+        when(client.fetch(Theme.class, themeName)).thenReturn(Mono.just(activeTheme));
     }
 
     private Path themeRoot() throws IOException {
