@@ -106,6 +106,7 @@ Inspector 的协议版本请选择 `legacy` 或 `auto`。
 - [瞬间](https://www.halo.run/store/apps/app-SnwWD)：让 AI Agent 管理瞬间内容
 - [联系表单](https://www.halo.run/store/apps/app-gSebd)：使用 AI Agent 处理运营数据
 - [微信公众号同步](https://www.halo.run/store/apps/app-nahksfoe)：使用 AI Agent 处理微信公众号文章发布
+- [AI 页面工坊](https://www.halo.run/store/apps/app-gscuxwkq)：AI 驱动的主题扩展页面，支持可视化编辑、源码编辑和版本历史
 
 ## 许可证
 
