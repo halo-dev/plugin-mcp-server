@@ -171,7 +171,7 @@ class HaloMcpServerTest {
                 .jsonPath("$.error.code")
                 .isEqualTo(-32601)
                 .jsonPath("$.error.message")
-                .isEqualTo("Missing handler for request type: unsupported/method");
+                .isEqualTo("Method not found: unsupported/method");
     }
 
     @Test

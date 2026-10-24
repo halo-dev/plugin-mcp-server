@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id "io.freefair.lombok" version "9.2.0"
+    id "io.freefair.lombok" version "9.8.2"
     id "run.halo.plugin.devtools" version "0.8.0"
 }
 
@@ -13,14 +13,14 @@ repositories {
 dependencies {
     implementation platform('run.halo.tools.platform:plugin:2.26.0')
     implementation project(':api')
-    implementation('io.modelcontextprotocol.sdk:mcp:2.0.0') {
+    implementation('io.modelcontextprotocol.sdk:mcp:2.1.0') {
         exclude group: 'com.fasterxml.jackson.core'
         exclude group: 'io.projectreactor'
         exclude group: 'org.slf4j'
         exclude group: 'tools.jackson.core'
         exclude group: 'tools.jackson.dataformat'
     }
-    implementation('org.springframework.ai:mcp-spring-webflux:2.0.0') {
+    implementation('org.springframework.ai:mcp-spring-webflux:2.0.2') {
         exclude group: 'com.fasterxml.jackson.core'
         exclude group: 'io.projectreactor'
         exclude group: 'org.slf4j'
