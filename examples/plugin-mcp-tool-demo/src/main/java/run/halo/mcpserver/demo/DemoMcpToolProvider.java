@@ -31,9 +31,7 @@ public class DemoMcpToolProvider implements McpToolProvider {
                 .description("Return a greeting for a supplied name.")
                 .displayTitle("生成问候语")
                 .displayDescription("根据输入的姓名生成一条问候语。")
-                .inputSchema(objectSchema(
-                        Map.of("name", Map.of("type", "string", "minLength", 1)),
-                        List.of("name")))
+                .inputSchema(objectSchema(Map.of("name", Map.of("type", "string", "minLength", 1)), List.of("name")))
                 .annotations(McpToolAnnotations.readOnly("Say hello"))
                 .permission(this::authenticated)
                 .handler(invocation -> {
@@ -51,21 +49,16 @@ public class DemoMcpToolProvider implements McpToolProvider {
                 .description("Count words and characters in a supplied text.")
                 .displayTitle("统计字数")
                 .displayDescription("统计输入文本的单词数和字符数。")
-                .inputSchema(objectSchema(
-                        Map.of("text", Map.of("type", "string", "minLength", 1)),
-                        List.of("text")))
+                .inputSchema(objectSchema(Map.of("text", Map.of("type", "string", "minLength", 1)), List.of("text")))
                 .annotations(McpToolAnnotations.readOnly("Count words"))
                 .permission(this::authenticated)
                 .handler(invocation -> {
                     var text = (String) invocation.arguments().get("text");
                     if (text == null || text.isBlank()) {
-                        return Mono.error(new McpToolException(
-                                "INVALID_ARGUMENT", "text must be a non-empty string"));
+                        return Mono.error(new McpToolException("INVALID_ARGUMENT", "text must be a non-empty string"));
                     }
                     var words = text.trim().split("\\s+");
-                    return Mono.just(McpToolResult.success(Map.of(
-                            "words", words.length,
-                            "characters", text.length())));
+                    return Mono.just(McpToolResult.success(Map.of("words", words.length, "characters", text.length())));
                 })
                 .build();
     }
@@ -77,12 +70,7 @@ public class DemoMcpToolProvider implements McpToolProvider {
                 .defaultIfEmpty(false);
     }
 
-    private static Map<String, Object> objectSchema(
-            Map<String, Object> properties, List<String> required) {
-        return Map.of(
-                "type", "object",
-                "properties", properties,
-                "required", required,
-                "additionalProperties", false);
+    private static Map<String, Object> objectSchema(Map<String, Object> properties, List<String> required) {
+        return Map.of("type", "object", "properties", properties, "required", required, "additionalProperties", false);
     }
 }

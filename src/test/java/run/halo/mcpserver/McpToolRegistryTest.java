@@ -49,8 +49,7 @@ class McpToolRegistryTest {
     @BeforeEach
     void setUp() {
         lenient().when(selfPluginWrapper.getPluginManager()).thenReturn(pluginManager);
-        registry = new McpToolRegistry(
-                extensionGetter, new McpAuthorization(), pluginManager, Duration.ofSeconds(5));
+        registry = new McpToolRegistry(extensionGetter, new McpAuthorization(), pluginManager, Duration.ofSeconds(5));
     }
 
     @Test
@@ -73,17 +72,14 @@ class McpToolRegistryTest {
                 .name("hello")
                 .title("Hello")
                 .description("Returns a greeting")
-                .inputSchema(objectSchema(
-                        Map.of("name", Map.of("type", "string")), List.of("name")))
-                .outputSchema(objectSchema(
-                        Map.of("message", Map.of("type", "string")), List.of("message")))
+                .inputSchema(objectSchema(Map.of("name", Map.of("type", "string")), List.of("name")))
+                .outputSchema(objectSchema(Map.of("message", Map.of("type", "string")), List.of("message")))
                 .annotations(McpToolAnnotations.readOnly("Hello"))
                 .permission(invocation -> Mono.just(true))
                 .handler(invocation -> {
                     assertThat(invocation.toolName()).isEqualTo("hello");
                     return Mono.just(McpToolResult.success(
-                            Map.of("message", "Hello " + invocation.arguments().get("name")),
-                            "Custom greeting"));
+                            Map.of("message", "Hello " + invocation.arguments().get("name")), "Custom greeting"));
                 })
                 .build();
         providerTools(provider, "demo", tool);
@@ -92,7 +88,8 @@ class McpToolRegistryTest {
                         .contextWrite(context("demo__hello")))
                 .assertNext(result -> {
                     assertThat(result).isPresent();
-                    assertThat(result.orElseThrow().structuredContent().toString()).contains("Hello Halo");
+                    assertThat(result.orElseThrow().structuredContent().toString())
+                            .contains("Hello Halo");
                     assertThat(result.orElseThrow().content().getFirst())
                             .isInstanceOfSatisfying(
                                     io.modelcontextprotocol.spec.McpSchema.TextContent.class,
@@ -106,8 +103,7 @@ class McpToolRegistryTest {
         var called = new AtomicBoolean();
         var tool = McpToolDefinition.builder()
                 .name("hello")
-                .inputSchema(objectSchema(
-                        Map.of("name", Map.of("type", "string")), List.of("name")))
+                .inputSchema(objectSchema(Map.of("name", Map.of("type", "string")), List.of("name")))
                 .permission(invocation -> Mono.just(true))
                 .handler(invocation -> {
                     called.set(true);
@@ -118,7 +114,8 @@ class McpToolRegistryTest {
 
         StepVerifier.create(registry.executeIfContributed("demo__hello", Map.of("name", 42))
                         .contextWrite(context("demo__hello")))
-                .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
+                .assertNext(result -> assertThat(
+                                result.orElseThrow().structuredContent().toString())
                         .contains("INVALID_ARGUMENT"))
                 .verifyComplete();
         assertThat(called).isFalse();
@@ -129,16 +126,16 @@ class McpToolRegistryTest {
         var tool = McpToolDefinition.builder()
                 .name("count")
                 .inputSchema(objectSchema(Map.of(), List.of()))
-                .outputSchema(objectSchema(
-                        Map.of("count", Map.of("type", "integer")), List.of("count")))
+                .outputSchema(objectSchema(Map.of("count", Map.of("type", "integer")), List.of("count")))
                 .permission(invocation -> Mono.just(true))
                 .handler(invocation -> Mono.just(McpToolResult.success(Map.of("count", "one"))))
                 .build();
         providerTools(provider, "demo", tool);
 
-        StepVerifier.create(registry.executeIfContributed("demo__count", Map.of())
-                        .contextWrite(context("demo__count")))
-                .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
+        StepVerifier.create(
+                        registry.executeIfContributed("demo__count", Map.of()).contextWrite(context("demo__count")))
+                .assertNext(result -> assertThat(
+                                result.orElseThrow().structuredContent().toString())
                         .contains("INVALID_TOOL_RESULT"))
                 .verifyComplete();
     }
@@ -161,12 +158,14 @@ class McpToolRegistryTest {
 
         StepVerifier.create(registry.executeIfContributed("demo__permission", Map.of())
                         .contextWrite(context("demo__permission")))
-                .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
+                .assertNext(result -> assertThat(
+                                result.orElseThrow().structuredContent().toString())
                         .contains("INTERNAL"))
                 .verifyComplete();
-        StepVerifier.create(registry.executeIfContributed("demo__handler", Map.of())
-                        .contextWrite(context("demo__handler")))
-                .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
+        StepVerifier.create(
+                        registry.executeIfContributed("demo__handler", Map.of()).contextWrite(context("demo__handler")))
+                .assertNext(result -> assertThat(
+                                result.orElseThrow().structuredContent().toString())
                         .contains("INTERNAL"))
                 .verifyComplete();
     }
@@ -183,9 +182,10 @@ class McpToolRegistryTest {
                 .build();
         providerTools(provider, "demo", tool);
 
-        StepVerifier.create(registry.executeIfContributed("demo__broken", Map.of())
-                        .contextWrite(context("demo__broken")))
-                .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
+        StepVerifier.create(
+                        registry.executeIfContributed("demo__broken", Map.of()).contextWrite(context("demo__broken")))
+                .assertNext(result -> assertThat(
+                                result.orElseThrow().structuredContent().toString())
                         .contains("INTERNAL"))
                 .expectComplete()
                 .verify(Duration.ofSeconds(1));
@@ -211,14 +211,16 @@ class McpToolRegistryTest {
                 .build();
         providerTools(provider, "demo", tool);
 
-        StepVerifier.create(registry.executeIfContributed("demo__secret", Map.of())
-                        .contextWrite(context("demo__secret")))
-                .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
+        StepVerifier.create(
+                        registry.executeIfContributed("demo__secret", Map.of()).contextWrite(context("demo__secret")))
+                .assertNext(result -> assertThat(
+                                result.orElseThrow().structuredContent().toString())
                         .contains("FORBIDDEN"))
                 .verifyComplete();
-        StepVerifier.create(registry.executeIfContributed("demo__secret", Map.of())
-                        .contextWrite(context("demo__other")))
-                .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
+        StepVerifier.create(
+                        registry.executeIfContributed("demo__secret", Map.of()).contextWrite(context("demo__other")))
+                .assertNext(result -> assertThat(
+                                result.orElseThrow().structuredContent().toString())
                         .contains("FORBIDDEN"))
                 .verifyComplete();
     }
@@ -237,15 +239,16 @@ class McpToolRegistryTest {
                 .build();
         providerTools(provider, "demo", tool);
 
-        StepVerifier.create(registry.executeIfContributed("demo__secret", Map.of())
-                        .contextWrite(context("demo__other")))
-                .assertNext(result -> assertThat(result.orElseThrow().structuredContent().toString())
+        StepVerifier.create(
+                        registry.executeIfContributed("demo__secret", Map.of()).contextWrite(context("demo__other")))
+                .assertNext(result -> assertThat(
+                                result.orElseThrow().structuredContent().toString())
                         .contains("FORBIDDEN"))
                 .verifyComplete();
         assertThat(permissionChecks).hasValue(0);
 
-        StepVerifier.create(registry.executeIfContributed("demo__secret", Map.of())
-                        .contextWrite(context("demo__secret")))
+        StepVerifier.create(
+                        registry.executeIfContributed("demo__secret", Map.of()).contextWrite(context("demo__secret")))
                 .assertNext(result -> assertThat(result.orElseThrow().isError()).isFalse())
                 .verifyComplete();
         assertThat(permissionChecks).hasValue(1);
@@ -294,10 +297,12 @@ class McpToolRegistryTest {
         when(provider.tools()).thenAnswer(invocation -> Flux.just(current.get()));
 
         assertThat(registry.registeredTools().block())
-                .extracting(RegisteredTool::protocolName).containsExactly("demo__one");
+                .extracting(RegisteredTool::protocolName)
+                .containsExactly("demo__one");
         current.set(tool("two"));
         assertThat(registry.registeredTools().block())
-                .extracting(RegisteredTool::protocolName).containsExactly("demo__two");
+                .extracting(RegisteredTool::protocolName)
+                .containsExactly("demo__two");
     }
 
     @Test
@@ -317,8 +322,7 @@ class McpToolRegistryTest {
     @Test
     void quarantinesAProviderWhenPf4jCannotResolveItsOwner() {
         McpToolProvider unknownProvider = () -> Flux.just(tool("hello"));
-        when(extensionGetter.getEnabledExtensions(McpToolProvider.class))
-                .thenReturn(Flux.just(unknownProvider));
+        when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(unknownProvider));
 
         assertThat(registry.registeredTools().block()).isEmpty();
     }
@@ -344,8 +348,7 @@ class McpToolRegistryTest {
         McpToolProvider failed = () -> Flux.error(new IllegalStateException("provider secret"));
         McpToolProvider healthy = () -> Flux.just(tool("available"));
         owner(healthy, "healthy");
-        when(extensionGetter.getEnabledExtensions(McpToolProvider.class))
-                .thenReturn(Flux.just(failed, healthy));
+        when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(failed, healthy));
 
         assertThat(registry.registeredTools().block())
                 .extracting(RegisteredTool::protocolName)
@@ -354,13 +357,11 @@ class McpToolRegistryTest {
 
     @Test
     void isolatesANonTerminatingProviderFromHealthyProviders() {
-        registry = new McpToolRegistry(
-                extensionGetter, new McpAuthorization(), pluginManager, Duration.ofMillis(10));
+        registry = new McpToolRegistry(extensionGetter, new McpAuthorization(), pluginManager, Duration.ofMillis(10));
         McpToolProvider stalled = Flux::never;
         McpToolProvider healthy = () -> Flux.just(tool("available"));
         owner(healthy, "healthy");
-        when(extensionGetter.getEnabledExtensions(McpToolProvider.class))
-                .thenReturn(Flux.just(stalled, healthy));
+        when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(stalled, healthy));
 
         StepVerifier.create(registry.registeredTools())
                 .assertNext(tools -> assertThat(tools)
@@ -371,12 +372,10 @@ class McpToolRegistryTest {
 
     @Test
     void isolatesAProviderThatReturnsTooManyTools() {
-        McpToolProvider excessive = () -> Flux.range(0, 101)
-                .map(index -> tool("tool_" + index));
+        McpToolProvider excessive = () -> Flux.range(0, 101).map(index -> tool("tool_" + index));
         McpToolProvider healthy = () -> Flux.just(tool("available"));
         owner(healthy, "healthy");
-        when(extensionGetter.getEnabledExtensions(McpToolProvider.class))
-                .thenReturn(Flux.just(excessive, healthy));
+        when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(excessive, healthy));
 
         StepVerifier.create(registry.registeredTools())
                 .assertNext(tools -> assertThat(tools)
@@ -385,11 +384,9 @@ class McpToolRegistryTest {
                 .verifyComplete();
     }
 
-    private void providerTools(
-            McpToolProvider toolProvider, String pluginName, McpToolDefinition... tools) {
+    private void providerTools(McpToolProvider toolProvider, String pluginName, McpToolDefinition... tools) {
         owner(toolProvider, pluginName);
-        when(extensionGetter.getEnabledExtensions(McpToolProvider.class))
-                .thenReturn(Flux.just(toolProvider));
+        when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(toolProvider));
         when(toolProvider.tools()).thenReturn(Flux.fromArray(tools));
     }
 
@@ -410,16 +407,10 @@ class McpToolRegistryTest {
 
     private static reactor.util.context.Context context(String... tools) {
         return org.springframework.security.core.context.ReactiveSecurityContextHolder.withAuthentication(
-                new McpKeyAuthenticationToken(
-                        "key-id", "Automation", "hmcp_key", "admin", java.util.Set.of(tools)));
+                new McpKeyAuthenticationToken("key-id", "Automation", "hmcp_key", "admin", java.util.Set.of(tools)));
     }
 
-    private static Map<String, Object> objectSchema(
-            Map<String, Object> properties, List<String> required) {
-        return Map.of(
-                "type", "object",
-                "properties", properties,
-                "required", required,
-                "additionalProperties", false);
+    private static Map<String, Object> objectSchema(Map<String, Object> properties, List<String> required) {
+        return Map.of("type", "object", "properties", properties, "required", required, "additionalProperties", false);
     }
 }

@@ -49,8 +49,7 @@ class CategoryToolsTest {
         var tools = new CategoryTools(client, authorization);
 
         StepVerifier.create(tools.update(Map.of("name", "current", "parent", "child")))
-                .expectErrorSatisfies(error -> assertThat(error)
-                        .hasMessageContaining("category cycle"))
+                .expectErrorSatisfies(error -> assertThat(error).hasMessageContaining("category cycle"))
                 .verify();
     }
 

@@ -45,14 +45,11 @@ class McpRequestRateLimiter {
         window.set(new Window(currentTimeMillis.getAsLong()));
     }
 
-    private boolean allow(
-            ConcurrentHashMap<String, AtomicInteger> counts, String key, int limit) {
+    private boolean allow(ConcurrentHashMap<String, AtomicInteger> counts, String key, int limit) {
         if (counts.size() >= MAX_TRACKED_KEYS && !counts.containsKey(key)) {
             return false;
         }
-        return counts.computeIfAbsent(key, ignored -> new AtomicInteger())
-                        .incrementAndGet()
-                <= limit;
+        return counts.computeIfAbsent(key, ignored -> new AtomicInteger()).incrementAndGet() <= limit;
     }
 
     private Window currentWindow() {
@@ -72,10 +69,8 @@ class McpRequestRateLimiter {
     private static final class Window {
 
         private final long startedAt;
-        private final ConcurrentHashMap<String, AtomicInteger> requestCounts =
-                new ConcurrentHashMap<>();
-        private final ConcurrentHashMap<String, AtomicInteger> toolCounts =
-                new ConcurrentHashMap<>();
+        private final ConcurrentHashMap<String, AtomicInteger> requestCounts = new ConcurrentHashMap<>();
+        private final ConcurrentHashMap<String, AtomicInteger> toolCounts = new ConcurrentHashMap<>();
 
         private Window(long startedAt) {
             this.startedAt = startedAt;

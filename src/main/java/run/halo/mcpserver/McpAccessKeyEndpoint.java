@@ -11,7 +11,6 @@ import java.net.URI;
 import java.security.Principal;
 import java.time.Instant;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
@@ -29,17 +28,14 @@ import run.halo.app.extension.GroupVersion;
 @Component
 class McpAccessKeyEndpoint implements CustomEndpoint {
 
-    private static final GroupVersion GROUP_VERSION =
-            new GroupVersion("console.api.mcp.halo.run", "v1alpha1");
+    private static final GroupVersion GROUP_VERSION = new GroupVersion("console.api.mcp.halo.run", "v1alpha1");
 
     private final McpAccessKeyService accessKeyService;
     private final McpToolCatalog toolCatalog;
     private final McpRecentCallHistory recentCallHistory;
 
     McpAccessKeyEndpoint(
-            McpAccessKeyService accessKeyService,
-            McpToolCatalog toolCatalog,
-            McpRecentCallHistory recentCallHistory) {
+            McpAccessKeyService accessKeyService, McpToolCatalog toolCatalog, McpRecentCallHistory recentCallHistory) {
         this.accessKeyService = accessKeyService;
         this.toolCatalog = toolCatalog;
         this.recentCallHistory = recentCallHistory;
@@ -48,68 +44,70 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
     @Override
     public RouterFunction<ServerResponse> endpoint() {
         final var tag = "console.api.mcp.halo.run/v1alpha1/McpAccessKey";
-        return route()
-                .GET("/keys", this::list, builder -> builder
-                        .operationId("listMcpAccessKeys")
-                        .description("List MCP access keys.")
-                        .tag(tag)
-                        .response(responseBuilder()
-                                .responseCode("200")
-                                .implementation(AccessKeyView[].class)))
-                .POST("/keys", this::create, builder -> builder
-                        .operationId("createMcpAccessKey")
-                        .description("Create an MCP access key.")
-                        .tag(tag)
-                        .requestBody(requestBodyBuilder()
-                                .required(true)
-                                .implementation(CreateKeyRequest.class))
-                        .response(responseBuilder()
-                                .responseCode("201")
-                                .implementation(CreatedKeyResponse.class)))
-                .PUT("/keys/{name}", this::update, builder -> builder
-                        .operationId("updateMcpAccessKey")
-                        .description("Update an MCP access key.")
-                        .tag(tag)
-                        .parameter(nameParameter())
-                        .requestBody(requestBodyBuilder()
-                                .required(true)
-                                .implementation(UpdateKeyRequest.class))
-                        .response(responseBuilder()
-                                .responseCode("200")
-                                .implementation(AccessKeyView.class)))
-                .POST("/keys/{name}/rotate", this::rotate, builder -> builder
-                        .operationId("rotateMcpAccessKey")
-                        .description("Rotate an MCP access key.")
-                        .tag(tag)
-                        .parameter(nameParameter())
-                        .response(responseBuilder()
-                                .responseCode("200")
-                                .implementation(CreatedKeyResponse.class)))
-                .DELETE("/keys/{name}", this::delete, builder -> builder
-                        .operationId("deleteMcpAccessKey")
-                        .description("Delete an MCP access key.")
-                        .tag(tag)
-                        .parameter(nameParameter())
-                        .response(responseBuilder().responseCode("204")))
-                .GET("/tools", this::tools, builder -> builder
-                        .operationId("listMcpTools")
-                        .description("List MCP tools available for access keys.")
-                        .tag(tag)
-                        .response(responseBuilder()
-                                .responseCode("200")
-                                .implementation(McpToolCatalog.ToolDescriptor[].class)))
-                .GET("/recent-calls", this::recentCalls, builder -> builder
-                        .operationId("listMcpRecentCalls")
-                        .description("List recent MCP tool calls from the current plugin instance.")
-                        .tag(tag)
-                        .parameter(queryParameter("page", "One-based page number.", Integer.class))
-                        .parameter(queryParameter("size", "Page size, up to 100.", Integer.class))
-                        .parameter(queryParameter("keyId", "Exact MCP access key ID.", String.class))
-                        .parameter(queryParameter("toolName", "Exact MCP tool name.", String.class))
-                        .parameter(queryParameter("outcome", "Exact call outcome.", McpCallOutcome.class))
-                        .response(responseBuilder()
-                                .responseCode("200")
-                                .implementation(McpRecentCallPage.class)))
+        return route().GET(
+                        "/keys",
+                        this::list,
+                        builder -> builder.operationId("listMcpAccessKeys")
+                                .description("List MCP access keys.")
+                                .tag(tag)
+                                .response(responseBuilder().responseCode("200").implementation(AccessKeyView[].class)))
+                .POST(
+                        "/keys",
+                        this::create,
+                        builder -> builder.operationId("createMcpAccessKey")
+                                .description("Create an MCP access key.")
+                                .tag(tag)
+                                .requestBody(requestBodyBuilder().required(true).implementation(CreateKeyRequest.class))
+                                .response(
+                                        responseBuilder().responseCode("201").implementation(CreatedKeyResponse.class)))
+                .PUT(
+                        "/keys/{name}",
+                        this::update,
+                        builder -> builder.operationId("updateMcpAccessKey")
+                                .description("Update an MCP access key.")
+                                .tag(tag)
+                                .parameter(nameParameter())
+                                .requestBody(requestBodyBuilder().required(true).implementation(UpdateKeyRequest.class))
+                                .response(responseBuilder().responseCode("200").implementation(AccessKeyView.class)))
+                .POST(
+                        "/keys/{name}/rotate",
+                        this::rotate,
+                        builder -> builder.operationId("rotateMcpAccessKey")
+                                .description("Rotate an MCP access key.")
+                                .tag(tag)
+                                .parameter(nameParameter())
+                                .response(
+                                        responseBuilder().responseCode("200").implementation(CreatedKeyResponse.class)))
+                .DELETE(
+                        "/keys/{name}",
+                        this::delete,
+                        builder -> builder.operationId("deleteMcpAccessKey")
+                                .description("Delete an MCP access key.")
+                                .tag(tag)
+                                .parameter(nameParameter())
+                                .response(responseBuilder().responseCode("204")))
+                .GET(
+                        "/tools",
+                        this::tools,
+                        builder -> builder.operationId("listMcpTools")
+                                .description("List MCP tools available for access keys.")
+                                .tag(tag)
+                                .response(responseBuilder()
+                                        .responseCode("200")
+                                        .implementation(McpToolCatalog.ToolDescriptor[].class)))
+                .GET(
+                        "/recent-calls",
+                        this::recentCalls,
+                        builder -> builder.operationId("listMcpRecentCalls")
+                                .description("List recent MCP tool calls from the current plugin instance.")
+                                .tag(tag)
+                                .parameter(queryParameter("page", "One-based page number.", Integer.class))
+                                .parameter(queryParameter("size", "Page size, up to 100.", Integer.class))
+                                .parameter(queryParameter("keyId", "Exact MCP access key ID.", String.class))
+                                .parameter(queryParameter("toolName", "Exact MCP tool name.", String.class))
+                                .parameter(queryParameter("outcome", "Exact call outcome.", McpCallOutcome.class))
+                                .response(
+                                        responseBuilder().responseCode("200").implementation(McpRecentCallPage.class)))
                 .build();
     }
 
@@ -133,7 +131,8 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
     }
 
     private Mono<ServerResponse> list(ServerRequest request) {
-        return accessKeyService.list()
+        return accessKeyService
+                .list()
                 .map(McpAccessKeyEndpoint::view)
                 .collectList()
                 .flatMap(keys -> ServerResponse.ok().bodyValue(keys));
@@ -150,19 +149,20 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
                         tools(tuple.getT1().allowedTools()),
                         tuple.getT1().allowedIpRanges(),
                         tuple.getT1().expiresAt()))
-                .flatMap(created -> ServerResponse.created(URI.create("keys/" + created.accessKey()
-                                .getMetadata()
-                                .getName()))
+                .flatMap(created -> ServerResponse.created(URI.create(
+                                "keys/" + created.accessKey().getMetadata().getName()))
                         .bodyValue(new CreatedKeyResponse(view(created.accessKey()), created.token())))
-                .onErrorMap(IllegalArgumentException.class, error ->
-                        new ServerWebInputException(error.getMessage(), null, error));
+                .onErrorMap(
+                        IllegalArgumentException.class,
+                        error -> new ServerWebInputException(error.getMessage(), null, error));
     }
 
     private Mono<ServerResponse> update(ServerRequest request) {
         var name = request.pathVariable("name");
         return request.bodyToMono(UpdateKeyRequest.class)
                 .switchIfEmpty(Mono.error(new ServerWebInputException("Request body is required")))
-                .flatMap(body -> accessKeyService.allowedTools(name)
+                .flatMap(body -> accessKeyService
+                        .allowedTools(name)
                         .flatMap(existing -> validateTools(body.allowedTools(), existing))
                         .thenReturn(body))
                 .flatMap(body -> accessKeyService.update(
@@ -173,25 +173,31 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
                         body.expiresAt(),
                         body.enabled()))
                 .flatMap(key -> ServerResponse.ok().bodyValue(view(key)))
-                .onErrorMap(McpAccessKeyService.AccessKeyNotFoundException.class, error ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, error.getMessage(), error))
-                .onErrorMap(IllegalArgumentException.class, error ->
-                        new ServerWebInputException(error.getMessage(), null, error));
+                .onErrorMap(
+                        McpAccessKeyService.AccessKeyNotFoundException.class,
+                        error -> new ResponseStatusException(HttpStatus.NOT_FOUND, error.getMessage(), error))
+                .onErrorMap(
+                        IllegalArgumentException.class,
+                        error -> new ServerWebInputException(error.getMessage(), null, error));
     }
 
     private Mono<ServerResponse> rotate(ServerRequest request) {
-        return accessKeyService.rotate(request.pathVariable("name"))
+        return accessKeyService
+                .rotate(request.pathVariable("name"))
                 .flatMap(created -> ServerResponse.ok()
                         .bodyValue(new CreatedKeyResponse(view(created.accessKey()), created.token())))
-                .onErrorMap(McpAccessKeyService.AccessKeyNotFoundException.class, error ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, error.getMessage(), error));
+                .onErrorMap(
+                        McpAccessKeyService.AccessKeyNotFoundException.class,
+                        error -> new ResponseStatusException(HttpStatus.NOT_FOUND, error.getMessage(), error));
     }
 
     private Mono<ServerResponse> delete(ServerRequest request) {
-        return accessKeyService.delete(request.pathVariable("name"))
+        return accessKeyService
+                .delete(request.pathVariable("name"))
                 .then(ServerResponse.noContent().build())
-                .onErrorMap(McpAccessKeyService.AccessKeyNotFoundException.class, error ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, error.getMessage(), error));
+                .onErrorMap(
+                        McpAccessKeyService.AccessKeyNotFoundException.class,
+                        error -> new ResponseStatusException(HttpStatus.NOT_FOUND, error.getMessage(), error));
     }
 
     private Mono<ServerResponse> tools(ServerRequest request) {
@@ -213,8 +219,7 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
         return ServerResponse.ok().bodyValue(recentCallHistory.list(query));
     }
 
-    private static int boundedQueryInt(
-            ServerRequest request, String name, int defaultValue, int minimum, int maximum) {
+    private static int boundedQueryInt(ServerRequest request, String name, int defaultValue, int minimum, int maximum) {
         var raw = request.queryParam(name).orElse(null);
         if (!StringUtils.hasText(raw)) {
             return defaultValue;
@@ -269,8 +274,8 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
         return ReactiveSecurityContextHolder.getContext()
                 .map(context -> context.getAuthentication())
                 .map(Principal::getName)
-                .switchIfEmpty(Mono.error(new ResponseStatusException(
-                        HttpStatus.UNAUTHORIZED, "Authentication is required")));
+                .switchIfEmpty(
+                        Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication is required")));
     }
 
     private static Set<String> tools(Set<String> tools) {
@@ -302,53 +307,73 @@ class McpAccessKeyEndpoint implements CustomEndpoint {
 
     @Schema(name = "CreateMcpAccessKeyRequest")
     record CreateKeyRequest(
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName,
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            String displayName,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = McpAccessKey.ALLOWED_TOOLS_DESCRIPTION)
+            Set<String> allowedTools,
+
             @Schema(
-                            requiredMode = Schema.RequiredMode.REQUIRED,
-                            description = McpAccessKey.ALLOWED_TOOLS_DESCRIPTION)
-                    Set<String> allowedTools,
-            @Schema(
-                            requiredMode = Schema.RequiredMode.REQUIRED,
-                            description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
-                    Set<String> allowedIpRanges,
+                    requiredMode = Schema.RequiredMode.REQUIRED,
+                    description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
+            Set<String> allowedIpRanges,
+
             Instant expiresAt) {}
 
     @Schema(name = "UpdateMcpAccessKeyRequest")
     record UpdateKeyRequest(
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName,
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            String displayName,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = McpAccessKey.ALLOWED_TOOLS_DESCRIPTION)
+            Set<String> allowedTools,
+
             @Schema(
-                            requiredMode = Schema.RequiredMode.REQUIRED,
-                            description = McpAccessKey.ALLOWED_TOOLS_DESCRIPTION)
-                    Set<String> allowedTools,
-            @Schema(
-                            requiredMode = Schema.RequiredMode.REQUIRED,
-                            description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
-                    Set<String> allowedIpRanges,
+                    requiredMode = Schema.RequiredMode.REQUIRED,
+                    description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
+            Set<String> allowedIpRanges,
+
             Instant expiresAt,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean enabled) {}
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            boolean enabled) {}
 
     @Schema(name = "McpAccessKey")
     record AccessKeyView(
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String name,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String keyPrefix,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String ownerName,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean enabled,
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            String name,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            String displayName,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            String keyPrefix,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            String ownerName,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            boolean enabled,
+
             Instant expiresAt,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = McpAccessKey.ALLOWED_TOOLS_DESCRIPTION)
+            Set<String> allowedTools,
+
             @Schema(
-                            requiredMode = Schema.RequiredMode.REQUIRED,
-                            description = McpAccessKey.ALLOWED_TOOLS_DESCRIPTION)
-                    Set<String> allowedTools,
-            @Schema(
-                            requiredMode = Schema.RequiredMode.REQUIRED,
-                            description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
-                    Set<String> allowedIpRanges,
+                    requiredMode = Schema.RequiredMode.REQUIRED,
+                    description = "Allowed IPv4/IPv6 addresses or CIDR ranges. Empty means unrestricted.")
+            Set<String> allowedIpRanges,
+
             Instant lastUsedAt,
             Instant creationTimestamp,
             Instant deletionTimestamp) {}
 
     @Schema(name = "CreatedMcpAccessKey")
     record CreatedKeyResponse(
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) AccessKeyView key,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String token) {}
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            AccessKeyView key,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            String token) {}
 }

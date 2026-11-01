@@ -35,22 +35,26 @@ class TagTools extends ToolSupport implements ToolGroup {
 
     @Override
     public List<BuiltInTool> tools() {
-        return List.of(tool(
-                LIST,
-                "List Halo tags",
-                "List post tags with display metadata and post counters.",
-                "查询标签",
-                "分页查询文章标签，返回显示信息和文章数量。",
-                "TAG",
-                objectSchema(
-                        map(
-                                "page", integerSchema(1, null, 1),
-                                "size", integerSchema(1, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE),
-                                "keyword", stringSchema()),
-                        List.of()),
-                pageOutputSchema(ContentPayloads.tagSchema()),
-                READ_ONLY,
-                this::list), createTool(), updateTool(), deleteTool());
+        return List.of(
+                tool(
+                        LIST,
+                        "List Halo tags",
+                        "List post tags with display metadata and post counters.",
+                        "查询标签",
+                        "分页查询文章标签，返回显示信息和文章数量。",
+                        "TAG",
+                        objectSchema(
+                                map(
+                                        "page", integerSchema(1, null, 1),
+                                        "size", integerSchema(1, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE),
+                                        "keyword", stringSchema()),
+                                List.of()),
+                        pageOutputSchema(ContentPayloads.tagSchema()),
+                        READ_ONLY,
+                        this::list),
+                createTool(),
+                updateTool(),
+                deleteTool());
     }
 
     Mono<ToolPayload> list(Map<String, Object> arguments) {
@@ -61,11 +65,11 @@ class TagTools extends ToolSupport implements ToolGroup {
         if (StringUtils.hasText(keyword)) {
             builder.andQuery(or(contains("spec.displayName", keyword), contains("spec.slug", keyword)));
         }
-        var pageable = PageRequestImpl.of(
-                page, size, Sort.by(asc("spec.displayName"), asc("metadata.name")));
-        return client.listBy(Tag.class, builder.build(), pageable).map(result -> payload(
-                ContentPayloads.page(result, ContentPayloads::tag),
-                "Listed " + result.getItems().size() + " tags"));
+        var pageable = PageRequestImpl.of(page, size, Sort.by(asc("spec.displayName"), asc("metadata.name")));
+        return client.listBy(Tag.class, builder.build(), pageable)
+                .map(result -> payload(
+                        ContentPayloads.page(result, ContentPayloads::tag),
+                        "Listed " + result.getItems().size() + " tags"));
     }
 
     Mono<ToolPayload> create(Map<String, Object> arguments) {
@@ -74,8 +78,7 @@ class TagTools extends ToolSupport implements ToolGroup {
         tag.setMetadata(metadata(name));
         tag.setSpec(new Tag.TagSpec());
         apply(tag.getSpec(), arguments, name, true);
-        return client.create(tag)
-                .map(created -> payload(ContentPayloads.tag(created), "Created tag " + name));
+        return client.create(tag).map(created -> payload(ContentPayloads.tag(created), "Created tag " + name));
     }
 
     Mono<ToolPayload> update(Map<String, Object> arguments) {
@@ -140,9 +143,10 @@ class TagTools extends ToolSupport implements ToolGroup {
                 objectSchema(
                         map(
                                 "name", stringSchema("Tag metadata.name."),
-                                "expectedVersion", described(
-                                        integerSchema(),
-                                        "Current metadata.version returned by a read or list call.")),
+                                "expectedVersion",
+                                        described(
+                                                integerSchema(),
+                                                "Current metadata.version returned by a read or list call.")),
                         List.of("name", "expectedVersion")),
                 ContentPayloads.tagSchema(),
                 DESTRUCTIVE,
@@ -176,8 +180,7 @@ class TagTools extends ToolSupport implements ToolGroup {
         if (arguments.containsKey("color")) {
             var color = nullableString(arguments, "color");
             if (color != null && !color.matches("^#(?:[a-fA-F0-9]{3}|[a-fA-F0-9]{6})$")) {
-                throw new McpToolException(
-                        "INVALID_ARGUMENT", "color must be a 3- or 6-digit hex color");
+                throw new McpToolException("INVALID_ARGUMENT", "color must be a 3- or 6-digit hex color");
             }
             spec.setColor(color);
         }

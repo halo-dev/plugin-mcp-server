@@ -13,9 +13,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import run.halo.app.extension.ReactiveExtensionClient;
+import run.halo.mcpserver.api.McpToolDefinition;
 import run.halo.mcpserver.tools.BuiltInTool;
 import run.halo.mcpserver.tools.BuiltInTools;
-import run.halo.mcpserver.api.McpToolDefinition;
 
 @ExtendWith(MockitoExtension.class)
 class McpToolCatalogTest {
@@ -31,14 +31,11 @@ class McpToolCatalogTest {
 
     @Test
     void separatesProtocolDescriptionsFromChineseConsoleDescriptions() {
-        var inputSchema = Map.<String, Object>of(
-                "type", "object",
-                "properties", Map.of("page", Map.of("type", "integer")));
-        var outputSchema = Map.<String, Object>of(
-                "type", "object",
-                "properties", Map.of("items", Map.of("type", "array")));
-        var protocolTool = McpSchema.Tool.builder(
-                        "halo_list_posts", inputSchema)
+        var inputSchema =
+                Map.<String, Object>of("type", "object", "properties", Map.of("page", Map.of("type", "integer")));
+        var outputSchema =
+                Map.<String, Object>of("type", "object", "properties", Map.of("items", Map.of("type", "array")));
+        var protocolTool = McpSchema.Tool.builder("halo_list_posts", inputSchema)
                 .title("List Halo posts")
                 .description("List posts with pagination.")
                 .outputSchema(outputSchema)
@@ -80,16 +77,13 @@ class McpToolCatalogTest {
                 .displayDescription("导出插件数据。")
                 .category("数据管理")
                 .inputSchema(Map.of("type", "object", "properties", Map.of()))
-                .outputSchema(Map.of(
-                        "type", "object",
-                        "properties", Map.of("url", Map.of("type", "string"))))
+                .outputSchema(Map.of("type", "object", "properties", Map.of("url", Map.of("type", "string"))))
                 .permission(invocation -> Mono.just(true))
                 .handler(invocation -> Mono.empty())
                 .build();
         when(builtInTools.tools()).thenReturn(List.of());
         when(registry.registeredTools())
-                .thenReturn(Mono.just(List.of(
-                        new RegisteredTool("demo", "demo__export", definition))));
+                .thenReturn(Mono.just(List.of(new RegisteredTool("demo", "demo__export", definition))));
         when(extensionClient.fetch(run.halo.app.core.extension.Plugin.class, "demo"))
                 .thenReturn(Mono.error(new IllegalStateException("plugin metadata unavailable")));
         var catalog = new McpToolCatalog(builtInTools, registry, extensionClient);
@@ -124,9 +118,7 @@ class McpToolCatalogTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {
-        "  数据管理  ", "\u3000数据管理\u3000", "\u2000数据管理\u2003"
-    })
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"  数据管理  ", "\u3000数据管理\u3000", "\u2000数据管理\u2003"})
     void trimsCustomCategory(String category) {
         var definition = McpToolDefinition.builder()
                 .name("export")
@@ -140,8 +132,7 @@ class McpToolCatalogTest {
 
     @Test
     void keepsBuiltInToolsWhenContributedToolDiscoveryFails() {
-        var protocolTool = McpSchema.Tool.builder(
-                        "halo_list_posts", Map.of("type", "object", "properties", Map.of()))
+        var protocolTool = McpSchema.Tool.builder("halo_list_posts", Map.of("type", "object", "properties", Map.of()))
                 .title("List Halo posts")
                 .description("List posts with pagination.")
                 .annotations(McpSchema.ToolAnnotations.builder()
@@ -157,13 +148,14 @@ class McpToolCatalogTest {
                 .build();
         var builtIn = new BuiltInTool(specification, "POST", "查询文章", "分页查询文章。");
         when(builtInTools.tools()).thenReturn(List.of(builtIn));
-        when(registry.registeredTools())
-                .thenReturn(Mono.error(new IllegalStateException("provider discovery secret")));
+        when(registry.registeredTools()).thenReturn(Mono.error(new IllegalStateException("provider discovery secret")));
         var catalog = new McpToolCatalog(builtInTools, registry, extensionClient);
 
-        assertThat(catalog.tools().block()).singleElement().satisfies(tool ->
-                assertThat(tool.name()).isEqualTo("halo_list_posts"));
-        assertThat(catalog.protocolTools().block()).singleElement().satisfies(tool ->
-                assertThat(tool.name()).isEqualTo("halo_list_posts"));
+        assertThat(catalog.tools().block())
+                .singleElement()
+                .satisfies(tool -> assertThat(tool.name()).isEqualTo("halo_list_posts"));
+        assertThat(catalog.protocolTools().block())
+                .singleElement()
+                .satisfies(tool -> assertThat(tool.name()).isEqualTo("halo_list_posts"));
     }
 }

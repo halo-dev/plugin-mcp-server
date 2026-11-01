@@ -12,10 +12,10 @@ import run.halo.mcpserver.api.McpToolException;
 public class McpAuthorization {
 
     Mono<Void> require(String toolName) {
-        return authentication().flatMap(authentication -> authentication.allows(toolName)
-                ? Mono.empty()
-                : Mono.error(new McpToolException(
-                        "FORBIDDEN", "The MCP access key cannot use " + toolName)));
+        return authentication()
+                .flatMap(authentication -> authentication.allows(toolName)
+                        ? Mono.empty()
+                        : Mono.error(new McpToolException("FORBIDDEN", "The MCP access key cannot use " + toolName)));
     }
 
     public <T> Mono<T> authorize(String toolName, Supplier<Mono<T>> action) {
@@ -40,8 +40,7 @@ public class McpAuthorization {
                 .map(SecurityContext::getAuthentication)
                 .ofType(McpKeyAuthenticationToken.class)
                 .filter(org.springframework.security.core.Authentication::isAuthenticated)
-                .switchIfEmpty(Mono.error(new McpToolException(
-                        "FORBIDDEN", "A valid MCP access key is required")));
+                .switchIfEmpty(Mono.error(new McpToolException("FORBIDDEN", "A valid MCP access key is required")));
     }
 
     public Mono<String> username() {

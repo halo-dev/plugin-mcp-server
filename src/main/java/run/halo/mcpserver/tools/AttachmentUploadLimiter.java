@@ -15,8 +15,8 @@ class AttachmentUploadLimiter {
             new KeyedInFlightLimiter(GLOBAL_BUDGET_BYTES, PER_KEY_BUDGET_BYTES, MAX_TRACKED_KEYS);
 
     /**
-     * Reserves decoded bytes against the global and per-key budgets, or returns null when either
-     * is exhausted. The caller must close the reservation exactly once when the upload terminates.
+     * Reserves decoded bytes against the global and per-key budgets, or returns null when either is exhausted. The
+     * caller must close the reservation exactly once when the upload terminates.
      */
     KeyedInFlightLimiter.Lease tryAcquire(String keyId, int bytes) {
         return limiter.tryAcquire(keyId, bytes);

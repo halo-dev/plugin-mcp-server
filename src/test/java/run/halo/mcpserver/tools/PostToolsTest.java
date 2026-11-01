@@ -2,13 +2,13 @@ package run.halo.mcpserver.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Instant;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -46,8 +46,7 @@ class PostToolsTest {
             return Mono.just(post);
         });
         when(client.create(any(Snapshot.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
-        when(client.fetch(Post.class, "hello-world"))
-                .thenAnswer(invocation -> Mono.just(storedPost.get()));
+        when(client.fetch(Post.class, "hello-world")).thenAnswer(invocation -> Mono.just(storedPost.get()));
         when(client.update(any(Post.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
 
@@ -71,8 +70,7 @@ class PostToolsTest {
             return Mono.just(post);
         });
         when(client.create(any(Snapshot.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
-        when(client.fetch(Post.class, "featured-post"))
-                .thenAnswer(invocation -> Mono.just(storedPost.get()));
+        when(client.fetch(Post.class, "featured-post")).thenAnswer(invocation -> Mono.just(storedPost.get()));
         when(client.update(any(Post.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
 
@@ -108,8 +106,7 @@ class PostToolsTest {
         when(client.delete(post)).thenReturn(Mono.just(post));
         var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
 
-        StepVerifier.create(tools.create(Map.of(
-                        "name", "hello-world", "title", "Hello", "raw", "Body")))
+        StepVerifier.create(tools.create(Map.of("name", "hello-world", "title", "Hello", "raw", "Body")))
                 .expectErrorMessage("snapshot")
                 .verify();
 
@@ -120,10 +117,8 @@ class PostToolsTest {
     void retriesPostStateChangeAfterReconcilerVersionConflict() {
         var stalePost = post(3L);
         var latestPost = post(4L);
-        when(client.fetch(Post.class, "hello-world"))
-                .thenReturn(Mono.just(stalePost), Mono.just(latestPost));
-        when(client.update(stalePost))
-                .thenReturn(Mono.error(new OptimisticLockingFailureException("version changed")));
+        when(client.fetch(Post.class, "hello-world")).thenReturn(Mono.just(stalePost), Mono.just(latestPost));
+        when(client.update(stalePost)).thenReturn(Mono.error(new OptimisticLockingFailureException("version changed")));
         when(client.update(latestPost)).thenReturn(Mono.just(latestPost));
         var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
 
@@ -169,8 +164,7 @@ class PostToolsTest {
         var base = snapshot("base", "old");
         var createdSnapshot = new AtomicReference<Snapshot>();
         when(authorization.username()).thenReturn(Mono.just("admin"));
-        when(client.fetch(Post.class, "hello-world"))
-                .thenReturn(Mono.just(original), Mono.just(latest));
+        when(client.fetch(Post.class, "hello-world")).thenReturn(Mono.just(original), Mono.just(latest));
         when(client.fetch(Snapshot.class, "base")).thenReturn(Mono.just(base));
         when(client.create(any(Snapshot.class))).thenAnswer(invocation -> {
             var snapshot = invocation.<Snapshot>getArgument(0);
@@ -181,8 +175,7 @@ class PostToolsTest {
         var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
 
         StepVerifier.create(tools.update(Map.of("name", "hello-world", "raw", "new")))
-                .expectErrorSatisfies(error -> assertThat(error)
-                        .hasMessageContaining("content changed"))
+                .expectErrorSatisfies(error -> assertThat(error).hasMessageContaining("content changed"))
                 .verify();
 
         verify(client, never()).update(any(Post.class));
@@ -200,8 +193,7 @@ class PostToolsTest {
         latest.getSpec().setReleaseSnapshot("head");
         var createdSnapshot = new AtomicReference<Snapshot>();
         when(authorization.username()).thenReturn(Mono.just("admin"));
-        when(client.fetch(Post.class, "hello-world"))
-                .thenReturn(Mono.just(original), Mono.just(latest));
+        when(client.fetch(Post.class, "hello-world")).thenReturn(Mono.just(original), Mono.just(latest));
         when(client.fetch(Snapshot.class, "base")).thenReturn(Mono.just(snapshot("base", "old")));
         when(client.create(any(Snapshot.class))).thenAnswer(invocation -> {
             var snapshot = invocation.<Snapshot>getArgument(0);
@@ -232,8 +224,7 @@ class PostToolsTest {
         when(client.fetch(Post.class, "hello-world"))
                 .thenReturn(Mono.just(original), Mono.just(latest), Mono.just(latest));
         when(client.fetch(Snapshot.class, "base")).thenReturn(Mono.just(snapshot("base", "old")));
-        when(client.create(any(Snapshot.class)))
-                .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(client.create(any(Snapshot.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         when(client.update(any(Post.class))).thenAnswer(invocation -> {
             var updated = invocation.<Post>getArgument(0);
             updated.getSpec().setReleaseSnapshot(updated.getSpec().getHeadSnapshot());
@@ -256,11 +247,9 @@ class PostToolsTest {
         original.getSpec().setHeadSnapshot("head");
         original.getSpec().setReleaseSnapshot("head");
         when(authorization.username()).thenReturn(Mono.just("admin"));
-        when(client.fetch(Post.class, "hello-world"))
-                .thenReturn(Mono.just(original), Mono.never());
+        when(client.fetch(Post.class, "hello-world")).thenReturn(Mono.just(original), Mono.never());
         when(client.fetch(Snapshot.class, "base")).thenReturn(Mono.just(snapshot("base", "old")));
-        when(client.create(any(Snapshot.class)))
-                .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(client.create(any(Snapshot.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         var tools = new PostTools(client, contentService, new ContentSnapshots(client), authorization);
 
         StepVerifier.create(tools.update(Map.of("name", "hello-world", "raw", "new")))
@@ -278,7 +267,8 @@ class PostToolsTest {
                 .filter(tool -> tool.specification().tool().name().equals(PostTools.SET_PUBLISH_STATE))
                 .findFirst()
                 .orElseThrow();
-        var properties = (Map<?, ?>) publishTool.specification().tool().inputSchema().get("properties");
+        var properties =
+                (Map<?, ?>) publishTool.specification().tool().inputSchema().get("properties");
 
         assertThat(properties.containsKey("expectedVersion")).isFalse();
     }

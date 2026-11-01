@@ -5,17 +5,16 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.data.domain.Sort;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Sort;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -43,9 +42,7 @@ class McpAccessKeyService {
 
     Flux<McpAccessKey> list() {
         return client.listAll(
-                McpAccessKey.class,
-                new ListOptions(),
-                Sort.by(Sort.Order.desc("metadata.creationTimestamp")));
+                McpAccessKey.class, new ListOptions(), Sort.by(Sort.Order.desc("metadata.creationTimestamp")));
     }
 
     Mono<CreatedKey> create(
@@ -118,35 +115,35 @@ class McpAccessKeyService {
         return get(id).flatMap(client::delete).then();
     }
 
-    Mono<McpKeyAuthenticationToken> authenticate(
-            String rawToken, InetSocketAddress remoteAddress) {
+    Mono<McpKeyAuthenticationToken> authenticate(String rawToken, InetSocketAddress remoteAddress) {
         var parsed = parse(rawToken);
         if (parsed == null) {
             return Mono.empty();
         }
         return client.fetch(McpAccessKey.class, parsed.id())
                 .filter(this::active)
-                .flatMap(accessKey -> matches(parsed.secret(), accessKey.getSpec().getKeyHash())
+                .flatMap(accessKey -> matches(
+                                parsed.secret(), accessKey.getSpec().getKeyHash())
                         .filter(Boolean::booleanValue)
-                        .filter(ignored -> McpIpAllowlist.allows(
-                                accessKey.getSpec().getAllowedIpRanges(), remoteAddress))
+                        .filter(ignored ->
+                                McpIpAllowlist.allows(accessKey.getSpec().getAllowedIpRanges(), remoteAddress))
                         .flatMap(ignored -> revalidate(accessKey))
-                        .flatMap(fresh -> touch(fresh).thenReturn(new McpKeyAuthenticationToken(
-                                parsed.id(),
-                                fresh.getSpec().getDisplayName(),
-                                fresh.getSpec().getKeyPrefix(),
-                                fresh.getSpec().getOwnerName(),
-                                fresh.getSpec().getAllowedTools() == null
-                                        ? Set.of()
-                                        : fresh.getSpec().getAllowedTools()))));
+                        .flatMap(fresh -> touch(fresh)
+                                .thenReturn(new McpKeyAuthenticationToken(
+                                        parsed.id(),
+                                        fresh.getSpec().getDisplayName(),
+                                        fresh.getSpec().getKeyPrefix(),
+                                        fresh.getSpec().getOwnerName(),
+                                        fresh.getSpec().getAllowedTools() == null
+                                                ? Set.of()
+                                                : fresh.getSpec().getAllowedTools()))));
     }
 
     /**
-     * Re-fetches the key after asynchronous password verification so a rotation, disablement,
-     * scope change, or deletion committed meanwhile invalidates this authentication. Status-only
-     * writes such as last-used updates do not affect the comparison. This relies on the extension
-     * client returning a freshly deserialized instance per fetch; a shared mutable instance would
-     * make the spec comparison trivially equal and silently defeat this check.
+     * Re-fetches the key after asynchronous password verification so a rotation, disablement, scope change, or deletion
+     * committed meanwhile invalidates this authentication. Status-only writes such as last-used updates do not affect
+     * the comparison. This relies on the extension client returning a freshly deserialized instance per fetch; a shared
+     * mutable instance would make the spec comparison trivially equal and silently defeat this check.
      */
     private Mono<McpAccessKey> revalidate(McpAccessKey snapshot) {
         return client.fetch(McpAccessKey.class, snapshot.getMetadata().getName())
@@ -155,8 +152,7 @@ class McpAccessKeyService {
     }
 
     private Mono<McpAccessKey> get(String id) {
-        return client.fetch(McpAccessKey.class, id)
-                .switchIfEmpty(Mono.error(new AccessKeyNotFoundException(id)));
+        return client.fetch(McpAccessKey.class, id).switchIfEmpty(Mono.error(new AccessKeyNotFoundException(id)));
     }
 
     private boolean active(McpAccessKey accessKey) {
@@ -179,25 +175,21 @@ class McpAccessKeyService {
             accessKey.setStatus(new McpAccessKey.Status());
         }
         accessKey.getStatus().setLastUsedAt(now);
-        return client.update(accessKey)
-                .then()
-                .onErrorResume(error -> {
-                    log.debug("Failed to update last-used time for MCP key {}", id, error);
-                    return Mono.empty();
-                });
+        return client.update(accessKey).then().onErrorResume(error -> {
+            log.debug("Failed to update last-used time for MCP key {}", id, error);
+            return Mono.empty();
+        });
     }
 
     private Mono<String> encode(String secret) {
-        return Mono.fromCallable(() -> passwordEncoder.encode(secret))
-                .subscribeOn(Schedulers.boundedElastic());
+        return Mono.fromCallable(() -> passwordEncoder.encode(secret)).subscribeOn(Schedulers.boundedElastic());
     }
 
     private Mono<Boolean> matches(String secret, String hash) {
         if (!StringUtils.hasText(hash)) {
             return Mono.just(false);
         }
-        return Mono.fromCallable(() -> passwordEncoder.matches(secret, hash))
-                .subscribeOn(Schedulers.boundedElastic());
+        return Mono.fromCallable(() -> passwordEncoder.matches(secret, hash)).subscribeOn(Schedulers.boundedElastic());
     }
 
     private static String randomSecret() {

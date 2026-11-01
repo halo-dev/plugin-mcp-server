@@ -39,12 +39,7 @@ class CommentTools extends ToolSupport implements ToolGroup {
     @Override
     public List<BuiltInTool> tools() {
         return List.of(
-                listTool(),
-                approvalTool(),
-                deleteTool(),
-                listRepliesTool(),
-                replyApprovalTool(),
-                deleteReplyTool());
+                listTool(), approvalTool(), deleteTool(), listRepliesTool(), replyApprovalTool(), deleteReplyTool());
     }
 
     Mono<ToolPayload> list(Map<String, Object> arguments) {
@@ -62,13 +57,11 @@ class CommentTools extends ToolSupport implements ToolGroup {
         var pageable = PageRequestImpl.of(
                 page,
                 size,
-                Sort.by(
-                        desc("metadata.creationTimestamp"),
-                        desc("status.lastReplyTime"),
-                        desc("metadata.name")));
-        return client.listBy(Comment.class, builder.build(), pageable).map(result -> payload(
-                ContentPayloads.page(result, ContentPayloads::comment),
-                "Listed " + result.getItems().size() + " comments"));
+                Sort.by(desc("metadata.creationTimestamp"), desc("status.lastReplyTime"), desc("metadata.name")));
+        return client.listBy(Comment.class, builder.build(), pageable)
+                .map(result -> payload(
+                        ContentPayloads.page(result, ContentPayloads::comment),
+                        "Listed " + result.getItems().size() + " comments"));
     }
 
     Mono<ToolPayload> setApproval(Map<String, Object> arguments) {
@@ -101,13 +94,12 @@ class CommentTools extends ToolSupport implements ToolGroup {
         if (StringUtils.hasText(keyword)) {
             builder.andQuery(contains("spec.raw", keyword));
         }
-        var pageable = PageRequestImpl.of(
-                page,
-                size,
-                Sort.by(desc("metadata.creationTimestamp"), desc("metadata.name")));
-        return client.listBy(Reply.class, builder.build(), pageable).map(result -> payload(
-                ContentPayloads.page(result, ContentPayloads::reply),
-                "Listed " + result.getItems().size() + " replies"));
+        var pageable =
+                PageRequestImpl.of(page, size, Sort.by(desc("metadata.creationTimestamp"), desc("metadata.name")));
+        return client.listBy(Reply.class, builder.build(), pageable)
+                .map(result -> payload(
+                        ContentPayloads.page(result, ContentPayloads::reply),
+                        "Listed " + result.getItems().size() + " replies"));
     }
 
     Mono<ToolPayload> setReplyApproval(Map<String, Object> arguments) {
@@ -152,8 +144,7 @@ class CommentTools extends ToolSupport implements ToolGroup {
                             return client.update(reply);
                         })))
                 .map(reply -> payload(
-                        ContentPayloads.reply(reply),
-                        (approved ? "Approved reply " : "Unapproved reply ") + name));
+                        ContentPayloads.reply(reply), (approved ? "Approved reply " : "Unapproved reply ") + name));
     }
 
     private BuiltInTool listTool() {
@@ -187,9 +178,10 @@ class CommentTools extends ToolSupport implements ToolGroup {
                 objectSchema(
                         map(
                                 "name", stringSchema("Comment metadata.name."),
-                                "expectedVersion", described(
-                                        integerSchema(),
-                                        "Current metadata.version returned by a read or list call.")),
+                                "expectedVersion",
+                                        described(
+                                                integerSchema(),
+                                                "Current metadata.version returned by a read or list call.")),
                         List.of("name", "expectedVersion")),
                 ContentPayloads.commentSchema(),
                 DESTRUCTIVE,
@@ -247,9 +239,10 @@ class CommentTools extends ToolSupport implements ToolGroup {
                 objectSchema(
                         map(
                                 "name", stringSchema("Reply metadata.name."),
-                                "expectedVersion", described(
-                                        integerSchema(),
-                                        "Current metadata.version returned by a read or list call.")),
+                                "expectedVersion",
+                                        described(
+                                                integerSchema(),
+                                                "Current metadata.version returned by a read or list call.")),
                         List.of("name", "expectedVersion")),
                 ContentPayloads.replySchema(),
                 DESTRUCTIVE,

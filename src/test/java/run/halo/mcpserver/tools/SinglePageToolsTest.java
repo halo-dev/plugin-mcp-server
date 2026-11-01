@@ -35,10 +35,8 @@ class SinglePageToolsTest {
     void retriesPageStateChangeAfterReconcilerVersionConflict() {
         var stalePage = page(3L);
         var latestPage = page(4L);
-        when(client.fetch(SinglePage.class, "about"))
-                .thenReturn(Mono.just(stalePage), Mono.just(latestPage));
-        when(client.update(stalePage))
-                .thenReturn(Mono.error(new OptimisticLockingFailureException("version changed")));
+        when(client.fetch(SinglePage.class, "about")).thenReturn(Mono.just(stalePage), Mono.just(latestPage));
+        when(client.update(stalePage)).thenReturn(Mono.error(new OptimisticLockingFailureException("version changed")));
         when(client.update(latestPage)).thenReturn(Mono.just(latestPage));
         var tools = new SinglePageTools(client, new ContentSnapshots(client), authorization);
 
@@ -57,7 +55,8 @@ class SinglePageToolsTest {
                 .filter(tool -> tool.specification().tool().name().equals(SinglePageTools.SET_PUBLISH_STATE))
                 .findFirst()
                 .orElseThrow();
-        var properties = (Map<?, ?>) publishTool.specification().tool().inputSchema().get("properties");
+        var properties =
+                (Map<?, ?>) publishTool.specification().tool().inputSchema().get("properties");
 
         assertThat(properties.containsKey("expectedVersion")).isFalse();
     }
@@ -88,8 +87,7 @@ class SinglePageToolsTest {
         var base = snapshot("base", "old");
         var createdSnapshot = new AtomicReference<Snapshot>();
         when(authorization.username()).thenReturn(Mono.just("admin"));
-        when(client.fetch(SinglePage.class, "about"))
-                .thenReturn(Mono.just(original), Mono.just(latest));
+        when(client.fetch(SinglePage.class, "about")).thenReturn(Mono.just(original), Mono.just(latest));
         when(client.fetch(Snapshot.class, "base")).thenReturn(Mono.just(base));
         when(client.create(any(Snapshot.class))).thenAnswer(invocation -> {
             var snapshot = invocation.<Snapshot>getArgument(0);
@@ -118,8 +116,7 @@ class SinglePageToolsTest {
         latest.getSpec().setReleaseSnapshot("head");
         var createdSnapshot = new AtomicReference<Snapshot>();
         when(authorization.username()).thenReturn(Mono.just("admin"));
-        when(client.fetch(SinglePage.class, "about"))
-                .thenReturn(Mono.just(original), Mono.just(latest));
+        when(client.fetch(SinglePage.class, "about")).thenReturn(Mono.just(original), Mono.just(latest));
         when(client.fetch(Snapshot.class, "base")).thenReturn(Mono.just(snapshot("base", "old")));
         when(client.create(any(Snapshot.class))).thenAnswer(invocation -> {
             var snapshot = invocation.<Snapshot>getArgument(0);
@@ -150,8 +147,7 @@ class SinglePageToolsTest {
         when(client.fetch(SinglePage.class, "about"))
                 .thenReturn(Mono.just(original), Mono.just(latest), Mono.just(latest));
         when(client.fetch(Snapshot.class, "base")).thenReturn(Mono.just(snapshot("base", "old")));
-        when(client.create(any(Snapshot.class)))
-                .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(client.create(any(Snapshot.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         when(client.update(any(SinglePage.class))).thenAnswer(invocation -> {
             var updated = invocation.<SinglePage>getArgument(0);
             updated.getSpec().setReleaseSnapshot(updated.getSpec().getHeadSnapshot());
@@ -174,11 +170,9 @@ class SinglePageToolsTest {
         original.getSpec().setHeadSnapshot("head");
         original.getSpec().setReleaseSnapshot("head");
         when(authorization.username()).thenReturn(Mono.just("admin"));
-        when(client.fetch(SinglePage.class, "about"))
-                .thenReturn(Mono.just(original), Mono.never());
+        when(client.fetch(SinglePage.class, "about")).thenReturn(Mono.just(original), Mono.never());
         when(client.fetch(Snapshot.class, "base")).thenReturn(Mono.just(snapshot("base", "old")));
-        when(client.create(any(Snapshot.class)))
-                .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(client.create(any(Snapshot.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         var tools = new SinglePageTools(client, new ContentSnapshots(client), authorization);
 
         StepVerifier.create(tools.update(Map.of("name", "about", "raw", "new")))

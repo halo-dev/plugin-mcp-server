@@ -16,11 +16,7 @@ final class McpKeyAuthenticationToken extends AbstractAuthenticationToken {
     private final Set<String> allowedTools;
 
     McpKeyAuthenticationToken(
-            String keyId,
-            String keyDisplayName,
-            String keyPrefix,
-            String ownerName,
-            Set<String> allowedTools) {
+            String keyId, String keyDisplayName, String keyPrefix, String ownerName, Set<String> allowedTools) {
         super(List.of(new SimpleGrantedAuthority("ROLE_super-role")));
         this.keyId = keyId;
         this.keyDisplayName = keyDisplayName;

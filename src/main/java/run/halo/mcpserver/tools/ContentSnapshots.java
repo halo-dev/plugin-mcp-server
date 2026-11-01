@@ -31,11 +31,7 @@ class ContentSnapshots {
     }
 
     Mono<Snapshot> update(
-            Ref subjectRef,
-            String baseSnapshotName,
-            String headSnapshotName,
-            ContentInput content,
-            String username) {
+            Ref subjectRef, String baseSnapshotName, String headSnapshotName, ContentInput content, String username) {
         return client.fetch(Snapshot.class, baseSnapshotName)
                 .switchIfEmpty(ToolSupport.unavailable(subjectRef.getName()))
                 .flatMap(base -> {

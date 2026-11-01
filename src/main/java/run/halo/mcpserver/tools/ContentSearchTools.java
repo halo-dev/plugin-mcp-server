@@ -41,9 +41,7 @@ class ContentSearchTools extends ToolSupport implements ToolGroup {
                 objectSchema(
                         map(
                                 "query", stringSchema("Search keyword"),
-                                "types", arraySchema(Map.of(
-                                        "type", "string",
-                                        "enum", List.of("POST", "SINGLE_PAGE"))),
+                                "types", arraySchema(Map.of("type", "string", "enum", List.of("POST", "SINGLE_PAGE"))),
                                 "limit", integerSchema(1, MAX_LIMIT, DEFAULT_LIMIT),
                                 "published", booleanSchema(),
                                 "recycled", booleanSchema(false)),
@@ -65,8 +63,7 @@ class ContentSearchTools extends ToolSupport implements ToolGroup {
                 .map(this::result)
                 .onErrorMap(error -> error instanceof McpToolException
                         ? error
-                        : new McpToolException(
-                                "SEARCH_UNAVAILABLE", "Halo search is currently unavailable", error));
+                        : new McpToolException("SEARCH_UNAVAILABLE", "Halo search is currently unavailable", error));
     }
 
     private ToolPayload result(SearchResult result) {
@@ -75,10 +72,14 @@ class ContentSearchTools extends ToolSupport implements ToolGroup {
         var total = Optional.ofNullable(result.getTotal()).orElse((long) items.size());
         return payload(
                 map(
-                        "items", items,
-                        "total", total,
-                        "limit", result.getLimit(),
-                        "processingTimeMillis", result.getProcessingTimeMillis()),
+                        "items",
+                        items,
+                        "total",
+                        total,
+                        "limit",
+                        result.getLimit(),
+                        "processingTimeMillis",
+                        result.getProcessingTimeMillis()),
                 "Found " + items.size() + " content items");
     }
 
@@ -125,8 +126,7 @@ class ContentSearchTools extends ToolSupport implements ToolGroup {
                         "categories", HaloSchemaProperties.property(HaloDocument.class, "categories"),
                         "tags", HaloSchemaProperties.property(HaloDocument.class, "tags"),
                         "permalink", HaloSchemaProperties.property(HaloDocument.class, "permalink"),
-                        "creationTimestamp",
-                                HaloSchemaProperties.property(HaloDocument.class, "creationTimestamp"),
+                        "creationTimestamp", HaloSchemaProperties.property(HaloDocument.class, "creationTimestamp"),
                         "updateTimestamp", HaloSchemaProperties.property(HaloDocument.class, "updateTimestamp")),
                 List.of("type", "published", "recycled", "exposed", "categories", "tags"));
         return objectSchema(
@@ -146,16 +146,20 @@ class ContentSearchTools extends ToolSupport implements ToolGroup {
         if (!(value instanceof List<?> list)) {
             throw new McpToolException("INVALID_ARGUMENT", "types must be an array");
         }
-        var types = list.stream().map(item -> {
-            if (!(item instanceof String text)) {
-                throw new McpToolException("INVALID_ARGUMENT", "types must contain strings");
-            }
-            return switch (text.toUpperCase(java.util.Locale.ROOT)) {
-                case "POST" -> POST_TYPE;
-                case "SINGLE_PAGE" -> PAGE_TYPE;
-                default -> throw new McpToolException("INVALID_ARGUMENT", "types contains an unsupported value");
-            };
-        }).distinct().toList();
+        var types = list.stream()
+                .map(item -> {
+                    if (!(item instanceof String text)) {
+                        throw new McpToolException("INVALID_ARGUMENT", "types must contain strings");
+                    }
+                    return switch (text.toUpperCase(java.util.Locale.ROOT)) {
+                        case "POST" -> POST_TYPE;
+                        case "SINGLE_PAGE" -> PAGE_TYPE;
+                        default ->
+                            throw new McpToolException("INVALID_ARGUMENT", "types contains an unsupported value");
+                    };
+                })
+                .distinct()
+                .toList();
         if (types.isEmpty()) {
             throw new McpToolException("INVALID_ARGUMENT", "types must not be empty");
         }

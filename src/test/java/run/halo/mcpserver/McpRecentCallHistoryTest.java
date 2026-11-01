@@ -24,19 +24,13 @@ class McpRecentCallHistoryTest {
     @BeforeEach
     void setUp() {
         nanoTime = new AtomicLong();
-        history = new McpRecentCallHistory(
-                Clock.fixed(STARTED_AT, ZoneOffset.UTC), nanoTime::get);
+        history = new McpRecentCallHistory(Clock.fixed(STARTED_AT, ZoneOffset.UTC), nanoTime::get);
         authentication = new McpKeyAuthenticationToken(
                 "key-1",
                 "Automation",
                 "hmcp_key",
                 "admin",
-                Set.of(
-                        "halo_get_post",
-                        "demo__private",
-                        "demo__broken",
-                        "demo__slow",
-                        "demo__read"));
+                Set.of("halo_get_post", "demo__private", "demo__broken", "demo__slow", "demo__read"));
     }
 
     @Test
@@ -90,22 +84,29 @@ class McpRecentCallHistoryTest {
                         "demo__private",
                         () -> Mono.just(McpSchema.JSONRPCResponse.result(1, toolError)))
                 .block();
-        history.observe(authentication, "", () -> Mono.just(McpSchema.JSONRPCResponse.error(
-                        2, new McpSchema.JSONRPCResponse.JSONRPCError(-32602, "invalid"))))
+        history.observe(
+                        authentication,
+                        "",
+                        () -> Mono.just(McpSchema.JSONRPCResponse.error(
+                                2, new McpSchema.JSONRPCResponse.JSONRPCError(-32602, "invalid"))))
                 .block();
         history.observe(authentication, "demo__broken", () -> Mono.error(new IllegalStateException("secret")))
                 .onErrorResume(error -> Mono.empty())
                 .block();
-        var cancelled = history.observe(authentication, "demo__slow", Mono::never).subscribe();
+        var cancelled =
+                history.observe(authentication, "demo__slow", Mono::never).subscribe();
         cancelled.dispose();
 
-        var calls = history.list(new McpRecentCallQuery(1, 20, null, null, null)).items();
+        var calls =
+                history.list(new McpRecentCallQuery(1, 20, null, null, null)).items();
 
-        assertThat(calls).extracting(McpRecentCall::outcome).containsExactly(
-                McpCallOutcome.CANCELLED,
-                McpCallOutcome.INTERNAL_ERROR,
-                McpCallOutcome.PROTOCOL_ERROR,
-                McpCallOutcome.TOOL_ERROR);
+        assertThat(calls)
+                .extracting(McpRecentCall::outcome)
+                .containsExactly(
+                        McpCallOutcome.CANCELLED,
+                        McpCallOutcome.INTERNAL_ERROR,
+                        McpCallOutcome.PROTOCOL_ERROR,
+                        McpCallOutcome.TOOL_ERROR);
         assertThat(calls.getLast().errorCode()).isEqualTo("FORBIDDEN");
         assertThat(calls.toString()).doesNotContain("secret");
     }
@@ -114,23 +115,18 @@ class McpRecentCallHistoryTest {
     void sanitizesUntrustedToolNamesAndErrorCodes() {
         var toolError = McpSchema.CallToolResult.builder()
                 .isError(true)
-                .structuredContent(Map.of(
-                        "error", Map.of("code", "secret data that must not be retained")))
+                .structuredContent(Map.of("error", Map.of("code", "secret data that must not be retained")))
                 .build();
         history.observe(
                         authentication,
                         "SECRET_TOKEN_MUST_NOT_BE_RETAINED",
                         () -> Mono.just(McpSchema.JSONRPCResponse.result(1, toolError)))
                 .block();
-        history.observe(
-                        authentication,
-                        "a".repeat(129),
-                        () -> Mono.just(McpSchema.JSONRPCResponse.result(2, Map.of())))
+        history.observe(authentication, "a".repeat(129), () -> Mono.just(McpSchema.JSONRPCResponse.result(2, Map.of())))
                 .block();
         var numericToolError = McpSchema.CallToolResult.builder()
                 .isError(true)
-                .structuredContent(Map.of(
-                        "error", Map.of("code", new java.math.BigInteger("9".repeat(11)))))
+                .structuredContent(Map.of("error", Map.of("code", new java.math.BigInteger("9".repeat(11)))))
                 .build();
         history.observe(
                         authentication,
@@ -138,7 +134,8 @@ class McpRecentCallHistoryTest {
                         () -> Mono.just(McpSchema.JSONRPCResponse.result(3, numericToolError)))
                 .block();
 
-        var calls = history.list(new McpRecentCallQuery(1, 20, null, null, null)).items();
+        var calls =
+                history.list(new McpRecentCallQuery(1, 20, null, null, null)).items();
 
         assertThat(calls)
                 .extracting(
@@ -147,12 +144,9 @@ class McpRecentCallHistoryTest {
                         McpRecentCall::sourcePlugin,
                         McpRecentCall::errorCode)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(
-                                "demo__private", McpToolSourceType.PLUGIN, "demo", null),
-                        org.assertj.core.groups.Tuple.tuple(
-                                "<invalid>", McpToolSourceType.UNKNOWN, null, null),
-                        org.assertj.core.groups.Tuple.tuple(
-                                "<invalid>", McpToolSourceType.UNKNOWN, null, null));
+                        org.assertj.core.groups.Tuple.tuple("demo__private", McpToolSourceType.PLUGIN, "demo", null),
+                        org.assertj.core.groups.Tuple.tuple("<invalid>", McpToolSourceType.UNKNOWN, null, null),
+                        org.assertj.core.groups.Tuple.tuple("<invalid>", McpToolSourceType.UNKNOWN, null, null));
         assertThat(calls.toString())
                 .doesNotContain("MUST_NOT_BE_RETAINED")
                 .doesNotContain("must not be retained")
@@ -163,22 +157,25 @@ class McpRecentCallHistoryTest {
     void keepsOnlyTheNewestFiveHundredCallsAndFiltersBeforePaging() {
         for (var index = 0; index < McpRecentCallHistory.CAPACITY + 2; index++) {
             var toolName = index % 2 == 0 ? "halo_get_post" : "demo__read";
-            history.observe(authentication, toolName, () -> Mono.just(McpSchema.JSONRPCResponse.result(
-                            1, McpSchema.CallToolResult.builder().structuredContent(Map.of()).build())))
+            history.observe(
+                            authentication,
+                            toolName,
+                            () -> Mono.just(McpSchema.JSONRPCResponse.result(
+                                    1,
+                                    McpSchema.CallToolResult.builder()
+                                            .structuredContent(Map.of())
+                                            .build())))
                     .block();
         }
 
         var all = history.list(new McpRecentCallQuery(1, McpRecentCallHistory.CAPACITY, null, null, null));
-        var plugins = history.list(new McpRecentCallQuery(
-                2, 10, null, "demo__read", McpCallOutcome.SUCCESS));
+        var plugins = history.list(new McpRecentCallQuery(2, 10, null, "demo__read", McpCallOutcome.SUCCESS));
 
         assertThat(all.total()).isEqualTo(McpRecentCallHistory.CAPACITY);
         assertThat(all.items().getFirst().id()).isEqualTo(McpRecentCallHistory.CAPACITY + 2L);
         assertThat(all.items().getLast().id()).isEqualTo(3L);
         assertThat(plugins.total()).isEqualTo(250);
-        assertThat(plugins.items())
-                .hasSize(10)
-                .allMatch(call -> call.toolName().equals("demo__read"));
+        assertThat(plugins.items()).hasSize(10).allMatch(call -> call.toolName().equals("demo__read"));
         assertThat(plugins.page()).isEqualTo(2);
         assertThat(plugins.totalPages()).isEqualTo(25);
         assertThat(plugins.hasNext()).isTrue();

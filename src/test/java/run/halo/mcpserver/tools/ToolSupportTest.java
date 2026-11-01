@@ -40,9 +40,8 @@ class ToolSupportTest {
                 ToolSupport.objectSchema(Map.of(), List.of()),
                 ToolSupport.objectSchema(Map.of(), List.of()),
                 ToolSupport.READ_ONLY,
-                arguments -> Mono.just(ToolSupport.payload(
-                        Map.of("items", List.of(Map.of("title", "Hello"))),
-                        "Listed 1 posts")));
+                arguments -> Mono.just(
+                        ToolSupport.payload(Map.of("items", List.of(Map.of("title", "Hello"))), "Listed 1 posts")));
 
         var result = tool.specification()
                 .callHandler()
@@ -74,21 +73,19 @@ class ToolSupportTest {
     void validatesLongArgumentsWithoutNumericTruncation() {
         assertThat(ToolSupport.requiredLong(Map.of("version", BigInteger.ZERO), "version"))
                 .isZero();
-        assertThat(ToolSupport.requiredLong(
-                        Map.of("version", BigInteger.valueOf(Long.MAX_VALUE)), "version"))
+        assertThat(ToolSupport.requiredLong(Map.of("version", BigInteger.valueOf(Long.MAX_VALUE)), "version"))
                 .isEqualTo(Long.MAX_VALUE);
         assertThat(ToolSupport.requiredLong(Map.of("version", new BigDecimal("8.0")), "version"))
                 .isEqualTo(8L);
         assertThat(ToolSupport.requiredLong(Map.of("version", new BigDecimal("8e0")), "version"))
                 .isEqualTo(8L);
 
-        assertThatThrownBy(() -> ToolSupport.requiredLong(
-                        Map.of("version", new BigInteger("18446744073709551616")), "version"))
+        assertThatThrownBy(() ->
+                        ToolSupport.requiredLong(Map.of("version", new BigInteger("18446744073709551616")), "version"))
                 .isInstanceOfSatisfying(
                         McpToolException.class,
                         error -> assertThat(error.code()).isEqualTo("INVALID_ARGUMENT"));
-        assertThatThrownBy(() -> ToolSupport.requiredLong(
-                        Map.of("version", new BigDecimal("1.5")), "version"))
+        assertThatThrownBy(() -> ToolSupport.requiredLong(Map.of("version", new BigDecimal("1.5")), "version"))
                 .isInstanceOfSatisfying(
                         McpToolException.class,
                         error -> assertThat(error.code()).isEqualTo("INVALID_ARGUMENT"));

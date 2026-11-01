@@ -35,8 +35,7 @@ class CommentToolsTest {
         when(client.update(any(Comment.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         var tools = new CommentTools(client, authorization);
 
-        StepVerifier.create(tools.setApproval(Map.of(
-                        "name", "comment-one", "approved", true, "expectedVersion", 2)))
+        StepVerifier.create(tools.setApproval(Map.of("name", "comment-one", "approved", true, "expectedVersion", 2)))
                 .assertNext(payload -> {
                     assertThat(comment.getSpec().getApproved()).isTrue();
                     assertThat(comment.getSpec().getApprovedTime()).isNotNull();
@@ -62,8 +61,7 @@ class CommentToolsTest {
         when(client.update(any(Reply.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         var tools = new CommentTools(client, authorization);
 
-        StepVerifier.create(tools.setReplyApproval(Map.of(
-                        "name", "reply-one", "approved", true, "expectedVersion", 4)))
+        StepVerifier.create(tools.setReplyApproval(Map.of("name", "reply-one", "approved", true, "expectedVersion", 4)))
                 .assertNext(payload -> {
                     assertThat(reply.getSpec().getApproved()).isTrue();
                     assertThat(reply.getSpec().getApprovedTime()).isNotNull();

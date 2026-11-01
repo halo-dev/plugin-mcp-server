@@ -19,9 +19,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import run.halo.app.plugin.extensionpoint.ExtensionGetter;
 import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.plugin.PluginContext;
+import run.halo.app.plugin.extensionpoint.ExtensionGetter;
 import run.halo.mcpserver.api.McpToolDefinition;
 import run.halo.mcpserver.api.McpToolProvider;
 import run.halo.mcpserver.api.McpToolResult;
@@ -58,40 +58,32 @@ class HaloMcpServerTest {
     @BeforeEach
     void setUp() {
         when(pluginContext.getVersion()).thenReturn("1.0.0");
-        lenient().when(extensionGetter.getEnabledExtensions(run.halo.mcpserver.api.McpToolProvider.class))
+        lenient()
+                .when(extensionGetter.getEnabledExtensions(run.halo.mcpserver.api.McpToolProvider.class))
                 .thenReturn(Flux.empty());
         authorization = new McpAuthorization();
         var searchTool = builtInTool("halo_search_content", "Search content", authorization);
         var getPostTool = builtInTool("halo_get_post", "Read post", authorization);
         lenient().when(builtInTools.tools()).thenReturn(java.util.List.of(searchTool, getPostTool));
-        when(builtInTools.specifications()).thenReturn(java.util.List.of(
-                searchTool.specification(), getPostTool.specification()));
-        var registry = new McpToolRegistry(
-                extensionGetter, authorization, pluginManager, Duration.ofSeconds(5));
+        when(builtInTools.specifications())
+                .thenReturn(java.util.List.of(searchTool.specification(), getPostTool.specification()));
+        var registry = new McpToolRegistry(extensionGetter, authorization, pluginManager, Duration.ofSeconds(5));
         var catalog = new McpToolCatalog(builtInTools, registry, extensionClient);
         recentCallHistory = new McpRecentCallHistory();
         rateLimiter = new McpRequestRateLimiter();
         server = new HaloMcpServer(
-                builtInTools,
-                registry,
-                catalog,
-                authorization,
-                rateLimiter,
-                recentCallHistory,
-                pluginContext);
+                builtInTools, registry, catalog, authorization, rateLimiter, recentCallHistory, pluginContext);
         var authentication = new McpKeyAuthenticationToken(
                 "key-id",
                 "Automation",
                 "hmcp_key",
                 "admin",
-                java.util.Set.of(
-                        "halo_search_content",
-                        "halo_get_post",
-                        "demo__hello"));
+                java.util.Set.of("halo_search_content", "halo_get_post", "demo__hello"));
         client = WebTestClient.bindToRouterFunction(server.routerFunction())
                 .webFilter((exchange, chain) -> chain.filter(exchange)
-                        .contextWrite(org.springframework.security.core.context.ReactiveSecurityContextHolder
-                                .withAuthentication(authentication)))
+                        .contextWrite(
+                                org.springframework.security.core.context.ReactiveSecurityContextHolder
+                                        .withAuthentication(authentication)))
                 .build();
     }
 
@@ -220,7 +212,8 @@ class HaloMcpServerTest {
                         }
                         """)
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
         var page = recentCallHistory.list(new McpRecentCallQuery(1, 20, null, null, null));
         org.assertj.core.api.Assertions.assertThat(page.total()).isEqualTo(1);
@@ -250,7 +243,8 @@ class HaloMcpServerTest {
                         }
                         """)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(String.class)
                 .value(body -> org.assertj.core.api.Assertions.assertThat(body)
                         .contains("\"expectedVersion\":1.0000000000000000000001"));
@@ -263,11 +257,10 @@ class HaloMcpServerTest {
                 .title("Hello")
                 .description("Returns a greeting")
                 .inputSchema(java.util.Map.of(
-                        "type", "object",
-                        "properties", java.util.Map.of("name", java.util.Map.of("type", "string"))))
+                        "type", "object", "properties", java.util.Map.of("name", java.util.Map.of("type", "string"))))
                 .permission(invocation -> Mono.just(true))
-                .handler(invocation -> Mono.just(McpToolResult.success(
-                        java.util.Map.of("message", "Hello " + invocation.arguments().get("name")))))
+                .handler(invocation -> Mono.just(McpToolResult.success(java.util.Map.of(
+                        "message", "Hello " + invocation.arguments().get("name")))))
                 .build();
         when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(provider));
         when(provider.tools()).thenReturn(Flux.just(definition));
@@ -283,10 +276,13 @@ class HaloMcpServerTest {
                         {"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}
                         """)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody()
-                .jsonPath("$.result.tools.length()").isEqualTo(3)
-                .jsonPath("$.result.tools[2].name").isEqualTo("demo__hello");
+                .jsonPath("$.result.tools.length()")
+                .isEqualTo(3)
+                .jsonPath("$.result.tools[2].name")
+                .isEqualTo("demo__hello");
 
         client.post()
                 .uri("/mcp")
@@ -301,10 +297,13 @@ class HaloMcpServerTest {
                         }
                         """)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody()
-                .jsonPath("$.result.structuredContent.message").isEqualTo("Hello Halo")
-                .jsonPath("$.result.content[0].text").isEqualTo("{\"message\":\"Hello Halo\"}");
+                .jsonPath("$.result.structuredContent.message")
+                .isEqualTo("Hello Halo")
+                .jsonPath("$.result.content[0].text")
+                .isEqualTo("{\"message\":\"Hello Halo\"}");
 
         var page = recentCallHistory.list(new McpRecentCallQuery(1, 20, null, null, null));
         org.assertj.core.api.Assertions.assertThat(page.total()).isEqualTo(1);
@@ -322,23 +321,24 @@ class HaloMcpServerTest {
                 .description("Returns a greeting")
                 .inputSchema(java.util.Map.of("type", "object"))
                 .permission(invocation -> Mono.just(true))
-                .handler(invocation -> Mono.just(McpToolResult.success(
-                        java.util.Map.of("message", "Hello"))))
+                .handler(invocation -> Mono.just(McpToolResult.success(java.util.Map.of("message", "Hello"))))
                 .build();
         when(extensionGetter.getEnabledExtensions(McpToolProvider.class)).thenReturn(Flux.just(provider));
         when(provider.tools()).thenReturn(Flux.just(definition));
         var plugin = mock(PluginWrapper.class);
         when(plugin.getPluginId()).thenReturn("demo");
         when(pluginManager.whichPlugin(AopUtils.getTargetClass(provider))).thenReturn(plugin);
-        var authentication = new McpKeyAuthenticationToken(
-                "wildcard-key", "Automation", "hmcp_key", "admin", java.util.Set.of("*"));
+        var authentication =
+                new McpKeyAuthenticationToken("wildcard-key", "Automation", "hmcp_key", "admin", java.util.Set.of("*"));
         var wildcardClient = WebTestClient.bindToRouterFunction(server.routerFunction())
                 .webFilter((exchange, chain) -> chain.filter(exchange)
-                        .contextWrite(org.springframework.security.core.context.ReactiveSecurityContextHolder
-                                .withAuthentication(authentication)))
+                        .contextWrite(
+                                org.springframework.security.core.context.ReactiveSecurityContextHolder
+                                        .withAuthentication(authentication)))
                 .build();
 
-        wildcardClient.post()
+        wildcardClient
+                .post()
                 .uri("/mcp")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
@@ -351,11 +351,14 @@ class HaloMcpServerTest {
                         }
                         """)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody()
-                .jsonPath("$.result.structuredContent.marker").isEqualTo("built-in");
+                .jsonPath("$.result.structuredContent.marker")
+                .isEqualTo("built-in");
 
-        wildcardClient.post()
+        wildcardClient
+                .post()
                 .uri("/mcp")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
@@ -368,10 +371,13 @@ class HaloMcpServerTest {
                         }
                         """)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody()
-                .jsonPath("$.result.structuredContent.message").isEqualTo("Hello")
-                .jsonPath("$.result.isError").isEqualTo(false);
+                .jsonPath("$.result.structuredContent.message")
+                .isEqualTo("Hello")
+                .jsonPath("$.result.isError")
+                .isEqualTo(false);
     }
 
     @Test
@@ -383,8 +389,8 @@ class HaloMcpServerTest {
     @Test
     void rateLimitsToolInvocationsPerKeyAndTool() {
         for (var i = 0; i < McpRequestRateLimiter.TOOL_CALLS_PER_MINUTE; i++) {
-            org.assertj.core.api.Assertions.assertThat(
-                    rateLimiter.allowTool("key-id", "halo_get_post")).isTrue();
+            org.assertj.core.api.Assertions.assertThat(rateLimiter.allowTool("key-id", "halo_get_post"))
+                    .isTrue();
         }
 
         client.post()
@@ -400,10 +406,13 @@ class HaloMcpServerTest {
                         }
                         """)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody()
-                .jsonPath("$.result.isError").isEqualTo(true)
-                .jsonPath("$.result.structuredContent.error.code").isEqualTo("RATE_LIMITED");
+                .jsonPath("$.result.isError")
+                .isEqualTo(true)
+                .jsonPath("$.result.structuredContent.error.code")
+                .isEqualTo("RATE_LIMITED");
     }
 
     @Test
@@ -419,20 +428,23 @@ class HaloMcpServerTest {
                         {"jsonrpc":"2.0","id":10,"method":"tools/list","params":{}}
                         """)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody()
-                .jsonPath("$.result.tools.length()").isEqualTo(2)
-                .jsonPath("$.result.tools[0].name").isEqualTo("halo_search_content")
-                .jsonPath("$.result.tools[1].name").isEqualTo("halo_get_post")
-                .jsonPath("$").value(body -> org.assertj.core.api.Assertions
-                        .assertThat(body.toString()).doesNotContain("storage password"));
+                .jsonPath("$.result.tools.length()")
+                .isEqualTo(2)
+                .jsonPath("$.result.tools[0].name")
+                .isEqualTo("halo_search_content")
+                .jsonPath("$.result.tools[1].name")
+                .isEqualTo("halo_get_post")
+                .jsonPath("$")
+                .value(body -> org.assertj.core.api.Assertions.assertThat(body.toString())
+                        .doesNotContain("storage password"));
     }
 
-    private static BuiltInTool builtInTool(
-            String name, String title, McpAuthorization authorization) {
+    private static BuiltInTool builtInTool(String name, String title, McpAuthorization authorization) {
         var tool = io.modelcontextprotocol.spec.McpSchema.Tool.builder(
-                        name,
-                        java.util.Map.of("type", "object", "properties", java.util.Map.of()))
+                        name, java.util.Map.of("type", "object", "properties", java.util.Map.of()))
                 .title(title)
                 .description(title)
                 .annotations(io.modelcontextprotocol.spec.McpSchema.ToolAnnotations.builder()
@@ -444,12 +456,12 @@ class HaloMcpServerTest {
                 .build();
         var specification = io.modelcontextprotocol.server.McpStatelessServerFeatures.AsyncToolSpecification.builder()
                 .tool(tool)
-                .callHandler((context, request) -> authorization.authorize(name, () -> Mono.just(
-                        io.modelcontextprotocol.spec.McpSchema.CallToolResult.builder()
+                .callHandler((context, request) -> authorization.authorize(
+                        name,
+                        () -> Mono.just(io.modelcontextprotocol.spec.McpSchema.CallToolResult.builder()
                                 .structuredContent(request.arguments())
                                 .build())))
                 .build();
         return new BuiltInTool(specification, "TEST", title, title);
     }
-
 }

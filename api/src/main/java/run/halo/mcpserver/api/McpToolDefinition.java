@@ -23,8 +23,7 @@ public final class McpToolDefinition {
         if (builder.name == null || builder.name.isBlank()) {
             throw new IllegalArgumentException("Tool name must not be blank");
         }
-        if (builder.name.length() > 63
-                || !builder.name.matches("[a-z][a-z0-9_]*")) {
+        if (builder.name.length() > 63 || !builder.name.matches("[a-z][a-z0-9_]*")) {
             throw new IllegalArgumentException(
                     "Tool name must be a lowercase snake_case local name with at most 63 characters");
         }
@@ -33,14 +32,11 @@ public final class McpToolDefinition {
         this.description = Objects.requireNonNullElse(builder.description, "");
         this.displayTitle = builder.displayTitle == null ? this.title : builder.displayTitle;
         this.displayDescription = Objects.requireNonNullElse(builder.displayDescription, this.description);
-        this.category = builder.category == null || builder.category.isBlank()
-                ? "PLUGIN" : builder.category.strip();
+        this.category = builder.category == null || builder.category.isBlank() ? "PLUGIN" : builder.category.strip();
         this.inputSchema = copySchema(builder.inputSchema);
         this.outputSchema = builder.outputSchema == null ? null : copySchema(builder.outputSchema);
-        this.annotations = Objects.requireNonNullElse(
-                builder.annotations, McpToolAnnotations.defaults(builder.title));
-        this.permission = Objects.requireNonNull(builder.permission,
-                "A tool must declare a permission callback");
+        this.annotations = Objects.requireNonNullElse(builder.annotations, McpToolAnnotations.defaults(builder.title));
+        this.permission = Objects.requireNonNull(builder.permission, "A tool must declare a permission callback");
         this.handler = Objects.requireNonNull(builder.handler, "A tool must declare a handler");
     }
 

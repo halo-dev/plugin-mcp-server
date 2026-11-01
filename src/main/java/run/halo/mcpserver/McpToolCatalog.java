@@ -1,7 +1,7 @@
 package run.halo.mcpserver;
 
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.modelcontextprotocol.spec.McpSchema;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -12,7 +12,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.app.core.extension.Plugin;
 import run.halo.app.extension.ReactiveExtensionClient;
-import run.halo.mcpserver.api.McpToolDefinition;
 import run.halo.mcpserver.tools.BuiltInTool;
 import run.halo.mcpserver.tools.BuiltInTools;
 
@@ -25,10 +24,7 @@ class McpToolCatalog {
     private final McpToolRegistry toolRegistry;
     private final ReactiveExtensionClient extensionClient;
 
-    McpToolCatalog(
-            BuiltInTools builtInTools,
-            McpToolRegistry toolRegistry,
-            ReactiveExtensionClient extensionClient) {
+    McpToolCatalog(BuiltInTools builtInTools, McpToolRegistry toolRegistry, ReactiveExtensionClient extensionClient) {
         this.builtInTools = builtInTools;
         this.toolRegistry = toolRegistry;
         this.extensionClient = extensionClient;
@@ -39,10 +35,9 @@ class McpToolCatalog {
         var builtIn = builtInTools.tools().stream()
                 .map(tool -> descriptor(tool, builtInSource))
                 .toList();
-        return contributedTools().flatMap(definitions ->
-                Flux.fromIterable(definitions)
-                        .flatMap(tool -> source(tool.pluginName())
-                                .map(source -> descriptor(tool, source)))
+        return contributedTools()
+                .flatMap(definitions -> Flux.fromIterable(definitions)
+                        .flatMap(tool -> source(tool.pluginName()).map(source -> descriptor(tool, source)))
                         .collectList()
                         .map(contributed -> {
                             var tools = new java.util.ArrayList<>(builtIn);
@@ -53,22 +48,21 @@ class McpToolCatalog {
 
     Mono<List<McpSchema.Tool>> protocolTools() {
         return contributedTools().map(definitions -> {
-            var tools = new java.util.ArrayList<>(builtInTools.tools().stream()
-                    .map(BuiltInTool::protocolTool)
-                    .toList());
-            definitions.stream()
-                    .map(McpToolCatalog::protocolTool)
-                    .forEach(tools::add);
+            var tools = new java.util.ArrayList<>(
+                    builtInTools.tools().stream().map(BuiltInTool::protocolTool).toList());
+            definitions.stream().map(McpToolCatalog::protocolTool).forEach(tools::add);
             return List.copyOf(tools);
         });
     }
 
     Mono<Boolean> hasProtocolTool(String name) {
-        if (builtInTools.tools().stream().anyMatch(tool -> tool.protocolTool().name().equals(name))) {
+        if (builtInTools.tools().stream()
+                .anyMatch(tool -> tool.protocolTool().name().equals(name))) {
             return Mono.just(true);
         }
-        return contributedTools().map(tools ->
-                tools.stream().anyMatch(tool -> tool.protocolName().equals(name)));
+        return contributedTools()
+                .map(tools ->
+                        tools.stream().anyMatch(tool -> tool.protocolName().equals(name)));
     }
 
     private Mono<List<RegisteredTool>> contributedTools() {
@@ -79,21 +73,22 @@ class McpToolCatalog {
     }
 
     Mono<Set<String>> availableNames() {
-        return tools().map(tools -> tools.stream()
-                .map(ToolDescriptor::name)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet()));
+        return tools().map(tools ->
+                tools.stream().map(ToolDescriptor::name).collect(java.util.stream.Collectors.toUnmodifiableSet()));
     }
 
     private Mono<ToolSource> source(String pluginName) {
         var fallback = new ToolSource("PLUGIN", pluginName, pluginName, null, null);
-        return extensionClient.fetch(Plugin.class, pluginName)
+        return extensionClient
+                .fetch(Plugin.class, pluginName)
                 .map(plugin -> {
                     var spec = plugin.getSpec();
-                    var displayName = spec == null || spec.getDisplayName() == null
-                            ? pluginName
-                            : spec.getDisplayName();
+                    var displayName =
+                            spec == null || spec.getDisplayName() == null ? pluginName : spec.getDisplayName();
                     var version = spec == null ? null : spec.getVersion();
-                    var logo = plugin.getStatus() == null ? null : plugin.getStatus().getLogo();
+                    var logo = plugin.getStatus() == null
+                            ? null
+                            : plugin.getStatus().getLogo();
                     if (logo == null && spec != null) {
                         logo = spec.getLogo();
                     }
@@ -157,29 +152,48 @@ class McpToolCatalog {
     @Schema(name = "McpToolSource")
     record ToolSource(
             @Schema(
-                            requiredMode = Schema.RequiredMode.REQUIRED,
-                            allowableValues = {"BUILT_IN", "PLUGIN"})
-                    String type,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String pluginName,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName,
+                    requiredMode = Schema.RequiredMode.REQUIRED,
+                    allowableValues = {"BUILT_IN", "PLUGIN"})
+            String type,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            String pluginName,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            String displayName,
+
             String version,
             String logo) {}
 
     @Schema(name = "McpTool")
     record ToolDescriptor(
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String name,
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            String name,
+
             String title,
             String description,
+
             @Schema(
-                            requiredMode = Schema.RequiredMode.REQUIRED,
-                            type = "object",
-                            additionalProperties = Schema.AdditionalPropertiesValue.TRUE)
-                    Map<String, Object> inputSchema,
+                    requiredMode = Schema.RequiredMode.REQUIRED,
+                    type = "object",
+                    additionalProperties = Schema.AdditionalPropertiesValue.TRUE)
+            Map<String, Object> inputSchema,
+
             @Schema(type = "object", additionalProperties = Schema.AdditionalPropertiesValue.TRUE)
-                    Map<String, Object> outputSchema,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String category,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean readOnly,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean destructive,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean available,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ToolSource source) {}
+            Map<String, Object> outputSchema,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            String category,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            boolean readOnly,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            boolean destructive,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            boolean available,
+
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            ToolSource source) {}
 }

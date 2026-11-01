@@ -21,10 +21,8 @@ import reactor.core.publisher.Mono;
 class McpRecentCallHistory {
 
     static final int CAPACITY = 500;
-    private static final Pattern TOOL_NAME_PATTERN =
-            Pattern.compile("[A-Za-z0-9_-]{1,128}");
-    private static final Pattern ERROR_CODE_PATTERN =
-            Pattern.compile("(?:[A-Z][A-Z0-9_]{0,63}|-?[0-9]{1,10})");
+    private static final Pattern TOOL_NAME_PATTERN = Pattern.compile("[A-Za-z0-9_-]{1,128}");
+    private static final Pattern ERROR_CODE_PATTERN = Pattern.compile("(?:[A-Z][A-Z0-9_]{0,63}|-?[0-9]{1,10})");
 
     private final Object monitor = new Object();
     private final Deque<McpRecentCall> calls = new ArrayDeque<>(CAPACITY);
@@ -79,8 +77,10 @@ class McpRecentCallHistory {
     McpRecentCallPage list(McpRecentCallQuery query) {
         var snapshot = snapshot();
         var matching = snapshot.stream()
-                .filter(call -> !StringUtils.hasText(query.keyId()) || query.keyId().equals(call.keyId()))
-                .filter(call -> !StringUtils.hasText(query.toolName()) || query.toolName().equals(call.toolName()))
+                .filter(call ->
+                        !StringUtils.hasText(query.keyId()) || query.keyId().equals(call.keyId()))
+                .filter(call -> !StringUtils.hasText(query.toolName())
+                        || query.toolName().equals(call.toolName()))
                 .filter(call -> query.outcome() == null || query.outcome() == call.outcome())
                 .toList();
         var total = matching.size();
@@ -160,18 +160,14 @@ class McpRecentCallHistory {
     }
 
     private static String errorCode(Object structuredContent) {
-        if (!(structuredContent instanceof Map<?, ?> content)
-                || !(content.get("error") instanceof Map<?, ?> error)) {
+        if (!(structuredContent instanceof Map<?, ?> content) || !(content.get("error") instanceof Map<?, ?> error)) {
             return null;
         }
         var code = error.get("code");
-        return code instanceof String || code instanceof Number
-                ? normalizedErrorCode(String.valueOf(code))
-                : null;
+        return code instanceof String || code instanceof Number ? normalizedErrorCode(String.valueOf(code)) : null;
     }
 
-    private static String normalizedToolName(
-            McpKeyAuthenticationToken authentication, String toolName) {
+    private static String normalizedToolName(McpKeyAuthenticationToken authentication, String toolName) {
         return toolName != null
                         && authentication.allows(toolName)
                         && TOOL_NAME_PATTERN.matcher(toolName).matches()
@@ -180,18 +176,14 @@ class McpRecentCallHistory {
     }
 
     private static String normalizedErrorCode(String errorCode) {
-        return errorCode != null && ERROR_CODE_PATTERN.matcher(errorCode).matches()
-                ? errorCode
-                : null;
+        return errorCode != null && ERROR_CODE_PATTERN.matcher(errorCode).matches() ? errorCode : null;
     }
 
     private static McpToolSourceType sourceType(String toolName) {
         if ("<invalid>".equals(toolName)) {
             return McpToolSourceType.UNKNOWN;
         }
-        return McpToolNames.pluginName(toolName).isPresent()
-                ? McpToolSourceType.PLUGIN
-                : McpToolSourceType.BUILT_IN;
+        return McpToolNames.pluginName(toolName).isPresent() ? McpToolSourceType.PLUGIN : McpToolSourceType.BUILT_IN;
     }
 
     private static String sourcePlugin(String toolName) {

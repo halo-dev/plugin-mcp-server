@@ -14,11 +14,9 @@ class McpIpAllowlistTest {
 
     @Test
     void normalizesAndValidatesRanges() {
-        var ranges = new LinkedHashSet<>(
-                java.util.List.of(" 203.0.113.10 ", "203.0.113.0/24", "2001:db8::/32"));
+        var ranges = new LinkedHashSet<>(java.util.List.of(" 203.0.113.10 ", "203.0.113.0/24", "2001:db8::/32"));
 
-        assertThat(McpIpAllowlist.normalize(ranges))
-                .containsExactly("203.0.113.10", "203.0.113.0/24", "2001:db8::/32");
+        assertThat(McpIpAllowlist.normalize(ranges)).containsExactly("203.0.113.10", "203.0.113.0/24", "2001:db8::/32");
     }
 
     @Test
@@ -42,46 +40,35 @@ class McpIpAllowlistTest {
 
     @Test
     void allowsExactAddressesAndCidrsForBothAddressFamilies() {
-        assertThat(McpIpAllowlist.allows(
-                        Set.of("203.0.113.10"), new InetSocketAddress("203.0.113.10", 443)))
+        assertThat(McpIpAllowlist.allows(Set.of("203.0.113.10"), new InetSocketAddress("203.0.113.10", 443)))
                 .isTrue();
-        assertThat(McpIpAllowlist.allows(
-                        Set.of("203.0.113.0/24"), new InetSocketAddress("203.0.113.42", 443)))
+        assertThat(McpIpAllowlist.allows(Set.of("203.0.113.0/24"), new InetSocketAddress("203.0.113.42", 443)))
                 .isTrue();
-        assertThat(McpIpAllowlist.allows(
-                        Set.of("2001:db8::/32"), new InetSocketAddress("2001:db8::42", 443)))
+        assertThat(McpIpAllowlist.allows(Set.of("2001:db8::/32"), new InetSocketAddress("2001:db8::42", 443)))
                 .isTrue();
     }
 
     @Test
     void rejectsMismatchesAndUnknownAddressesWhenConfigured() {
-        assertThat(McpIpAllowlist.allows(
-                        Set.of("203.0.113.0/24"), new InetSocketAddress("198.51.100.10", 443)))
+        assertThat(McpIpAllowlist.allows(Set.of("203.0.113.0/24"), new InetSocketAddress("198.51.100.10", 443)))
                 .isFalse();
-        assertThat(McpIpAllowlist.allows(Set.of("203.0.113.0/24"), null))
-                .isFalse();
+        assertThat(McpIpAllowlist.allows(Set.of("203.0.113.0/24"), null)).isFalse();
         assertThat(McpIpAllowlist.allows(
-                        Set.of("203.0.113.0/24"),
-                        InetSocketAddress.createUnresolved("client.example.com", 443)))
+                        Set.of("203.0.113.0/24"), InetSocketAddress.createUnresolved("client.example.com", 443)))
                 .isFalse();
     }
 
     @Test
     void rejectsAddressesFromAnotherAddressFamily() {
-        assertThat(McpIpAllowlist.allows(
-                        Set.of("0.0.0.0/0"), new InetSocketAddress("203.0.113.10", 443)))
+        assertThat(McpIpAllowlist.allows(Set.of("0.0.0.0/0"), new InetSocketAddress("203.0.113.10", 443)))
                 .isTrue();
-        assertThat(McpIpAllowlist.allows(
-                        Set.of("::/0"), new InetSocketAddress("2001:db8::10", 443)))
+        assertThat(McpIpAllowlist.allows(Set.of("::/0"), new InetSocketAddress("2001:db8::10", 443)))
                 .isTrue();
-        assertThat(McpIpAllowlist.allows(
-                        Set.of("cb00:710a::/32"), new InetSocketAddress("203.0.113.10", 443)))
+        assertThat(McpIpAllowlist.allows(Set.of("cb00:710a::/32"), new InetSocketAddress("203.0.113.10", 443)))
                 .isFalse();
-        assertThat(McpIpAllowlist.allows(
-                        Set.of("::/0"), new InetSocketAddress("203.0.113.10", 443)))
+        assertThat(McpIpAllowlist.allows(Set.of("::/0"), new InetSocketAddress("203.0.113.10", 443)))
                 .isFalse();
-        assertThat(McpIpAllowlist.allows(
-                        Set.of("0.0.0.0/0"), new InetSocketAddress("2001:db8::10", 443)))
+        assertThat(McpIpAllowlist.allows(Set.of("0.0.0.0/0"), new InetSocketAddress("2001:db8::10", 443)))
                 .isFalse();
     }
 
@@ -89,12 +76,13 @@ class McpIpAllowlistTest {
     void allowsNumericAddressesFromForwardedHeaders() {
         var forwardedIpv4 = transformedRemoteAddress("X-Forwarded-For", "203.0.113.42");
         assertThat(forwardedIpv4.isUnresolved()).isTrue();
-        assertThat(McpIpAllowlist.allows(Set.of("203.0.113.0/24"), forwardedIpv4)).isTrue();
+        assertThat(McpIpAllowlist.allows(Set.of("203.0.113.0/24"), forwardedIpv4))
+                .isTrue();
 
-        var forwardedIpv6 = transformedRemoteAddress(
-                "Forwarded", "for=\"[2001:db8::42]\"");
+        var forwardedIpv6 = transformedRemoteAddress("Forwarded", "for=\"[2001:db8::42]\"");
         assertThat(forwardedIpv6.isUnresolved()).isTrue();
-        assertThat(McpIpAllowlist.allows(Set.of("2001:db8::/32"), forwardedIpv6)).isTrue();
+        assertThat(McpIpAllowlist.allows(Set.of("2001:db8::/32"), forwardedIpv6))
+                .isTrue();
     }
 
     @Test
@@ -114,8 +102,7 @@ class McpIpAllowlistTest {
     void failsClosedWhenStoredConfigurationIsInvalid() {
         var ranges = new LinkedHashSet<>(java.util.List.of("203.0.113.10", "invalid"));
 
-        assertThat(McpIpAllowlist.allows(
-                        ranges, new InetSocketAddress("203.0.113.10", 443)))
+        assertThat(McpIpAllowlist.allows(ranges, new InetSocketAddress("203.0.113.10", 443)))
                 .isFalse();
     }
 

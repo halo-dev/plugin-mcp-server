@@ -65,8 +65,7 @@ class McpAccessKeyEndpointTest {
     @Test
     void mapsInvalidIpRangesToBadRequestWhenUpdating() {
         when(toolCatalog.availableNames()).thenReturn(reactor.core.publisher.Mono.just(Set.of()));
-        when(accessKeyService.allowedTools("test-key"))
-                .thenReturn(reactor.core.publisher.Mono.just(Set.of()));
+        when(accessKeyService.allowedTools("test-key")).thenReturn(reactor.core.publisher.Mono.just(Set.of()));
         when(accessKeyService.update(any(), any(), any(), any(), any(), anyBoolean()))
                 .thenReturn(reactor.core.publisher.Mono.error(
                         new IllegalArgumentException("Invalid IP address or CIDR: invalid")));
@@ -91,8 +90,7 @@ class McpAccessKeyEndpointTest {
 
     @Test
     void preservesExistingUnavailableToolsButRejectsNewUnknownTools() {
-        when(toolCatalog.availableNames())
-                .thenReturn(reactor.core.publisher.Mono.just(Set.of("halo_get_post")));
+        when(toolCatalog.availableNames()).thenReturn(reactor.core.publisher.Mono.just(Set.of("halo_get_post")));
         when(accessKeyService.allowedTools("test-key"))
                 .thenReturn(reactor.core.publisher.Mono.just(Set.of("unavailable__tool")));
         var updated = new McpAccessKey();
@@ -117,13 +115,8 @@ class McpAccessKeyEndpointTest {
                 .exchange()
                 .expectStatus()
                 .isOk();
-        verify(accessKeyService).update(
-                "test-key",
-                "Test key",
-                Set.of("halo_get_post", "unavailable__tool"),
-                Set.of(),
-                null,
-                true);
+        verify(accessKeyService)
+                .update("test-key", "Test key", Set.of("halo_get_post", "unavailable__tool"), Set.of(), null, true);
 
         client.put()
                 .uri("/keys/test-key")
@@ -144,8 +137,7 @@ class McpAccessKeyEndpointTest {
     @Test
     void acceptsTheAllToolsWildcard() {
         when(toolCatalog.availableNames()).thenReturn(reactor.core.publisher.Mono.just(Set.of()));
-        when(accessKeyService.allowedTools("test-key"))
-                .thenReturn(reactor.core.publisher.Mono.just(Set.of()));
+        when(accessKeyService.allowedTools("test-key")).thenReturn(reactor.core.publisher.Mono.just(Set.of()));
         var updated = new McpAccessKey();
         updated.setMetadata(new Metadata());
         updated.getMetadata().setName("test-key");
@@ -173,8 +165,7 @@ class McpAccessKeyEndpointTest {
                 .jsonPath("$.allowedTools[0]")
                 .isEqualTo("*");
 
-        verify(accessKeyService).update(
-                "test-key", "Test key", Set.of("*"), Set.of(), null, true);
+        verify(accessKeyService).update("test-key", "Test key", Set.of("*"), Set.of(), null, true);
     }
 
     @Test
@@ -188,8 +179,7 @@ class McpAccessKeyEndpointTest {
         key.getSpec().setOwnerName("admin");
         key.getSpec().setAllowedTools(Set.of("*"));
         when(accessKeyService.create("Automation", "admin", Set.of("*"), Set.of(), null))
-                .thenReturn(reactor.core.publisher.Mono.just(
-                        new McpAccessKeyService.CreatedKey(key, "secret")));
+                .thenReturn(reactor.core.publisher.Mono.just(new McpAccessKeyService.CreatedKey(key, "secret")));
 
         var authentication = new UsernamePasswordAuthenticationToken("admin", "n/a");
         WebTestClient.bindToRouterFunction(endpoint.endpoint())
@@ -233,8 +223,8 @@ class McpAccessKeyEndpointTest {
                 "plugin-mcp-server",
                 McpCallOutcome.SUCCESS,
                 null);
-        when(recentCallHistory.list(any())).thenReturn(
-                new McpRecentCallPage(java.util.List.of(call), 2, 10, 11, 2, false));
+        when(recentCallHistory.list(any()))
+                .thenReturn(new McpRecentCallPage(java.util.List.of(call), 2, 10, 11, 2, false));
 
         WebTestClient.bindToRouterFunction(endpoint.endpoint())
                 .build()

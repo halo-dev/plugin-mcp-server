@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import io.modelcontextprotocol.json.schema.jackson3.DefaultJsonSchemaValidator;
-import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import run.halo.app.content.PostContentService;
@@ -28,10 +27,7 @@ class BuiltInToolsTest {
                 new TagTools(client, authorization),
                 new CommentTools(client, authorization),
                 new AttachmentTools(
-                        client,
-                        mock(AttachmentService.class),
-                        new AttachmentUploadLimiter(),
-                        authorization),
+                        client, mock(AttachmentService.class), new AttachmentUploadLimiter(), authorization),
                 new ThemeSettingTools(client, authorization));
 
         var names = tools.names().toList();
@@ -60,12 +56,11 @@ class BuiltInToolsTest {
         assertThat(tools.tools())
                 .extracting(BuiltInTool::category)
                 .contains("CONTENT_SEARCH", "POST", "PAGE", "CATEGORY", "TAG", "COMMENT", "ATTACHMENT", "THEME");
-        assertThat(tools.tools())
-                .allSatisfy(tool -> {
-                    assertThat(tool.displayTitle()).containsPattern("[\\p{IsHan}]");
-                    assertThat(tool.displayDescription()).containsPattern("[\\p{IsHan}]");
-                    assertThat(tool.protocolTool().description()).isNotBlank();
-                });
+        assertThat(tools.tools()).allSatisfy(tool -> {
+            assertThat(tool.displayTitle()).containsPattern("[\\p{IsHan}]");
+            assertThat(tool.displayDescription()).containsPattern("[\\p{IsHan}]");
+            assertThat(tool.protocolTool().description()).isNotBlank();
+        });
     }
 
     @Test
@@ -81,34 +76,33 @@ class BuiltInToolsTest {
                 new TagTools(client, authorization),
                 new CommentTools(client, authorization),
                 new AttachmentTools(
-                        client,
-                        mock(AttachmentService.class),
-                        new AttachmentUploadLimiter(),
-                        authorization),
+                        client, mock(AttachmentService.class), new AttachmentUploadLimiter(), authorization),
                 new ThemeSettingTools(client, authorization));
 
         var destructive = tools.tools().stream()
-                .filter(tool -> Boolean.TRUE.equals(tool.protocolTool().annotations().destructiveHint()))
+                .filter(tool ->
+                        Boolean.TRUE.equals(tool.protocolTool().annotations().destructiveHint()))
                 .map(tool -> tool.protocolTool().name())
                 .toList();
 
-        assertThat(destructive).containsExactlyInAnyOrder(
-                PostTools.UPDATE_POST,
-                PostTools.SET_PUBLISH_STATE,
-                PostTools.RECYCLE_POST,
-                SinglePageTools.UPDATE_PAGE,
-                SinglePageTools.SET_PUBLISH_STATE,
-                SinglePageTools.RECYCLE_PAGE,
-                CategoryTools.UPDATE,
-                CategoryTools.DELETE,
-                TagTools.UPDATE,
-                TagTools.DELETE,
-                CommentTools.SET_APPROVAL,
-                CommentTools.DELETE,
-                CommentTools.SET_REPLY_APPROVAL,
-                CommentTools.DELETE_REPLY,
-                AttachmentTools.DELETE,
-                ThemeSettingTools.UPDATE_GROUP);
+        assertThat(destructive)
+                .containsExactlyInAnyOrder(
+                        PostTools.UPDATE_POST,
+                        PostTools.SET_PUBLISH_STATE,
+                        PostTools.RECYCLE_POST,
+                        SinglePageTools.UPDATE_PAGE,
+                        SinglePageTools.SET_PUBLISH_STATE,
+                        SinglePageTools.RECYCLE_PAGE,
+                        CategoryTools.UPDATE,
+                        CategoryTools.DELETE,
+                        TagTools.UPDATE,
+                        TagTools.DELETE,
+                        CommentTools.SET_APPROVAL,
+                        CommentTools.DELETE,
+                        CommentTools.SET_REPLY_APPROVAL,
+                        CommentTools.DELETE_REPLY,
+                        AttachmentTools.DELETE,
+                        ThemeSettingTools.UPDATE_GROUP);
     }
 
     @Test
@@ -124,10 +118,7 @@ class BuiltInToolsTest {
                 new TagTools(client, authorization),
                 new CommentTools(client, authorization),
                 new AttachmentTools(
-                        client,
-                        mock(AttachmentService.class),
-                        new AttachmentUploadLimiter(),
-                        authorization),
+                        client, mock(AttachmentService.class), new AttachmentUploadLimiter(), authorization),
                 new ThemeSettingTools(client, authorization));
         var schemaValidator = new DefaultJsonSchemaValidator();
 
@@ -135,14 +126,15 @@ class BuiltInToolsTest {
             var outputSchema = tool.protocolTool().outputSchema();
             var validation = schemaValidator.validateSchema(outputSchema);
             assertThat(validation.valid())
-                    .as("%s output schema must be valid: %s", tool.protocolTool().name(), validation.errorMessage())
+                    .as(
+                            "%s output schema must be valid: %s",
+                            tool.protocolTool().name(), validation.errorMessage())
                     .isTrue();
             assertDetailedObjectSchemas(tool.protocolTool().name(), outputSchema, "$");
         });
     }
 
-    private static void assertDetailedObjectSchemas(
-            String toolName, Map<String, Object> schema, String path) {
+    private static void assertDetailedObjectSchemas(String toolName, Map<String, Object> schema, String path) {
         if ("object".equals(schema.get("type"))) {
             var properties = schema.get("properties");
             var additionalProperties = schema.get("additionalProperties");
@@ -157,14 +149,12 @@ class BuiltInToolsTest {
                                 .isInstanceOf(String.class)
                                 .asString()
                                 .isNotBlank();
-                        assertDetailedObjectSchemas(
-                                toolName, castSchema(nestedSchema), path + ".properties." + name);
+                        assertDetailedObjectSchemas(toolName, castSchema(nestedSchema), path + ".properties." + name);
                     }
                 });
             }
             if (additionalProperties instanceof Map<?, ?> valueSchema) {
-                assertDetailedObjectSchemas(
-                        toolName, castSchema(valueSchema), path + ".additionalProperties");
+                assertDetailedObjectSchemas(toolName, castSchema(valueSchema), path + ".additionalProperties");
             }
         }
         if ("array".equals(schema.get("type")) && schema.get("items") instanceof Map<?, ?> itemSchema) {

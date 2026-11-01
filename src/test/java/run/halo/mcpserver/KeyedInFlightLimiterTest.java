@@ -83,8 +83,7 @@ class KeyedInFlightLimiterTest {
         }
 
         assertThat(errors).isEmpty();
-        assertThat(maximum.values())
-                .allSatisfy(max -> assertThat(max.get()).isLessThanOrEqualTo(PER_KEY_LIMIT));
+        assertThat(maximum.values()).allSatisfy(max -> assertThat(max.get()).isLessThanOrEqualTo(PER_KEY_LIMIT));
         for (var i = 0; i < 4; i++) {
             var lease = limiter.tryAcquire("key-" + i, PER_KEY_LIMIT);
             assertThat(lease).isNotNull();

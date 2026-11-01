@@ -64,8 +64,7 @@ class ThemeSettingToolsTest {
                 .filter(tool -> tool.specification().tool().name().equals(ThemeSettingTools.UPDATE_GROUP))
                 .findFirst()
                 .orElseThrow();
-        var properties =
-                (Map<?, ?>) update.specification().tool().inputSchema().get("properties");
+        var properties = (Map<?, ?>) update.specification().tool().inputSchema().get("properties");
         var expectedVersion = (Map<?, ?>) properties.get("expectedVersion");
 
         assertThat(expectedVersion.get("minimum")).isEqualTo(0);
@@ -116,20 +115,18 @@ class ThemeSettingToolsTest {
                 .containsEntry("themeVersion", "1.2.3");
         assertThat(result.get("groups"))
                 .isEqualTo(List.of(
-                        Map.of("name", "basics", "label", "Basic"),
-                        Map.of("name", "layout", "label", "Layout")));
+                        Map.of("name", "basics", "label", "Basic"), Map.of("name", "layout", "label", "Layout")));
         verify(client, never()).fetch(ConfigMap.class, "theme-hao-config");
     }
 
     @Test
     void getsStoredGroupValuesAndRawFormSchema() {
-        var schema = Map.<String, Object>of(
-                "$formkit", "text", "name", "title", "value", "Schema default");
+        var schema = Map.<String, Object>of("$formkit", "text", "name", "title", "value", "Schema default");
         when(client.fetch(Setting.class, "theme-hao-setting"))
                 .thenReturn(Mono.just(setting(form("basics", "Basic", schema))));
         when(client.fetch(ConfigMap.class, "theme-hao-config"))
-                .thenReturn(Mono.just(configMap(
-                        "theme-hao-config", 0L, Map.of("basics", "{\"title\":\"Stored value\"}"))));
+                .thenReturn(
+                        Mono.just(configMap("theme-hao-config", 0L, Map.of("basics", "{\"title\":\"Stored value\"}"))));
 
         var result = data(tools.getGroup(Map.of("group", "basics")).block());
 
@@ -200,8 +197,7 @@ class ThemeSettingToolsTest {
         var html = "<section th:if=\"${theme.config.layout.enabled}\"></section>";
         Files.writeString(templates.resolve("layout.html"), html);
 
-        var result = data(tools.getTemplate(Map.of(
-                        "themeName", themeName, "path", "modules/layout.html"))
+        var result = data(tools.getTemplate(Map.of("themeName", themeName, "path", "modules/layout.html"))
                 .block());
 
         assertThat(result)
@@ -214,15 +210,16 @@ class ThemeSettingToolsTest {
     void rejectsAStaleThemeAndUnsafeTemplatePaths() throws IOException {
         Files.createDirectories(themeRoot().resolve("templates"));
 
-        StepVerifier.create(tools.getTemplate(Map.of(
-                        "themeName", "theme-other", "path", "index.html")))
+        StepVerifier.create(tools.getTemplate(Map.of("themeName", "theme-other", "path", "index.html")))
                 .expectErrorSatisfies(error -> assertToolError(error, "CONFLICT", "active theme changed"))
                 .verify();
-        assertThatThrownBy(() -> tools.getTemplate(Map.of(
-                        "themeName", "theme-hao", "path", "../theme.yaml")))
+        assertThatThrownBy(() -> tools.getTemplate(Map.of("themeName", "theme-hao", "path", "../theme.yaml")))
                 .satisfies(error -> assertToolError(error, "INVALID_ARGUMENT", "relative HTML path"));
         assertThatThrownBy(() -> tools.getTemplate(Map.of(
-                        "themeName", "theme-hao", "path", tempDir.resolve("outside.html").toString())))
+                        "themeName",
+                        "theme-hao",
+                        "path",
+                        tempDir.resolve("outside.html").toString())))
                 .satisfies(error -> assertToolError(error, "INVALID_ARGUMENT", "relative HTML path"));
     }
 
@@ -233,16 +230,12 @@ class ThemeSettingToolsTest {
         Files.writeString(outside, "<p>outside</p>");
         Files.createSymbolicLink(templates.resolve("outside.html"), outside);
 
-        StepVerifier.create(tools.getTemplate(Map.of(
-                        "themeName", "theme-hao", "path", "outside.html")))
+        StepVerifier.create(tools.getTemplate(Map.of("themeName", "theme-hao", "path", "outside.html")))
                 .expectErrorSatisfies(error -> assertToolError(error, "INVALID_ARGUMENT", "outside templates"))
                 .verify();
 
-        Files.write(
-                templates.resolve("large.html"),
-                new byte[ThemeSettingTools.MAX_TEMPLATE_BYTES + 1]);
-        StepVerifier.create(tools.getTemplate(Map.of(
-                        "themeName", "theme-hao", "path", "large.html")))
+        Files.write(templates.resolve("large.html"), new byte[ThemeSettingTools.MAX_TEMPLATE_BYTES + 1]);
+        StepVerifier.create(tools.getTemplate(Map.of("themeName", "theme-hao", "path", "large.html")))
                 .expectErrorSatisfies(error -> assertToolError(error, "TEMPLATE_TOO_LARGE", "256 KiB"))
                 .verify();
     }
@@ -260,8 +253,7 @@ class ThemeSettingToolsTest {
                 Map.of(
                         "basics", "{\"nested\":{\"keep\":1,\"remove\":2},\"items\":[1,2]}",
                         "layout", "{\"enabled\":true}"));
-        when(client.fetch(ConfigMap.class, "theme-hao-config"))
-                .thenReturn(Mono.just(configMap));
+        when(client.fetch(ConfigMap.class, "theme-hao-config")).thenReturn(Mono.just(configMap));
         when(client.update(any(ConfigMap.class))).thenAnswer(invocation -> {
             var updated = invocation.getArgument(0, ConfigMap.class);
             updated.getMetadata().setVersion(1L);
@@ -272,11 +264,8 @@ class ThemeSettingToolsTest {
         nestedPatch.put("add", 3);
         var patch = Map.<String, Object>of("nested", nestedPatch, "items", List.of(4));
 
-        var result = data(tools.updateGroup(Map.of(
-                        "themeName", themeName,
-                        "group", "basics",
-                        "patch", patch,
-                        "expectedVersion", 0L))
+        var result = data(tools.updateGroup(
+                        Map.of("themeName", themeName, "group", "basics", "patch", patch, "expectedVersion", 0L))
                 .block());
 
         var captor = ArgumentCaptor.forClass(ConfigMap.class);
@@ -289,20 +278,21 @@ class ThemeSettingToolsTest {
         assertThat(savedGroup.get("nested").get("add").asInt()).isEqualTo(3);
         assertThat(savedGroup.get("items").size()).isEqualTo(1);
         assertThat(savedGroup.get("items").get(0).asInt()).isEqualTo(4);
-        assertThat(result)
-                .containsEntry("themeName", themeName)
-                .containsEntry("configVersion", 1L);
-        assertThat(result.get("values")).isEqualTo(Map.of(
-                "nested", Map.of("keep", 1, "add", 3), "items", List.of(4)));
+        assertThat(result).containsEntry("themeName", themeName).containsEntry("configVersion", 1L);
+        assertThat(result.get("values")).isEqualTo(Map.of("nested", Map.of("keep", 1, "add", 3), "items", List.of(4)));
     }
 
     @Test
     void rejectsAStaleThemeOrConfigVersion() {
         StepVerifier.create(tools.updateGroup(Map.of(
-                        "themeName", "theme-other",
-                        "group", "basics",
-                        "patch", Map.of("title", "New"),
-                        "expectedVersion", 8L)))
+                        "themeName",
+                        "theme-other",
+                        "group",
+                        "basics",
+                        "patch",
+                        Map.of("title", "New"),
+                        "expectedVersion",
+                        8L)))
                 .expectErrorSatisfies(error -> assertToolError(error, "CONFLICT", "active theme changed"))
                 .verify();
 
@@ -312,10 +302,14 @@ class ThemeSettingToolsTest {
                 .thenReturn(Mono.just(configMap("theme-hao-config", 9L, Map.of("basics", "{}"))));
 
         StepVerifier.create(tools.updateGroup(Map.of(
-                        "themeName", "theme-hao",
-                        "group", "basics",
-                        "patch", Map.of("title", "New"),
-                        "expectedVersion", 8L)))
+                        "themeName",
+                        "theme-hao",
+                        "group",
+                        "basics",
+                        "patch",
+                        Map.of("title", "New"),
+                        "expectedVersion",
+                        8L)))
                 .expectErrorSatisfies(error -> assertToolError(error, "CONFLICT", "expected version 8"))
                 .verify();
         verify(client, never()).update(any(ConfigMap.class));
@@ -327,24 +321,18 @@ class ThemeSettingToolsTest {
                 .thenReturn(Mono.just(setting(form("basics", "Basic", Map.of()))));
         when(client.fetch(ConfigMap.class, "theme-hao-config"))
                 .thenReturn(Mono.just(configMap("theme-hao-config", 8L, Map.of("basics", "[]"))))
-                .thenReturn(Mono.just(configMap(
-                        "theme-hao-config", 8L, Map.of("basics", "{\"title\":\"Old\"}"))));
+                .thenReturn(Mono.just(configMap("theme-hao-config", 8L, Map.of("basics", "{\"title\":\"Old\"}"))));
 
         StepVerifier.create(tools.getGroup(Map.of("group", "basics")))
-                .expectErrorSatisfies(error -> assertToolError(
-                        error, "THEME_SETTING_UNAVAILABLE", "must contain a JSON object"))
+                .expectErrorSatisfies(
+                        error -> assertToolError(error, "THEME_SETTING_UNAVAILABLE", "must contain a JSON object"))
                 .verify();
 
-        var result = data(tools.updateGroup(Map.of(
-                        "themeName", "theme-hao",
-                        "group", "basics",
-                        "patch", Map.of(),
-                        "expectedVersion", 8L))
+        var result = data(tools.updateGroup(
+                        Map.of("themeName", "theme-hao", "group", "basics", "patch", Map.of(), "expectedVersion", 8L))
                 .block());
 
-        assertThat(result)
-                .containsEntry("configVersion", 8L)
-                .containsEntry("values", Map.of("title", "Old"));
+        assertThat(result).containsEntry("configVersion", 8L).containsEntry("values", Map.of("title", "Old"));
         verify(client, never()).update(any(ConfigMap.class));
     }
 
@@ -365,14 +353,10 @@ class ThemeSettingToolsTest {
         stubActiveTheme("theme-echoCraft");
 
         StepVerifier.create(tools.updateGroup(Map.of(
-                        "themeName", "theme-echocraft",
-                        "group", "basics",
-                        "patch", Map.of(),
-                        "expectedVersion", 0L)))
+                        "themeName", "theme-echocraft", "group", "basics", "patch", Map.of(), "expectedVersion", 0L)))
                 .expectErrorSatisfies(error -> assertToolError(error, "CONFLICT", "active theme changed"))
                 .verify();
-        StepVerifier.create(tools.getTemplate(Map.of(
-                        "themeName", "theme-echocraft", "path", "index.html")))
+        StepVerifier.create(tools.getTemplate(Map.of("themeName", "theme-echocraft", "path", "index.html")))
                 .expectErrorSatisfies(error -> assertToolError(error, "CONFLICT", "active theme changed"))
                 .verify();
         verify(client, never()).update(any(ConfigMap.class));
@@ -416,8 +400,7 @@ class ThemeSettingToolsTest {
         return setting;
     }
 
-    private static Setting.SettingForm form(
-            String group, String label, Map<String, Object> schema) {
+    private static Setting.SettingForm form(String group, String label, Map<String, Object> schema) {
         var form = new Setting.SettingForm();
         form.setGroup(group);
         form.setLabel(label);
@@ -445,9 +428,7 @@ class ThemeSettingToolsTest {
     }
 
     private static void assertToolError(Throwable error, String code, String message) {
-        assertThat(error)
-                .isInstanceOf(McpToolException.class)
-                .hasMessageContaining(message);
+        assertThat(error).isInstanceOf(McpToolException.class).hasMessageContaining(message);
         assertThat(((McpToolException) error).code()).isEqualTo(code);
     }
 }

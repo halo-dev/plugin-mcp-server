@@ -36,8 +36,7 @@ class McpToolNamesTest {
     void rejectsNamesOutsideTheSharedContract() {
         assertThat(McpToolNames.pluginName("demo__ListPosts")).isEmpty();
         assertThat(McpToolNames.pluginName("demo/list_posts")).isEmpty();
-        assertThatThrownBy(() -> McpToolNames.contributed("demo", "ListPosts"))
-                .isInstanceOf(McpToolException.class);
+        assertThatThrownBy(() -> McpToolNames.contributed("demo", "ListPosts")).isInstanceOf(McpToolException.class);
         assertThatThrownBy(() -> McpToolNames.contributed("x".repeat(120), "list_posts"))
                 .isInstanceOf(McpToolException.class);
     }

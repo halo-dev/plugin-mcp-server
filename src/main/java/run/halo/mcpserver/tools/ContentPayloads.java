@@ -76,8 +76,7 @@ final class ContentPayloads {
                         "excerpt", halo(Post.PostStatus.class, "excerpt"),
                         "published",
                                 ToolSupport.described(
-                                        ToolSupport.booleanSchema(),
-                                        "Whether the single page is currently published."),
+                                        ToolSupport.booleanSchema(), "Whether the single page is currently published."),
                         "publishRequested",
                                 describedHalo(
                                         SinglePage.SinglePageSpec.class,
@@ -167,10 +166,8 @@ final class ContentPayloads {
                                         Comment.CommentOwner.class,
                                         "displayName",
                                         "Display name shown for the comment owner."),
-                        "subjectGroup",
-                                describedHalo(Ref.class, "group", "Extension group of the comment subject."),
-                        "subjectKind",
-                                describedHalo(Ref.class, "kind", "Extension kind of the comment subject."),
+                        "subjectGroup", describedHalo(Ref.class, "group", "Extension group of the comment subject."),
+                        "subjectKind", describedHalo(Ref.class, "kind", "Extension kind of the comment subject."),
                         "subjectName",
                                 describedHalo(Ref.class, "name", "Extension metadata.name of the comment subject."),
                         "creationTime",
@@ -205,10 +202,7 @@ final class ContentPayloads {
                         "Reply owner identifier; User owners use User metadata.name."));
         properties.put(
                 "ownerDisplayName",
-                describedHalo(
-                        Comment.CommentOwner.class,
-                        "displayName",
-                        "Display name shown for the reply owner."));
+                describedHalo(Comment.CommentOwner.class, "displayName", "Display name shown for the reply owner."));
         properties.put(
                 "creationTime",
                 describedHalo(
@@ -241,8 +235,7 @@ final class ContentPayloads {
         return HaloSchemaProperties.property(owner, name);
     }
 
-    private static Map<String, Object> describedHalo(
-            Class<?> owner, String name, String description) {
+    private static Map<String, Object> describedHalo(Class<?> owner, String name, String description) {
         return ToolSupport.described(halo(owner, name), description);
     }
 
@@ -254,12 +247,14 @@ final class ContentPayloads {
                 "title", spec == null ? null : spec.getTitle(),
                 "slug", spec == null ? null : spec.getSlug(),
                 "excerpt", status == null ? null : status.getExcerpt(),
-                "excerptRaw", spec == null || spec.getExcerpt() == null
-                        ? null
-                        : spec.getExcerpt().getRaw(),
-                "autoGenerateExcerpt", spec == null
-                        || spec.getExcerpt() == null
-                        || Boolean.TRUE.equals(spec.getExcerpt().getAutoGenerate()),
+                "excerptRaw",
+                        spec == null || spec.getExcerpt() == null
+                                ? null
+                                : spec.getExcerpt().getRaw(),
+                "autoGenerateExcerpt",
+                        spec == null
+                                || spec.getExcerpt() == null
+                                || Boolean.TRUE.equals(spec.getExcerpt().getAutoGenerate()),
                 "cover", spec == null ? null : spec.getCover(),
                 "template", spec == null ? null : spec.getTemplate(),
                 "pinned", spec != null && Boolean.TRUE.equals(spec.getPinned()),
@@ -269,7 +264,10 @@ final class ContentPayloads {
                 "published", published(post.getMetadata(), Post.PUBLISHED_LABEL),
                 "publishRequested", spec != null && Boolean.TRUE.equals(spec.getPublish()),
                 "recycled", spec != null && Boolean.TRUE.equals(spec.getDeleted()),
-                "visible", spec == null || spec.getVisible() == null ? null : spec.getVisible().name(),
+                "visible",
+                        spec == null || spec.getVisible() == null
+                                ? null
+                                : spec.getVisible().name(),
                 "owner", spec == null ? null : spec.getOwner(),
                 "categories", spec == null || spec.getCategories() == null ? List.of() : spec.getCategories(),
                 "tags", spec == null || spec.getTags() == null ? List.of() : spec.getTags(),
@@ -277,10 +275,13 @@ final class ContentPayloads {
                 "headSnapshot", spec == null ? null : spec.getHeadSnapshot(),
                 "releaseSnapshot", spec == null ? null : spec.getReleaseSnapshot(),
                 "baseSnapshot", spec == null ? null : spec.getBaseSnapshot(),
-                "version", post.getMetadata() == null ? null : post.getMetadata().getVersion(),
-                "creationTimestamp", instant(post.getMetadata() == null
-                        ? null
-                        : post.getMetadata().getCreationTimestamp()),
+                "version",
+                        post.getMetadata() == null ? null : post.getMetadata().getVersion(),
+                "creationTimestamp",
+                        instant(
+                                post.getMetadata() == null
+                                        ? null
+                                        : post.getMetadata().getCreationTimestamp()),
                 "updateTimestamp", status == null ? null : instant(status.getLastModifyTime()));
     }
 
@@ -295,16 +296,22 @@ final class ContentPayloads {
                 "published", published(page.getMetadata(), SinglePage.PUBLISHED_LABEL),
                 "publishRequested", spec != null && Boolean.TRUE.equals(spec.getPublish()),
                 "recycled", spec != null && Boolean.TRUE.equals(spec.getDeleted()),
-                "visible", spec == null || spec.getVisible() == null ? null : spec.getVisible().name(),
+                "visible",
+                        spec == null || spec.getVisible() == null
+                                ? null
+                                : spec.getVisible().name(),
                 "owner", spec == null ? null : spec.getOwner(),
                 "permalink", status == null ? null : status.getPermalink(),
                 "headSnapshot", spec == null ? null : spec.getHeadSnapshot(),
                 "releaseSnapshot", spec == null ? null : spec.getReleaseSnapshot(),
                 "baseSnapshot", spec == null ? null : spec.getBaseSnapshot(),
-                "version", page.getMetadata() == null ? null : page.getMetadata().getVersion(),
-                "creationTimestamp", instant(page.getMetadata() == null
-                        ? null
-                        : page.getMetadata().getCreationTimestamp()),
+                "version",
+                        page.getMetadata() == null ? null : page.getMetadata().getVersion(),
+                "creationTimestamp",
+                        instant(
+                                page.getMetadata() == null
+                                        ? null
+                                        : page.getMetadata().getCreationTimestamp()),
                 "updateTimestamp", status == null ? null : instant(status.getLastModifyTime()));
     }
 
@@ -322,12 +329,14 @@ final class ContentPayloads {
                 "parent", spec == null ? null : spec.getParent(),
                 "priority", spec == null ? null : spec.getPriority(),
                 "hideFromList", spec != null && spec.isHideFromList(),
-                "preventParentPostCascadeQuery",
-                        spec != null && spec.isPreventParentPostCascadeQuery(),
+                "preventParentPostCascadeQuery", spec != null && spec.isPreventParentPostCascadeQuery(),
                 "permalink", status == null ? null : status.getPermalink(),
                 "postCount", status == null ? null : status.getPostCount(),
                 "visiblePostCount", status == null ? null : status.getVisiblePostCount(),
-                "version", category.getMetadata() == null ? null : category.getMetadata().getVersion());
+                "version",
+                        category.getMetadata() == null
+                                ? null
+                                : category.getMetadata().getVersion());
     }
 
     static Map<String, Object> tag(Tag tag) {
@@ -364,12 +373,17 @@ final class ContentPayloads {
                 "subjectGroup", subject == null ? null : subject.getGroup(),
                 "subjectKind", subject == null ? null : subject.getKind(),
                 "subjectName", subject == null ? null : subject.getName(),
-                "creationTime", spec == null || spec.getCreationTime() == null
-                        ? instant(comment.getMetadata() == null
+                "creationTime",
+                        spec == null || spec.getCreationTime() == null
+                                ? instant(
+                                        comment.getMetadata() == null
+                                                ? null
+                                                : comment.getMetadata().getCreationTimestamp())
+                                : instant(spec.getCreationTime()),
+                "version",
+                        comment.getMetadata() == null
                                 ? null
-                                : comment.getMetadata().getCreationTimestamp())
-                        : instant(spec.getCreationTime()),
-                "version", comment.getMetadata() == null ? null : comment.getMetadata().getVersion());
+                                : comment.getMetadata().getVersion());
     }
 
     static Map<String, Object> reply(Reply reply) {
@@ -386,12 +400,15 @@ final class ContentPayloads {
                 "ownerKind", owner == null ? null : owner.getKind(),
                 "ownerName", owner == null ? null : owner.getName(),
                 "ownerDisplayName", owner == null ? null : owner.getDisplayName(),
-                "creationTime", spec == null || spec.getCreationTime() == null
-                        ? instant(reply.getMetadata() == null
-                                ? null
-                                : reply.getMetadata().getCreationTimestamp())
-                        : instant(spec.getCreationTime()),
-                "version", reply.getMetadata() == null ? null : reply.getMetadata().getVersion(),
+                "creationTime",
+                        spec == null || spec.getCreationTime() == null
+                                ? instant(
+                                        reply.getMetadata() == null
+                                                ? null
+                                                : reply.getMetadata().getCreationTimestamp())
+                                : instant(spec.getCreationTime()),
+                "version",
+                        reply.getMetadata() == null ? null : reply.getMetadata().getVersion(),
                 "commentName", spec == null ? null : spec.getCommentName(),
                 "quoteReply", spec == null ? null : spec.getQuoteReply());
     }
@@ -409,7 +426,10 @@ final class ContentPayloads {
                 "size", spec == null ? null : spec.getSize(),
                 "permalink", status == null ? null : status.getPermalink(),
                 "thumbnails", status == null ? null : status.getThumbnails(),
-                "version", attachment.getMetadata() == null ? null : attachment.getMetadata().getVersion());
+                "version",
+                        attachment.getMetadata() == null
+                                ? null
+                                : attachment.getMetadata().getVersion());
     }
 
     static <T> Map<String, Object> page(ListResult<T> result, java.util.function.Function<T, ?> mapper) {

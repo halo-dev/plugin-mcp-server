@@ -10,9 +10,9 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunctions;
-import org.springframework.web.server.WebHandler;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilterChain;
+import org.springframework.web.server.WebHandler;
 import reactor.core.publisher.Mono;
 import run.halo.app.security.BeforeSecurityWebFilter;
 
@@ -84,17 +84,18 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
                                 if (permit == null) {
                                     return tooManyRequests(exchange).thenReturn(true);
                                 }
-                                var request = exchange.getRequest().mutate()
+                                var request = exchange.getRequest()
+                                        .mutate()
                                         .headers(headers -> headers.remove(AUTHORIZATION))
                                         .build();
                                 // Defer so a synchronously throwing handler assembly still flows through
                                 // the error path and releases the permit.
-                                return Mono.defer(() -> mcpHandler.handle(
-                                                exchange.mutate().request(request).build()))
+                                return Mono.defer(() -> mcpHandler.handle(exchange.mutate()
+                                                .request(request)
+                                                .build()))
                                         .doFinally(ignored -> permit.close())
                                         .contextWrite(org.springframework.security.core.context
-                                                .ReactiveSecurityContextHolder
-                                                .withAuthentication(authentication))
+                                                .ReactiveSecurityContextHolder.withAuthentication(authentication))
                                         .thenReturn(true);
                             })
                             .defaultIfEmpty(false);
@@ -102,7 +103,8 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
                 // The deadline covers the whole authenticate-and-handle chain so stalled
                 // credential lookups cannot park requests either.
                 .timeout(requestTimeout)
-                .onErrorResume(java.util.concurrent.TimeoutException.class,
+                .onErrorResume(
+                        java.util.concurrent.TimeoutException.class,
                         error -> serviceUnavailable(exchange).thenReturn(true))
                 .flatMap(handled -> handled ? Mono.empty() : unauthorized(exchange));
     }
@@ -114,8 +116,7 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
     private static boolean hasMcpBearerToken(String authorization) {
         return authorization != null
                 && authorization.regionMatches(true, 0, BEARER_SCHEME, 0, BEARER_SCHEME.length())
-                && authorization.regionMatches(
-                        false, BEARER_SCHEME.length(), "hmcp_", 0, "hmcp_".length());
+                && authorization.regionMatches(false, BEARER_SCHEME.length(), "hmcp_", 0, "hmcp_".length());
     }
 
     private static Mono<Void> unauthorized(ServerWebExchange exchange) {
@@ -125,8 +126,8 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
     }
 
     private boolean hasSupportedProtocolVersion(ServerWebExchange exchange) {
-        var versions = exchange.getRequest().getHeaders()
-                .get(io.modelcontextprotocol.spec.HttpHeaders.PROTOCOL_VERSION);
+        var versions =
+                exchange.getRequest().getHeaders().get(io.modelcontextprotocol.spec.HttpHeaders.PROTOCOL_VERSION);
         return versions == null
                 || versions.isEmpty()
                 || (versions.size() == 1 && protocolVersions.contains(versions.getFirst()));
@@ -139,8 +140,7 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
 
     private static Mono<Void> tooManyRequests(ServerWebExchange exchange) {
         exchange.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
-        exchange.getResponse().getHeaders().set(
-                RETRY_AFTER, String.valueOf(McpRequestRateLimiter.RETRY_AFTER_SECONDS));
+        exchange.getResponse().getHeaders().set(RETRY_AFTER, String.valueOf(McpRequestRateLimiter.RETRY_AFTER_SECONDS));
         return exchange.getResponse().setComplete();
     }
 

@@ -29,8 +29,8 @@ public class ClockMcpToolProvider implements McpToolProvider {
                 .inputSchema(objectSchema())
                 .annotations(McpToolAnnotations.readOnly("Current time"))
                 .permission(this::authenticated)
-                .handler(invocation -> Mono.just(McpToolResult.success(Map.of(
-                        "utc", Instant.now().toString()))))
+                .handler(invocation -> Mono.just(
+                        McpToolResult.success(Map.of("utc", Instant.now().toString()))))
                 .build());
     }
 
@@ -42,10 +42,6 @@ public class ClockMcpToolProvider implements McpToolProvider {
     }
 
     private static Map<String, Object> objectSchema() {
-        return Map.of(
-                "type", "object",
-                "properties", Map.of(),
-                "required", List.of(),
-                "additionalProperties", false);
+        return Map.of("type", "object", "properties", Map.of(), "required", List.of(), "additionalProperties", false);
     }
 }

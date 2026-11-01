@@ -21,8 +21,8 @@ class McpInFlightLimiter {
     }
 
     /**
-     * Reserves one global and per-key slot for the key, or returns null when either budget is
-     * exhausted. The caller must close the permit exactly once when the request terminates.
+     * Reserves one global and per-key slot for the key, or returns null when either budget is exhausted. The caller
+     * must close the permit exactly once when the request terminates.
      */
     KeyedInFlightLimiter.Lease tryAcquire(String keyId) {
         return limiter.tryAcquire(keyId, 1);

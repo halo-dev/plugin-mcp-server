@@ -78,11 +78,12 @@ abstract class ToolSupport {
     private Mono<McpSchema.CallToolResult> invoke(
             Function<Map<String, Object>, Mono<ToolPayload>> handler, Map<String, Object> arguments) {
         try {
-            return handler.apply(arguments).map(payload -> McpSchema.CallToolResult.builder()
-                    .addTextContent(jsonText(payload.data()))
-                    .addTextContent(payload.summary())
-                    .structuredContent(payload.data())
-                    .build());
+            return handler.apply(arguments)
+                    .map(payload -> McpSchema.CallToolResult.builder()
+                            .addTextContent(jsonText(payload.data()))
+                            .addTextContent(payload.summary())
+                            .structuredContent(payload.data())
+                            .build());
         } catch (Throwable error) {
             return Mono.error(error);
         }
@@ -103,8 +104,7 @@ abstract class ToolSupport {
         var toolError = toToolException(error);
         return Mono.just(McpSchema.CallToolResult.builder()
                 .addTextContent(toolError.code() + ": " + toolError.getMessage())
-                .structuredContent(Map.of(
-                        "error", Map.of("code", toolError.code(), "message", toolError.getMessage())))
+                .structuredContent(Map.of("error", Map.of("code", toolError.code(), "message", toolError.getMessage())))
                 .isError(true)
                 .build());
     }
@@ -129,11 +129,7 @@ abstract class ToolSupport {
     }
 
     static <E extends Extension> Mono<E> updateLatest(
-            ReactiveExtensionClient client,
-            Class<E> type,
-            String name,
-            String resourceType,
-            Consumer<E> mutation) {
+            ReactiveExtensionClient client, Class<E> type, String name, String resourceType, Consumer<E> mutation) {
         return Mono.defer(() -> client.fetch(type, name)
                         .switchIfEmpty(notFound(resourceType, name))
                         .flatMap(resource -> {
@@ -169,8 +165,7 @@ abstract class ToolSupport {
                         .onRetryExhaustedThrow((spec, signal) -> signal.failure()));
     }
 
-    static <E extends Extension> Mono<Void> rollbackCreated(
-            ReactiveExtensionClient client, E resource) {
+    static <E extends Extension> Mono<Void> rollbackCreated(ReactiveExtensionClient client, E resource) {
         return client.delete(resource).then().onErrorResume(error -> {
             rollbackLog.warn(
                     "Failed to roll back created {} {}",
@@ -182,11 +177,7 @@ abstract class ToolSupport {
     }
 
     static Map<String, Object> objectSchema(Map<String, Object> properties, List<String> required) {
-        return map(
-                "type", "object",
-                "properties", properties,
-                "required", required,
-                "additionalProperties", false);
+        return map("type", "object", "properties", properties, "required", required, "additionalProperties", false);
     }
 
     static Map<String, Object> pageOutputSchema(Map<String, Object> itemSchema) {
@@ -205,27 +196,28 @@ abstract class ToolSupport {
         return objectSchema(
                 map(
                         "item", described(itemSchema, "Content item metadata and publication state."),
-                        "content", described(
-                                objectSchema(
-                                        map(
-                                                "snapshotName",
-                                                        described(
-                                                                nullableOutputStringSchema(),
-                                                                "Content snapshot metadata.name."),
-                                                "rawType",
-                                                        described(
-                                                                nullableOutputStringSchema(),
-                                                                "Format identifier of the raw content."),
-                                                "raw",
-                                                        described(
-                                                                nullableOutputStringSchema(),
-                                                                "Raw content when requested by format."),
-                                                "rendered",
-                                                        described(
-                                                                nullableOutputStringSchema(),
-                                                                "Rendered HTML content when requested by format.")),
-                                        List.of("snapshotName", "rawType")),
-                                "Content loaded from the selected snapshot."),
+                        "content",
+                                described(
+                                        objectSchema(
+                                                map(
+                                                        "snapshotName",
+                                                                described(
+                                                                        nullableOutputStringSchema(),
+                                                                        "Content snapshot metadata.name."),
+                                                        "rawType",
+                                                                described(
+                                                                        nullableOutputStringSchema(),
+                                                                        "Format identifier of the raw content."),
+                                                        "raw",
+                                                                described(
+                                                                        nullableOutputStringSchema(),
+                                                                        "Raw content when requested by format."),
+                                                        "rendered",
+                                                                described(
+                                                                        nullableOutputStringSchema(),
+                                                                        "Rendered HTML content when requested by format.")),
+                                                List.of("snapshotName", "rawType")),
+                                        "Content loaded from the selected snapshot."),
                         "truncated",
                                 described(
                                         booleanSchema(),
@@ -309,8 +301,10 @@ abstract class ToolSupport {
 
     static <E extends Enum<E>> Map<String, Object> enumSchema(Class<E> type, String defaultValue) {
         var schema = map(
-                "type", "string",
-                "enum", Arrays.stream(type.getEnumConstants()).map(Enum::name).toList());
+                "type",
+                "string",
+                "enum",
+                Arrays.stream(type.getEnumConstants()).map(Enum::name).toList());
         if (defaultValue != null) {
             schema.put("default", defaultValue);
         }
@@ -383,19 +377,16 @@ abstract class ToolSupport {
             return null;
         }
         if (!(value instanceof Number number)) {
-            throw new McpToolException(
-                    "INVALID_ARGUMENT", name + " must be a non-negative 64-bit integer");
+            throw new McpToolException("INVALID_ARGUMENT", name + " must be a non-negative 64-bit integer");
         }
         final long result;
         try {
             result = new BigDecimal(number.toString()).longValueExact();
         } catch (NumberFormatException | ArithmeticException error) {
-            throw new McpToolException(
-                    "INVALID_ARGUMENT", name + " must be a non-negative 64-bit integer", error);
+            throw new McpToolException("INVALID_ARGUMENT", name + " must be a non-negative 64-bit integer", error);
         }
         if (result < 0) {
-            throw new McpToolException(
-                    "INVALID_ARGUMENT", name + " must be a non-negative 64-bit integer");
+            throw new McpToolException("INVALID_ARGUMENT", name + " must be a non-negative 64-bit integer");
         }
         return result;
     }
@@ -403,8 +394,7 @@ abstract class ToolSupport {
     static long requiredLong(Map<String, Object> arguments, String name) {
         var value = optionalLong(arguments, name);
         if (value == null) {
-            throw new McpToolException(
-                    "INVALID_ARGUMENT", name + " must be a non-negative 64-bit integer");
+            throw new McpToolException("INVALID_ARGUMENT", name + " must be a non-negative 64-bit integer");
         }
         return value;
     }
@@ -415,8 +405,7 @@ abstract class ToolSupport {
             return defaultValue;
         }
         if (!(value instanceof Number number) || number.intValue() < min || number.intValue() > max) {
-            throw new McpToolException(
-                    "INVALID_ARGUMENT", name + " must be between " + min + " and " + max);
+            throw new McpToolException("INVALID_ARGUMENT", name + " must be between " + min + " and " + max);
         }
         return number.intValue();
     }
@@ -454,12 +443,15 @@ abstract class ToolSupport {
         if (!(value instanceof List<?> list)) {
             throw new McpToolException("INVALID_ARGUMENT", name + " must be an array of strings");
         }
-        return list.stream().map(item -> {
-            if (!(item instanceof String text) || !StringUtils.hasText(text)) {
-                throw new McpToolException("INVALID_ARGUMENT", name + " must contain non-empty strings");
-            }
-            return text;
-        }).distinct().toList();
+        return list.stream()
+                .map(item -> {
+                    if (!(item instanceof String text) || !StringUtils.hasText(text)) {
+                        throw new McpToolException("INVALID_ARGUMENT", name + " must contain non-empty strings");
+                    }
+                    return text;
+                })
+                .distinct()
+                .toList();
     }
 
     static Metadata metadata(String name) {

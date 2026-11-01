@@ -24,8 +24,8 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import run.halo.app.core.extension.attachment.Attachment;
 import run.halo.app.core.extension.service.AttachmentService;
-import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.extension.ConfigMap;
+import run.halo.app.extension.ReactiveExtensionClient;
 import run.halo.app.infra.SystemSetting;
 import run.halo.mcpserver.McpAuthorization;
 import run.halo.mcpserver.api.McpToolException;
@@ -44,8 +44,7 @@ class AttachmentToolsTest {
 
     @Test
     void advertisesUrlUploadInTheAttachmentCatalog() {
-        var tools = new AttachmentTools(
-                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        var tools = new AttachmentTools(client, attachmentService, new AttachmentUploadLimiter(), authorization);
 
         var upload = tools.tools().stream()
                 .filter(tool -> tool.specification().tool().name().equals("halo_upload_attachment_from_url"))
@@ -67,8 +66,7 @@ class AttachmentToolsTest {
 
     @Test
     void transfersUrlWithConsoleConfigAndReturnsResolvedPermalink() throws Exception {
-        var tools = new AttachmentTools(
-                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        var tools = new AttachmentTools(client, attachmentService, new AttachmentUploadLimiter(), authorization);
         stubAttachmentConfig();
         var source = URI.create("https://example.com/source.png").toURL();
         var attachment = new Attachment();
@@ -78,9 +76,7 @@ class AttachmentToolsTest {
         when(attachmentService.getPermalink(attachment))
                 .thenReturn(Mono.just(URI.create("https://example.com/stored.png")));
 
-        StepVerifier.create(tools.uploadFromUrl(Map.of(
-                        "url", source.toString(),
-                        "filename", "photo.png")))
+        StepVerifier.create(tools.uploadFromUrl(Map.of("url", source.toString(), "filename", "photo.png")))
                 .assertNext(payload -> {
                     assertThat(payload.summary()).contains("photo.png");
                     assertThat(payload.data().toString()).contains("https://example.com/stored.png");
@@ -92,8 +88,7 @@ class AttachmentToolsTest {
 
     @Test
     void omitsFilenameWhenTransferringUrl() throws Exception {
-        var tools = new AttachmentTools(
-                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        var tools = new AttachmentTools(client, attachmentService, new AttachmentUploadLimiter(), authorization);
         stubAttachmentConfig();
         var source = URI.create("http://example.com/source.png").toURL();
         var attachment = new Attachment();
@@ -112,8 +107,7 @@ class AttachmentToolsTest {
 
     @Test
     void rejectsNonHttpAndRelativeUrlsBeforeTransfer() {
-        var tools = new AttachmentTools(
-                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        var tools = new AttachmentTools(client, attachmentService, new AttachmentUploadLimiter(), authorization);
 
         for (var url : java.util.List.of("ftp://example.com/a.png", "/relative/a.png")) {
             assertThatThrownBy(() -> tools.uploadFromUrl(Map.of("url", url)))
@@ -125,71 +119,94 @@ class AttachmentToolsTest {
 
     @Test
     void validatesAttachmentBase64BeforeUpload() {
-        var tools = new AttachmentTools(
-                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        var tools = new AttachmentTools(client, attachmentService, new AttachmentUploadLimiter(), authorization);
         stubKeyId("key-one");
 
         StepVerifier.create(tools.upload(Map.<String, Object>of(
                         "filename", "a.txt",
                         "contentBase64", "not-base64")))
-                .expectErrorSatisfies(error -> assertThat(error)
-                        .isInstanceOf(McpToolException.class)
-                        .hasMessageContaining("valid Base64"))
+                .expectErrorSatisfies(error ->
+                        assertThat(error).isInstanceOf(McpToolException.class).hasMessageContaining("valid Base64"))
                 .verify();
-        verify(attachmentService, never()).upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class));
+        verify(attachmentService, never())
+                .upload(
+                        any(),
+                        any(),
+                        any(),
+                        any(reactor.core.publisher.Flux.class),
+                        any(org.springframework.http.MediaType.class));
     }
 
     @Test
     void rejectsContentAboveTheSevenMiBLimitBeforeUpload() {
-        var tools = new AttachmentTools(
-                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        var tools = new AttachmentTools(client, attachmentService, new AttachmentUploadLimiter(), authorization);
 
         assertThatThrownBy(() -> tools.upload(Map.of(
-                        "filename", "large.bin",
-                        "contentBase64", Base64.getEncoder().encodeToString(new byte[7 * 1024 * 1024 + 3]))))
+                        "filename",
+                        "large.bin",
+                        "contentBase64",
+                        Base64.getEncoder().encodeToString(new byte[7 * 1024 * 1024 + 3]))))
                 .isInstanceOf(McpToolException.class)
                 .hasMessageContaining("7 MiB");
 
-        verify(attachmentService, never()).upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class));
+        verify(attachmentService, never())
+                .upload(
+                        any(),
+                        any(),
+                        any(),
+                        any(reactor.core.publisher.Flux.class),
+                        any(org.springframework.http.MediaType.class));
     }
 
     @Test
     void rejectsUploadsWhenTheInFlightByteBudgetIsExhausted() {
         var uploadLimiter = new AttachmentUploadLimiter();
-        var reservation = uploadLimiter.tryAcquire(
-                "key-one", AttachmentUploadLimiter.PER_KEY_BUDGET_BYTES);
+        var reservation = uploadLimiter.tryAcquire("key-one", AttachmentUploadLimiter.PER_KEY_BUDGET_BYTES);
         var tools = new AttachmentTools(client, attachmentService, uploadLimiter, authorization);
         stubKeyId("key-one");
         var arguments = Map.<String, Object>of(
-                "filename", "a.txt",
-                "contentBase64", Base64.getEncoder().encodeToString("hello".getBytes(StandardCharsets.UTF_8)));
+                "filename",
+                "a.txt",
+                "contentBase64",
+                Base64.getEncoder().encodeToString("hello".getBytes(StandardCharsets.UTF_8)));
 
         StepVerifier.create(tools.upload(arguments))
                 .expectErrorSatisfies(error -> assertThat(error)
                         .isInstanceOf(McpToolException.class)
                         .hasMessageContaining("concurrent attachment uploads"))
                 .verify();
-        verify(attachmentService, never()).upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class));
+        verify(attachmentService, never())
+                .upload(
+                        any(),
+                        any(),
+                        any(),
+                        any(reactor.core.publisher.Flux.class),
+                        any(org.springframework.http.MediaType.class));
 
         reservation.close();
         var attachment = new Attachment();
         attachment.setMetadata(ToolSupport.metadata("a.txt"));
-        when(attachmentService.upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class)))
+        when(attachmentService.upload(
+                        any(),
+                        any(),
+                        any(),
+                        any(reactor.core.publisher.Flux.class),
+                        any(org.springframework.http.MediaType.class)))
                 .thenReturn(Mono.just(attachment));
-        when(attachmentService.getPermalink(attachment))
-                .thenReturn(Mono.just(URI.create("https://example.com/a.txt")));
+        when(attachmentService.getPermalink(attachment)).thenReturn(Mono.just(URI.create("https://example.com/a.txt")));
         StepVerifier.create(tools.upload(arguments))
                 .assertNext(payload -> {
                     assertThat(payload.summary()).contains("a.txt");
                     assertThat(payload.data().toString()).contains("https://example.com/a.txt");
                 })
                 .verifyComplete();
-        verify(attachmentService).upload(
-                eq("local"),
-                eq("default"),
-                eq("a.txt"),
-                any(reactor.core.publisher.Flux.class),
-                eq(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM));
+        verify(attachmentService)
+                .upload(
+                        eq("local"),
+                        eq("default"),
+                        eq("a.txt"),
+                        any(reactor.core.publisher.Flux.class),
+                        eq(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM));
     }
 
     @Test
@@ -198,16 +215,22 @@ class AttachmentToolsTest {
         var tools = new AttachmentTools(client, attachmentService, uploadLimiter, authorization);
         stubKeyId("key-one");
         var started = new CountDownLatch(1);
-        when(attachmentService.upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class)))
+        when(attachmentService.upload(
+                        any(),
+                        any(),
+                        any(),
+                        any(reactor.core.publisher.Flux.class),
+                        any(org.springframework.http.MediaType.class)))
                 .thenAnswer(ignored -> {
                     started.countDown();
                     return Mono.never();
                 });
 
         var upload = tools.upload(Map.<String, Object>of(
-                        "filename", "a.txt",
+                        "filename",
+                        "a.txt",
                         "contentBase64",
-                                Base64.getEncoder().encodeToString("hello".getBytes(StandardCharsets.UTF_8))))
+                        Base64.getEncoder().encodeToString("hello".getBytes(StandardCharsets.UTF_8))))
                 .subscribe();
         assertThat(started.await(1, TimeUnit.SECONDS)).isTrue();
         upload.dispose();
@@ -222,14 +245,18 @@ class AttachmentToolsTest {
         var tools = new AttachmentTools(client, attachmentService, uploadLimiter, authorization);
         stubKeyId("key-one");
         var started = new CountDownLatch(4);
-        when(attachmentService.upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class)))
+        when(attachmentService.upload(
+                        any(),
+                        any(),
+                        any(),
+                        any(reactor.core.publisher.Flux.class),
+                        any(org.springframework.http.MediaType.class)))
                 .thenAnswer(ignored -> {
                     started.countDown();
                     return Mono.never();
                 });
         var arguments = Map.<String, Object>of(
-                "filename", "a.bin",
-                "contentBase64", Base64.getEncoder().encodeToString(new byte[7 * 1024 * 1024]));
+                "filename", "a.bin", "contentBase64", Base64.getEncoder().encodeToString(new byte[7 * 1024 * 1024]));
 
         var errors = new java.util.concurrent.CopyOnWriteArrayList<Throwable>();
         var uploads = new java.util.ArrayList<reactor.core.Disposable>();
@@ -261,32 +288,36 @@ class AttachmentToolsTest {
                 "{\"console\":{\"policyName\":\"default-policy\",\"groupName\":\"default-group\"}}"));
         var system = new ConfigMap();
         system.setData(Map.of());
-        when(client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG_DEFAULT))
-                .thenReturn(Mono.just(defaults));
-        when(client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG))
-                .thenReturn(Mono.just(system));
+        when(client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG_DEFAULT)).thenReturn(Mono.just(defaults));
+        when(client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG)).thenReturn(Mono.just(system));
         when(authorization.keyId()).thenReturn(Mono.just("key-one"));
         var attachment = new Attachment();
         attachment.setMetadata(ToolSupport.metadata("a.txt"));
-        when(attachmentService.upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class)))
+        when(attachmentService.upload(
+                        any(),
+                        any(),
+                        any(),
+                        any(reactor.core.publisher.Flux.class),
+                        any(org.springframework.http.MediaType.class)))
                 .thenReturn(Mono.just(attachment));
-        when(attachmentService.getPermalink(attachment))
-                .thenReturn(Mono.just(URI.create("https://example.com/a.txt")));
-        var tools = new AttachmentTools(
-                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        when(attachmentService.getPermalink(attachment)).thenReturn(Mono.just(URI.create("https://example.com/a.txt")));
+        var tools = new AttachmentTools(client, attachmentService, new AttachmentUploadLimiter(), authorization);
 
         StepVerifier.create(tools.upload(Map.of(
-                        "filename", "a.txt",
-                        "contentBase64", Base64.getEncoder().encodeToString("a".getBytes(StandardCharsets.UTF_8)))))
+                        "filename",
+                        "a.txt",
+                        "contentBase64",
+                        Base64.getEncoder().encodeToString("a".getBytes(StandardCharsets.UTF_8)))))
                 .expectNextCount(1)
                 .verifyComplete();
 
-        verify(attachmentService).upload(
-                eq("default-policy"),
-                eq("default-group"),
-                eq("a.txt"),
-                any(reactor.core.publisher.Flux.class),
-                eq(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM));
+        verify(attachmentService)
+                .upload(
+                        eq("default-policy"),
+                        eq("default-group"),
+                        eq("a.txt"),
+                        any(reactor.core.publisher.Flux.class),
+                        eq(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM));
     }
 
     @Test
@@ -296,60 +327,67 @@ class AttachmentToolsTest {
                 SystemSetting.Attachment.GROUP,
                 "{\"console\":{\"policyName\":\"default-policy\",\"groupName\":\"default-group\"}}"));
         var system = new ConfigMap();
-        system.setData(Map.of(
-                SystemSetting.Attachment.GROUP,
-                "{\"console\":{\"groupName\":\"custom-group\"}}"));
-        when(client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG_DEFAULT))
-                .thenReturn(Mono.just(defaults));
-        when(client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG))
-                .thenReturn(Mono.just(system));
+        system.setData(Map.of(SystemSetting.Attachment.GROUP, "{\"console\":{\"groupName\":\"custom-group\"}}"));
+        when(client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG_DEFAULT)).thenReturn(Mono.just(defaults));
+        when(client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG)).thenReturn(Mono.just(system));
         when(authorization.keyId()).thenReturn(Mono.just("key-one"));
         var attachment = new Attachment();
         attachment.setMetadata(ToolSupport.metadata("a.txt"));
-        when(attachmentService.upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class)))
+        when(attachmentService.upload(
+                        any(),
+                        any(),
+                        any(),
+                        any(reactor.core.publisher.Flux.class),
+                        any(org.springframework.http.MediaType.class)))
                 .thenReturn(Mono.just(attachment));
-        when(attachmentService.getPermalink(attachment))
-                .thenReturn(Mono.just(URI.create("https://example.com/a.txt")));
-        var tools = new AttachmentTools(
-                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        when(attachmentService.getPermalink(attachment)).thenReturn(Mono.just(URI.create("https://example.com/a.txt")));
+        var tools = new AttachmentTools(client, attachmentService, new AttachmentUploadLimiter(), authorization);
 
         StepVerifier.create(tools.upload(Map.of(
-                        "filename", "a.txt",
-                        "contentBase64", Base64.getEncoder().encodeToString(new byte[] {1}))))
+                        "filename",
+                        "a.txt",
+                        "contentBase64",
+                        Base64.getEncoder().encodeToString(new byte[] {1}))))
                 .expectNextCount(1)
                 .verifyComplete();
 
-        verify(attachmentService).upload(
-                eq("default-policy"),
-                eq("custom-group"),
-                eq("a.txt"),
-                any(reactor.core.publisher.Flux.class),
-                eq(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM));
+        verify(attachmentService)
+                .upload(
+                        eq("default-policy"),
+                        eq("custom-group"),
+                        eq("a.txt"),
+                        any(reactor.core.publisher.Flux.class),
+                        eq(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM));
     }
 
     @Test
     void keepsTheSuccessfulUploadWhenPermalinkResolutionFails() {
-        var tools = new AttachmentTools(
-                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        var tools = new AttachmentTools(client, attachmentService, new AttachmentUploadLimiter(), authorization);
         stubKeyId("key-one");
         var attachment = new Attachment();
         attachment.setMetadata(ToolSupport.metadata("a.txt"));
-        when(attachmentService.upload(any(), any(), any(), any(reactor.core.publisher.Flux.class), any(org.springframework.http.MediaType.class)))
+        when(attachmentService.upload(
+                        any(),
+                        any(),
+                        any(),
+                        any(reactor.core.publisher.Flux.class),
+                        any(org.springframework.http.MediaType.class)))
                 .thenReturn(Mono.just(attachment));
         when(attachmentService.getPermalink(attachment))
                 .thenReturn(Mono.error(new IllegalStateException("storage unavailable")));
 
         StepVerifier.create(tools.upload(Map.of(
-                        "filename", "a.txt",
-                        "contentBase64", Base64.getEncoder().encodeToString(new byte[] {1}))))
+                        "filename",
+                        "a.txt",
+                        "contentBase64",
+                        Base64.getEncoder().encodeToString(new byte[] {1}))))
                 .assertNext(payload -> assertThat(payload.summary()).contains("a.txt"))
                 .verifyComplete();
     }
 
     @Test
     void advertisesUploadLimitsInTheInputSchema() {
-        var tools = new AttachmentTools(
-                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        var tools = new AttachmentTools(client, attachmentService, new AttachmentUploadLimiter(), authorization);
         var upload = tools.tools().stream()
                 .filter(tool -> tool.specification().tool().name().equals(AttachmentTools.UPLOAD))
                 .findFirst()
@@ -370,8 +408,7 @@ class AttachmentToolsTest {
         attachment.getMetadata().setVersion(1L);
         when(client.fetch(Attachment.class, "attachment-one")).thenReturn(Mono.just(attachment));
         when(client.delete(attachment)).thenReturn(Mono.just(attachment));
-        var tools = new AttachmentTools(
-                client, attachmentService, new AttachmentUploadLimiter(), authorization);
+        var tools = new AttachmentTools(client, attachmentService, new AttachmentUploadLimiter(), authorization);
 
         StepVerifier.create(tools.delete(Map.of("name", "attachment-one", "expectedVersion", 1)))
                 .assertNext(payload -> assertThat(payload.summary()).contains("attachment-one"))
@@ -389,12 +426,10 @@ class AttachmentToolsTest {
     private void stubAttachmentConfig() {
         var defaults = new ConfigMap();
         defaults.setData(Map.of());
-        when(client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG_DEFAULT))
-                .thenReturn(Mono.just(defaults));
+        when(client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG_DEFAULT)).thenReturn(Mono.just(defaults));
         var system = new ConfigMap();
         system.setData(Map.of(
-                SystemSetting.Attachment.GROUP,
-                "{\"console\":{\"policyName\":\"local\",\"groupName\":\"default\"}}"));
+                SystemSetting.Attachment.GROUP, "{\"console\":{\"policyName\":\"local\",\"groupName\":\"default\"}}"));
         when(client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG)).thenReturn(Mono.just(system));
     }
 }

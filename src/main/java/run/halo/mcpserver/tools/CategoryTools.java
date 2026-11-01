@@ -37,23 +37,27 @@ class CategoryTools extends ToolSupport implements ToolGroup {
 
     @Override
     public List<BuiltInTool> tools() {
-        return List.of(tool(
-                LIST,
-                "List Halo categories",
-                "List post categories with hierarchy and post counters.",
-                "查询分类",
-                "分页查询文章分类，返回父级关系、优先级和文章数量。",
-                "CATEGORY",
-                objectSchema(
-                        map(
-                                "page", integerSchema(1, null, 1),
-                                "size", integerSchema(1, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE),
-                                "keyword", stringSchema(),
-                                "parent", stringSchema()),
-                        List.of()),
-                pageOutputSchema(ContentPayloads.categorySchema()),
-                READ_ONLY,
-                this::list), createTool(), updateTool(), deleteTool());
+        return List.of(
+                tool(
+                        LIST,
+                        "List Halo categories",
+                        "List post categories with hierarchy and post counters.",
+                        "查询分类",
+                        "分页查询文章分类，返回父级关系、优先级和文章数量。",
+                        "CATEGORY",
+                        objectSchema(
+                                map(
+                                        "page", integerSchema(1, null, 1),
+                                        "size", integerSchema(1, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE),
+                                        "keyword", stringSchema(),
+                                        "parent", stringSchema()),
+                                List.of()),
+                        pageOutputSchema(ContentPayloads.categorySchema()),
+                        READ_ONLY,
+                        this::list),
+                createTool(),
+                updateTool(),
+                deleteTool());
     }
 
     Mono<ToolPayload> list(Map<String, Object> arguments) {
@@ -69,24 +73,25 @@ class CategoryTools extends ToolSupport implements ToolGroup {
             builder.andQuery(equal("spec.parent", parent));
         }
         var pageable = PageRequestImpl.of(
-                page,
-                size,
-                Sort.by(asc("spec.priority"), asc("metadata.creationTimestamp"), asc("metadata.name")));
-        return client.listBy(Category.class, builder.build(), pageable).map(result -> payload(
-                ContentPayloads.page(result, ContentPayloads::category),
-                "Listed " + result.getItems().size() + " categories"));
+                page, size, Sort.by(asc("spec.priority"), asc("metadata.creationTimestamp"), asc("metadata.name")));
+        return client.listBy(Category.class, builder.build(), pageable)
+                .map(result -> payload(
+                        ContentPayloads.page(result, ContentPayloads::category),
+                        "Listed " + result.getItems().size() + " categories"));
     }
 
     Mono<ToolPayload> create(Map<String, Object> arguments) {
         var name = resourceName(arguments, "name");
         var parent = parent(arguments);
-        return validateParent(name, parent).then(Mono.defer(() -> {
-            var category = new Category();
-            category.setMetadata(metadata(name));
-            category.setSpec(new Category.CategorySpec());
-            apply(category.getSpec(), arguments, name, true);
-            return client.create(category);
-        })).map(category -> payload(ContentPayloads.category(category), "Created category " + name));
+        return validateParent(name, parent)
+                .then(Mono.defer(() -> {
+                    var category = new Category();
+                    category.setMetadata(metadata(name));
+                    category.setSpec(new Category.CategorySpec());
+                    apply(category.getSpec(), arguments, name, true);
+                    return client.create(category);
+                }))
+                .map(category -> payload(ContentPayloads.category(category), "Created category " + name));
     }
 
     Mono<ToolPayload> update(Map<String, Object> arguments) {
@@ -94,7 +99,8 @@ class CategoryTools extends ToolSupport implements ToolGroup {
         var expectedVersion = optionalLong(arguments, "expectedVersion");
         var parent = arguments.containsKey("parent") ? parent(arguments) : null;
         var validation = arguments.containsKey("parent") ? validateParent(name, parent) : Mono.<Void>empty();
-        return validation.then(Mono.defer(() -> client.fetch(Category.class, name)
+        return validation
+                .then(Mono.defer(() -> client.fetch(Category.class, name)
                         .switchIfEmpty(notFound("Category", name))
                         .flatMap(category -> checkVersion(category.getMetadata().getVersion(), expectedVersion)
                                 .then(Mono.defer(() -> {
@@ -155,9 +161,10 @@ class CategoryTools extends ToolSupport implements ToolGroup {
                 objectSchema(
                         map(
                                 "name", stringSchema("Category metadata.name."),
-                                "expectedVersion", described(
-                                        integerSchema(),
-                                        "Current metadata.version returned by a read or list call.")),
+                                "expectedVersion",
+                                        described(
+                                                integerSchema(),
+                                                "Current metadata.version returned by a read or list call.")),
                         List.of("name", "expectedVersion")),
                 ContentPayloads.categorySchema(),
                 DESTRUCTIVE,
@@ -179,8 +186,7 @@ class CategoryTools extends ToolSupport implements ToolGroup {
                 "hideFromList", create ? booleanSchema(false) : booleanSchema());
     }
 
-    private static void apply(
-            Category.CategorySpec spec, Map<String, Object> arguments, String name, boolean create) {
+    private static void apply(Category.CategorySpec spec, Map<String, Object> arguments, String name, boolean create) {
         if (create || arguments.containsKey("displayName")) {
             spec.setDisplayName(requiredString(arguments, "displayName"));
         }
@@ -206,8 +212,7 @@ class CategoryTools extends ToolSupport implements ToolGroup {
             spec.setParent(parent(arguments));
         }
         if (create || arguments.containsKey("preventParentPostCascadeQuery")) {
-            spec.setPreventParentPostCascadeQuery(
-                    optionalBoolean(arguments, "preventParentPostCascadeQuery", false));
+            spec.setPreventParentPostCascadeQuery(optionalBoolean(arguments, "preventParentPostCascadeQuery", false));
         }
         if (create || arguments.containsKey("hideFromList")) {
             spec.setHideFromList(optionalBoolean(arguments, "hideFromList", false));
@@ -231,12 +236,11 @@ class CategoryTools extends ToolSupport implements ToolGroup {
             return Mono.empty();
         }
         if (categoryName.equals(parentName) || !visited.add(parentName)) {
-            return Mono.error(new McpToolException(
-                    "INVALID_ARGUMENT", "parent would create a category cycle"));
+            return Mono.error(new McpToolException("INVALID_ARGUMENT", "parent would create a category cycle"));
         }
         return client.fetch(Category.class, parentName)
-                .switchIfEmpty(Mono.error(new McpToolException(
-                        "INVALID_ARGUMENT", "Parent category not found: " + parentName)))
+                .switchIfEmpty(Mono.error(
+                        new McpToolException("INVALID_ARGUMENT", "Parent category not found: " + parentName)))
                 .flatMap(parent -> validateParent(categoryName, parent.getSpec().getParent(), visited));
     }
 }

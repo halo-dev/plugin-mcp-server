@@ -55,25 +55,20 @@ class PostTools extends ToolSupport implements ToolGroup {
     @Override
     public List<BuiltInTool> tools() {
         return List.of(
-                listTool(),
-                getTool(),
-                createTool(),
-                updateTool(),
-                publishStateTool(),
-                recycleTool(),
-                restoreTool());
+                listTool(), getTool(), createTool(), updateTool(), publishStateTool(), recycleTool(), restoreTool());
     }
 
     Mono<ToolPayload> list(Map<String, Object> arguments) {
         var page = boundedInt(arguments, "page", 1, 1, Integer.MAX_VALUE);
         var size = boundedInt(arguments, "size", DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
-        var options = contentOptions(optionalBoolean(arguments, "published"),
-                optionalBoolean(arguments, "recycled", false));
-        var pageable = PageRequestImpl.of(
-                page, size, Sort.by(desc("metadata.creationTimestamp"), asc("metadata.name")));
-        return client.listBy(Post.class, options, pageable).map(result -> payload(
-                ContentPayloads.page(result, ContentPayloads::post),
-                "Listed " + result.getItems().size() + " posts"));
+        var options =
+                contentOptions(optionalBoolean(arguments, "published"), optionalBoolean(arguments, "recycled", false));
+        var pageable =
+                PageRequestImpl.of(page, size, Sort.by(desc("metadata.creationTimestamp"), asc("metadata.name")));
+        return client.listBy(Post.class, options, pageable)
+                .map(result -> payload(
+                        ContentPayloads.page(result, ContentPayloads::post),
+                        "Listed " + result.getItems().size() + " posts"));
     }
 
     Mono<ToolPayload> get(Map<String, Object> arguments) {
@@ -104,9 +99,11 @@ class PostTools extends ToolSupport implements ToolGroup {
             post.setSpec(spec(arguments, username, title, slug));
             return Mono.usingWhen(
                             client.create(post),
-                            created -> snapshots.createBase(Ref.of(created), content, username)
+                            created -> snapshots
+                                    .createBase(Ref.of(created), content, username)
                                     .flatMap(snapshot -> {
-                                        var snapshotName = snapshot.getMetadata().getName();
+                                        var snapshotName =
+                                                snapshot.getMetadata().getName();
                                         return updateLatest(client, Post.class, name, "Post", latest -> {
                                             var postSpec = latest.getSpec();
                                             postSpec.setBaseSnapshot(snapshotName);
@@ -127,65 +124,74 @@ class PostTools extends ToolSupport implements ToolGroup {
         var name = resourceName(arguments, "name");
         if (!arguments.containsKey("raw")) {
             if (arguments.containsKey("content") || arguments.containsKey("rawType")) {
-                throw new McpToolException(
-                        "INVALID_ARGUMENT", "raw is required when content or rawType is provided");
+                throw new McpToolException("INVALID_ARGUMENT", "raw is required when content or rawType is provided");
             }
             return updateLatest(client, Post.class, name, "Post", post -> applyMetadata(post, arguments))
                     .map(updated -> payload(ContentPayloads.post(updated), "Updated post " + name));
         }
         var content = content(arguments);
-        return authorization.username().flatMap(username -> client.fetch(Post.class, name)
-                .switchIfEmpty(notFound("Post", name))
-                .flatMap(post -> {
-                    var expectedHead = post.getSpec().getHeadSnapshot();
-                    var expectedRelease = post.getSpec().getReleaseSnapshot();
-                    return snapshots.update(
-                                Ref.of(post),
-                                post.getSpec().getBaseSnapshot(),
-                                expectedHead,
-                                content,
-                                username)
-                            .flatMap(snapshot -> Mono.usingWhen(
-                                    Mono.just(snapshot),
-                                    ignored -> updateLatestIf(
-                                            client,
-                                            Post.class,
-                                            name,
-                                            "Post",
-                                            latest -> Objects.equals(
-                                                            latest.getSpec().getHeadSnapshot(), expectedHead)
-                                                    && Objects.equals(
-                                                            latest.getSpec().getReleaseSnapshot(), expectedRelease),
-                                            () -> new McpToolException(
-                                                    "CONFLICT",
-                                                    "Post content changed while it was being updated"),
-                                            latest -> {
-                                                applyMetadata(latest, arguments);
-                                                latest.getSpec().setHeadSnapshot(
-                                                        snapshot.getMetadata().getName());
-                                    }),
-                                    ignored -> Mono.empty(),
-                                    (created, ignored) -> snapshots.rollbackUnlessReferenced(
-                                            created,
-                                            client.fetch(Post.class, name)
-                                                    .map(latest -> {
-                                                        var snapshotName = created.getMetadata().getName();
-                                                        return Objects.equals(
-                                                                        latest.getSpec().getHeadSnapshot(),
-                                                                        snapshotName)
-                                                                || Objects.equals(
-                                                                        latest.getSpec().getReleaseSnapshot(),
-                                                                        snapshotName);
-                                                    })),
-                                    created -> Mono.empty()));
-                })
-                .map(updated -> payload(ContentPayloads.post(updated), "Updated post " + name)));
+        return authorization
+                .username()
+                .flatMap(username -> client.fetch(Post.class, name)
+                        .switchIfEmpty(notFound("Post", name))
+                        .flatMap(post -> {
+                            var expectedHead = post.getSpec().getHeadSnapshot();
+                            var expectedRelease = post.getSpec().getReleaseSnapshot();
+                            return snapshots
+                                    .update(
+                                            Ref.of(post),
+                                            post.getSpec().getBaseSnapshot(),
+                                            expectedHead,
+                                            content,
+                                            username)
+                                    .flatMap(snapshot -> Mono.usingWhen(
+                                            Mono.just(snapshot),
+                                            ignored -> updateLatestIf(
+                                                    client,
+                                                    Post.class,
+                                                    name,
+                                                    "Post",
+                                                    latest -> Objects.equals(
+                                                                    latest.getSpec()
+                                                                            .getHeadSnapshot(),
+                                                                    expectedHead)
+                                                            && Objects.equals(
+                                                                    latest.getSpec()
+                                                                            .getReleaseSnapshot(),
+                                                                    expectedRelease),
+                                                    () -> new McpToolException(
+                                                            "CONFLICT",
+                                                            "Post content changed while it was being updated"),
+                                                    latest -> {
+                                                        applyMetadata(latest, arguments);
+                                                        latest.getSpec()
+                                                                .setHeadSnapshot(snapshot.getMetadata()
+                                                                        .getName());
+                                                    }),
+                                            ignored -> Mono.empty(),
+                                            (created, ignored) -> snapshots.rollbackUnlessReferenced(
+                                                    created,
+                                                    client.fetch(Post.class, name)
+                                                            .map(latest -> {
+                                                                var snapshotName = created.getMetadata()
+                                                                        .getName();
+                                                                return Objects.equals(
+                                                                                latest.getSpec()
+                                                                                        .getHeadSnapshot(),
+                                                                                snapshotName)
+                                                                        || Objects.equals(
+                                                                                latest.getSpec()
+                                                                                        .getReleaseSnapshot(),
+                                                                                snapshotName);
+                                                            })),
+                                            created -> Mono.empty()));
+                        })
+                        .map(updated -> payload(ContentPayloads.post(updated), "Updated post " + name)));
     }
 
     Mono<ToolPayload> setPublishState(Map<String, Object> arguments) {
         var publish = requiredBoolean(arguments, "publish");
-        return updateState(
-                arguments, publish, false, (publish ? "Published post " : "Unpublished post "));
+        return updateState(arguments, publish, false, (publish ? "Published post " : "Unpublished post "));
     }
 
     Mono<ToolPayload> recycle(Map<String, Object> arguments) {
@@ -194,7 +200,8 @@ class PostTools extends ToolSupport implements ToolGroup {
 
     Mono<ToolPayload> restore(Map<String, Object> arguments) {
         var name = resourceName(arguments, "name");
-        return updateLatest(client, Post.class, name, "Post", post -> post.getSpec().setDeleted(false))
+        return updateLatest(
+                        client, Post.class, name, "Post", post -> post.getSpec().setDeleted(false))
                 .map(post -> payload(ContentPayloads.post(post), "Restored post " + name));
     }
 
@@ -272,12 +279,14 @@ class PostTools extends ToolSupport implements ToolGroup {
                                 "slug", stringSchema(),
                                 "raw", stringSchema("Editable source content stored in the snapshot."),
                                 "content", stringSchema("Rendered content; defaults to raw when omitted."),
-                                "rawType", described(
-                                        stringSchemaWithDefault(DEFAULT_RAW_TYPE),
-                                        "Format identifier for raw, such as html or markdown."),
-                                "publish", described(
-                                        booleanSchema(false),
-                                        "Whether to publish the initial snapshot immediately."),
+                                "rawType",
+                                        described(
+                                                stringSchemaWithDefault(DEFAULT_RAW_TYPE),
+                                                "Format identifier for raw, such as html or markdown."),
+                                "publish",
+                                        described(
+                                                booleanSchema(false),
+                                                "Whether to publish the initial snapshot immediately."),
                                 "visible", enumSchema(Post.VisibleEnum.class, Post.VisibleEnum.PUBLIC.name()),
                                 "allowComment", booleanSchema(true),
                                 "cover", nullableStringSchema(),
@@ -310,9 +319,10 @@ class PostTools extends ToolSupport implements ToolGroup {
                                 "slug", stringSchema(),
                                 "raw", stringSchema("New editable source; omit for a metadata-only update."),
                                 "content", stringSchema("Rendered content; valid only when raw is provided."),
-                                "rawType", described(
-                                        stringSchemaWithDefault(DEFAULT_RAW_TYPE),
-                                        "Format identifier for raw; valid only when raw is provided."),
+                                "rawType",
+                                        described(
+                                                stringSchemaWithDefault(DEFAULT_RAW_TYPE),
+                                                "Format identifier for raw; valid only when raw is provided."),
                                 "visible", enumSchema(Post.VisibleEnum.class),
                                 "allowComment", booleanSchema(),
                                 "cover", nullableStringSchema(),
@@ -338,9 +348,7 @@ class PostTools extends ToolSupport implements ToolGroup {
                 "回收文章",
                 "将文章移入回收站。",
                 "POST",
-                objectSchema(
-                        map("name", stringSchema()),
-                        List.of("name")),
+                objectSchema(map("name", stringSchema()), List.of("name")),
                 ContentPayloads.postSchema(),
                 DESTRUCTIVE,
                 this::recycle);
@@ -357,9 +365,10 @@ class PostTools extends ToolSupport implements ToolGroup {
                 objectSchema(
                         map(
                                 "name", stringSchema("Post metadata.name."),
-                                "publish", described(
-                                        booleanSchema(),
-                                        "True publishes the current head snapshot; false returns the post to draft.")),
+                                "publish",
+                                        described(
+                                                booleanSchema(),
+                                                "True publishes the current head snapshot; false returns the post to draft.")),
                         List.of("name", "publish")),
                 ContentPayloads.postSchema(),
                 UPDATE,
@@ -392,8 +401,7 @@ class PostTools extends ToolSupport implements ToolGroup {
         return builder.build();
     }
 
-    private static Post.PostSpec spec(
-            Map<String, Object> arguments, String username, String title, String slug) {
+    private static Post.PostSpec spec(Map<String, Object> arguments, String username, String title, String slug) {
         var spec = new Post.PostSpec();
         spec.setTitle(title);
         spec.setSlug(slug);
@@ -456,9 +464,7 @@ class PostTools extends ToolSupport implements ToolGroup {
     private static ContentSnapshots.ContentInput content(Map<String, Object> arguments) {
         var raw = requiredString(arguments, "raw");
         return new ContentSnapshots.ContentInput(
-                raw,
-                optionalString(arguments, "content", raw),
-                optionalString(arguments, "rawType", DEFAULT_RAW_TYPE));
+                raw, optionalString(arguments, "content", raw), optionalString(arguments, "rawType", DEFAULT_RAW_TYPE));
     }
 
     private static Post.Excerpt excerpt(Map<String, Object> arguments, Post.Excerpt current) {

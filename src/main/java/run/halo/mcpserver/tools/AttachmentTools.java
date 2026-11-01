@@ -77,12 +77,14 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
     Mono<ToolPayload> list(Map<String, Object> arguments) {
         var page = boundedInt(arguments, "page", 1, 1, Integer.MAX_VALUE);
         var size = boundedInt(arguments, "size", DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
-        var options = ListOptions.builder().fieldQuery(ExtensionUtil.notDeleting()).build();
-        var pageable = PageRequestImpl.of(
-                page, size, Sort.by(desc("metadata.creationTimestamp"), asc("metadata.name")));
-        return client.listBy(Attachment.class, options, pageable).map(result -> payload(
-                ContentPayloads.page(result, ContentPayloads::attachment),
-                "Listed " + result.getItems().size() + " attachments"));
+        var options =
+                ListOptions.builder().fieldQuery(ExtensionUtil.notDeleting()).build();
+        var pageable =
+                PageRequestImpl.of(page, size, Sort.by(desc("metadata.creationTimestamp"), asc("metadata.name")));
+        return client.listBy(Attachment.class, options, pageable)
+                .map(result -> payload(
+                        ContentPayloads.page(result, ContentPayloads::attachment),
+                        "Listed " + result.getItems().size() + " attachments"));
     }
 
     Mono<ToolPayload> get(Map<String, Object> arguments) {
@@ -128,14 +130,15 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
         var url = httpUrl(requiredString(arguments, "url"));
         var requestedFilename = optionalString(arguments, "filename", null);
         var filename = requestedFilename == null ? null : safeFilename(requestedFilename);
-        return attachmentConfig().flatMap(config -> uploadedAttachment(
-                attachmentService.uploadFromUrl(url, config.policyName(), config.groupName(), filename),
-                filename));
+        return attachmentConfig()
+                .flatMap(config -> uploadedAttachment(
+                        attachmentService.uploadFromUrl(url, config.policyName(), config.groupName(), filename),
+                        filename));
     }
 
     private Mono<ToolPayload> uploadedAttachment(Mono<Attachment> upload, String filename) {
-        return upload.switchIfEmpty(Mono.error(new McpToolException(
-                        "ATTACHMENT_UNAVAILABLE", "Halo did not create the attachment")))
+        return upload.switchIfEmpty(Mono.error(
+                        new McpToolException("ATTACHMENT_UNAVAILABLE", "Halo did not create the attachment")))
                 .flatMap(attachment -> attachmentService
                         .getPermalink(attachment)
                         .doOnNext(permalink -> {
@@ -163,15 +166,14 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
             throw new McpToolException("INVALID_ARGUMENT", "contentBase64 is not valid Base64", error);
         }
         if (bytes.length == 0 || bytes.length > MAX_CONTENT_BYTES) {
-            throw new McpToolException(
-                    "INVALID_ARGUMENT", "Attachment content must be between 1 byte and 7 MiB");
+            throw new McpToolException("INVALID_ARGUMENT", "Attachment content must be between 1 byte and 7 MiB");
         }
         return bytes;
     }
 
     /**
-     * Returns the exact length valid Base64 decodes to. Invalid input may misestimate but never
-     * below zero; the content is still validated when it is actually decoded.
+     * Returns the exact length valid Base64 decodes to. Invalid input may misestimate but never below zero; the content
+     * is still validated when it is actually decoded.
      */
     private static int decodedLength(String encoded) {
         var padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
@@ -234,11 +236,14 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                                 "mediaType", stringSchema("IANA media type; defaults to application/octet-stream."),
                                 "contentBase64",
                                         map(
-                                                "type", "string",
-                                                "minLength", 1,
-                                                "maxLength", MAX_ENCODED_CHARS,
+                                                "type",
+                                                "string",
+                                                "minLength",
+                                                1,
+                                                "maxLength",
+                                                MAX_ENCODED_CHARS,
                                                 "description",
-                                                        "Base64-encoded file bytes; do not include a data URL prefix.")),
+                                                "Base64-encoded file bytes; do not include a data URL prefix.")),
                         List.of("filename", "contentBase64")),
                 ContentPayloads.attachmentSchema(),
                 CREATE,
@@ -274,9 +279,10 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
                 objectSchema(
                         map(
                                 "name", stringSchema("Attachment metadata.name."),
-                                "expectedVersion", described(
-                                        integerSchema(),
-                                        "Current metadata.version returned by a read or list call.")),
+                                "expectedVersion",
+                                        described(
+                                                integerSchema(),
+                                                "Current metadata.version returned by a read or list call.")),
                         List.of("name", "expectedVersion")),
                 ContentPayloads.attachmentSchema(),
                 DESTRUCTIVE,
@@ -308,8 +314,7 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
             }
             return uri.toURL();
         } catch (IllegalArgumentException | MalformedURLException error) {
-            throw new McpToolException(
-                    "INVALID_ARGUMENT", "url must be an absolute http or https URL", error);
+            throw new McpToolException("INVALID_ARGUMENT", "url must be an absolute http or https URL", error);
         }
     }
 
@@ -323,10 +328,11 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
     }
 
     private static String safeFilename(String filename) {
-        if (filename.length() > 255 || filename.contains("/") || filename.contains("\\")
+        if (filename.length() > 255
+                || filename.contains("/")
+                || filename.contains("\\")
                 || filename.chars().anyMatch(Character::isISOControl)) {
-            throw new McpToolException(
-                    "INVALID_ARGUMENT", "filename contains an unsafe path or is too long");
+            throw new McpToolException("INVALID_ARGUMENT", "filename contains an unsafe path or is too long");
         }
         return filename;
     }
@@ -334,30 +340,28 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
     private Mono<SystemSetting.Attachment.UploadOptions> attachmentConfig() {
         var defaults = client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG_DEFAULT)
                 .defaultIfEmpty(new ConfigMap());
-        var overrides = client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG)
-                .defaultIfEmpty(new ConfigMap());
+        var overrides =
+                client.fetch(ConfigMap.class, SystemSetting.SYSTEM_CONFIG).defaultIfEmpty(new ConfigMap());
         return Mono.zip(defaults, overrides)
                 .map(tuple -> mergedAttachmentJson(configData(tuple.getT1()), configData(tuple.getT2())))
                 .flatMap(Mono::justOrEmpty)
-                .flatMap(json -> Mono.fromCallable(() -> JsonMapper.shared()
-                                .readValue(json, SystemSetting.Attachment.class)))
-                .onErrorMap(error -> !(error instanceof McpToolException), error -> new McpToolException(
-                                "ATTACHMENT_CONFIG_UNAVAILABLE",
-                                "Attachment system setting is invalid",
-                                error))
+                .flatMap(json ->
+                        Mono.fromCallable(() -> JsonMapper.shared().readValue(json, SystemSetting.Attachment.class)))
+                .onErrorMap(
+                        error -> !(error instanceof McpToolException),
+                        error -> new McpToolException(
+                                "ATTACHMENT_CONFIG_UNAVAILABLE", "Attachment system setting is invalid", error))
                 .mapNotNull(SystemSetting.Attachment::console)
                 .filter(config -> StringUtils.hasText(config.policyName()))
                 .switchIfEmpty(Mono.error(new McpToolException(
-                        "ATTACHMENT_CONFIG_UNAVAILABLE",
-                        "Attachment system setting is not configured for console")));
+                        "ATTACHMENT_CONFIG_UNAVAILABLE", "Attachment system setting is not configured for console")));
     }
 
     private static Map<String, String> configData(ConfigMap configMap) {
         return configMap.getData() == null ? Map.of() : configMap.getData();
     }
 
-    private static String mergedAttachmentJson(
-            Map<String, String> defaults, Map<String, String> overrides) {
+    private static String mergedAttachmentJson(Map<String, String> defaults, Map<String, String> overrides) {
         var defaultJson = defaults.get(SystemSetting.Attachment.GROUP);
         var overrideJson = overrides.get(SystemSetting.Attachment.GROUP);
         if (defaultJson == null || overrideJson == null) {
@@ -371,11 +375,13 @@ class AttachmentTools extends ToolSupport implements ToolGroup {
         if (!(target instanceof ObjectNode targetObject) || !(override instanceof ObjectNode overrideObject)) {
             return override;
         }
-        overrideObject.properties().forEach(entry -> targetObject.set(
-                entry.getKey(),
-                targetObject.has(entry.getKey())
-                        ? deepMerge(targetObject.get(entry.getKey()), entry.getValue())
-                        : entry.getValue()));
+        overrideObject
+                .properties()
+                .forEach(entry -> targetObject.set(
+                        entry.getKey(),
+                        targetObject.has(entry.getKey())
+                                ? deepMerge(targetObject.get(entry.getKey()), entry.getValue())
+                                : entry.getValue()));
         return targetObject;
     }
 }

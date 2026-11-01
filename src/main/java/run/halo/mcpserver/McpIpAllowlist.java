@@ -1,10 +1,10 @@
 package run.halo.mcpserver;
 
+import com.google.common.net.InetAddresses;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.LinkedHashSet;
 import java.util.Set;
-import com.google.common.net.InetAddresses;
 import org.springframework.security.util.matcher.InetAddressMatcher;
 import org.springframework.security.util.matcher.InetAddressMatchers;
 import org.springframework.util.StringUtils;
@@ -43,9 +43,7 @@ final class McpIpAllowlist {
         }
         try {
             var address = resolved.get();
-            var matchers = ranges.stream()
-                    .map(McpIpAllowlist::compile)
-                    .toList();
+            var matchers = ranges.stream().map(McpIpAllowlist::compile).toList();
             for (var matcher : matchers) {
                 if (matcher.matches(address)) {
                     return true;
@@ -58,17 +56,18 @@ final class McpIpAllowlist {
     }
 
     /**
-     * Resolves the numeric client address for both IP authorization and rate limiting, whether
-     * the socket address carried a resolved InetAddress or only a numeric host string.
+     * Resolves the numeric client address for both IP authorization and rate limiting, whether the socket address
+     * carried a resolved InetAddress or only a numeric host string.
      */
     static java.util.Optional<InetAddress> resolveNumericAddress(InetSocketAddress remoteAddress) {
         if (remoteAddress == null) {
             return java.util.Optional.empty();
         }
         try {
-            return java.util.Optional.of(remoteAddress.getAddress() == null
-                    ? parseNumericAddress(remoteAddress.getHostString())
-                    : remoteAddress.getAddress());
+            return java.util.Optional.of(
+                    remoteAddress.getAddress() == null
+                            ? parseNumericAddress(remoteAddress.getHostString())
+                            : remoteAddress.getAddress());
         } catch (IllegalArgumentException error) {
             return java.util.Optional.empty();
         }
@@ -86,13 +85,12 @@ final class McpIpAllowlist {
     }
 
     /**
-     * Parses a strict numeric IP literal without ever consulting DNS; anything else is rejected
-     * with an IllegalArgumentException.
+     * Parses a strict numeric IP literal without ever consulting DNS; anything else is rejected with an
+     * IllegalArgumentException.
      */
     private static InetAddress parseNumericAddress(String address) {
-        var value = address.startsWith("[") && address.endsWith("]")
-                ? address.substring(1, address.length() - 1)
-                : address;
+        var value =
+                address.startsWith("[") && address.endsWith("]") ? address.substring(1, address.length() - 1) : address;
         return InetAddresses.forString(value);
     }
 

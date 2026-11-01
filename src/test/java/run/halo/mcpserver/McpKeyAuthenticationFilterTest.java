@@ -55,14 +55,14 @@ class McpKeyAuthenticationFilterTest {
                     .doOnNext(context -> currentAuthentication.set(context.getAuthentication()))
                     .then(ServerResponse.noContent().build());
         };
-        when(mcpServer.routerFunction()).thenReturn(RouterFunctions.route()
-                .POST("/mcp", handler)
-                .POST("/mcp/", handler)
-                .build());
+        when(mcpServer.routerFunction())
+                .thenReturn(RouterFunctions.route()
+                        .POST("/mcp", handler)
+                        .POST("/mcp/", handler)
+                        .build());
         when(mcpServer.protocolVersions()).thenReturn(java.util.List.of("2025-11-25"));
         rateLimiter = new McpRequestRateLimiter();
-        filter = new McpKeyAuthenticationFilter(
-                accessKeyService, rateLimiter, new McpInFlightLimiter(), mcpServer);
+        filter = new McpKeyAuthenticationFilter(accessKeyService, rateLimiter, new McpInFlightLimiter(), mcpServer);
     }
 
     @Test
@@ -90,8 +90,7 @@ class McpKeyAuthenticationFilterTest {
                 "admin",
                 Set.of("halo_search_content"));
         var remoteAddress = new InetSocketAddress("203.0.113.8", 41321);
-        when(accessKeyService.authenticate(rawToken, remoteAddress))
-                .thenReturn(Mono.just(authentication));
+        when(accessKeyService.authenticate(rawToken, remoteAddress)).thenReturn(Mono.just(authentication));
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
                 .remoteAddress(remoteAddress)
                 .header(HttpHeaders.AUTHORIZATION, "bEaReR " + rawToken)
@@ -122,8 +121,7 @@ class McpKeyAuthenticationFilterTest {
 
     @Test
     void rejectsAMissingMcpKey() {
-        var exchange = MockServerWebExchange.from(
-                MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH));
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH));
 
         filter.filter(exchange, ignored -> Mono.error(new AssertionError("Request must not continue")))
                 .block();
@@ -155,14 +153,10 @@ class McpKeyAuthenticationFilterTest {
     void authenticatesATrailingSlashAsTheSameMcpEndpoint() {
         var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
         var authentication = new McpKeyAuthenticationToken(
-                "00000000-0000-0000-0000-000000000000",
-                "Automation",
-                "hmcp_00000000",
-                "admin",
-                Set.of());
+                "00000000-0000-0000-0000-000000000000", "Automation", "hmcp_00000000", "admin", Set.of());
         when(accessKeyService.authenticate(rawToken, null)).thenReturn(Mono.just(authentication));
-        var exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/mcp/")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/mcp/").header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
 
         filter.filter(exchange, ignored -> Mono.error(new AssertionError("Halo chain must not continue")))
                 .block();
@@ -213,21 +207,25 @@ class McpKeyAuthenticationFilterTest {
     void timesOutAStalledMcpRequestAndReleasesThePermit() {
         org.springframework.web.reactive.function.server.HandlerFunction<ServerResponse> stalled =
                 request -> Mono.never();
-        when(mcpServer.routerFunction()).thenReturn(
-                RouterFunctions.route().POST("/mcp", stalled).build());
+        when(mcpServer.routerFunction())
+                .thenReturn(RouterFunctions.route().POST("/mcp", stalled).build());
         var inFlightLimiter = new McpInFlightLimiter();
         var fastFilter = new McpKeyAuthenticationFilter(
-                accessKeyService, new McpRequestRateLimiter(), inFlightLimiter, mcpServer,
+                accessKeyService,
+                new McpRequestRateLimiter(),
+                inFlightLimiter,
+                mcpServer,
                 java.time.Duration.ofMillis(50));
         var keyId = "00000000-0000-0000-0000-000000000000";
         var rawToken = "hmcp_" + keyId + "_secret";
         when(accessKeyService.authenticate(rawToken, null))
-                .thenReturn(Mono.just(new McpKeyAuthenticationToken(
-                        keyId, "Automation", "hmcp_00000000", "admin", Set.of())));
+                .thenReturn(Mono.just(
+                        new McpKeyAuthenticationToken(keyId, "Automation", "hmcp_00000000", "admin", Set.of())));
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
 
-        fastFilter.filter(exchange, ignored -> Mono.error(new AssertionError("Request must not continue")))
+        fastFilter
+                .filter(exchange, ignored -> Mono.error(new AssertionError("Request must not continue")))
                 .block();
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
@@ -241,12 +239,16 @@ class McpKeyAuthenticationFilterTest {
         var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
         when(accessKeyService.authenticate(rawToken, null)).thenReturn(Mono.never());
         var fastFilter = new McpKeyAuthenticationFilter(
-                accessKeyService, new McpRequestRateLimiter(), new McpInFlightLimiter(), mcpServer,
+                accessKeyService,
+                new McpRequestRateLimiter(),
+                new McpInFlightLimiter(),
+                mcpServer,
                 java.time.Duration.ofMillis(50));
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
 
-        fastFilter.filter(exchange, ignored -> Mono.error(new AssertionError("Request must not continue")))
+        fastFilter
+                .filter(exchange, ignored -> Mono.error(new AssertionError("Request must not continue")))
                 .block();
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
@@ -256,8 +258,8 @@ class McpKeyAuthenticationFilterTest {
     void limitsConcurrentAuthenticationBeforeCredentialLookup() {
         var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
         when(accessKeyService.authenticate(
-                org.mockito.ArgumentMatchers.eq(rawToken),
-                org.mockito.ArgumentMatchers.any(InetSocketAddress.class)))
+                        org.mockito.ArgumentMatchers.eq(rawToken),
+                        org.mockito.ArgumentMatchers.any(InetSocketAddress.class)))
                 .thenReturn(Mono.never());
         var inFlightLimiter = new McpInFlightLimiter();
         var boundedFilter = new McpKeyAuthenticationFilter(
@@ -265,21 +267,20 @@ class McpKeyAuthenticationFilterTest {
         var requests = new ArrayList<reactor.core.Disposable>();
         try {
             for (var i = 0; i < McpInFlightLimiter.AUTHENTICATION_LIMIT; i++) {
-                var exchange = MockServerWebExchange.from(MockServerHttpRequest
-                        .post(McpKeyAuthenticationFilter.MCP_PATH)
-                        .remoteAddress(new InetSocketAddress("192.0.2." + (i + 1), 8080))
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
-                requests.add(boundedFilter.filter(exchange,
-                                ignored -> Mono.error(new AssertionError("Request must not continue")))
+                var exchange =
+                        MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
+                                .remoteAddress(new InetSocketAddress("192.0.2." + (i + 1), 8080))
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
+                requests.add(boundedFilter
+                        .filter(exchange, ignored -> Mono.error(new AssertionError("Request must not continue")))
                         .subscribe());
             }
-            var overflow = MockServerWebExchange.from(MockServerHttpRequest
-                    .post(McpKeyAuthenticationFilter.MCP_PATH)
+            var overflow = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
                     .remoteAddress(new InetSocketAddress("198.51.100.1", 8080))
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
 
-            StepVerifier.create(boundedFilter.filter(overflow,
-                            ignored -> Mono.error(new AssertionError("Request must not continue"))))
+            StepVerifier.create(boundedFilter.filter(
+                            overflow, ignored -> Mono.error(new AssertionError("Request must not continue"))))
                     .expectComplete()
                     .verify(Duration.ofMillis(200));
 
@@ -304,8 +305,8 @@ class McpKeyAuthenticationFilterTest {
         }
         var rawToken = "hmcp_" + keyId + "_secret";
         when(accessKeyService.authenticate(rawToken, null))
-                .thenReturn(Mono.just(new McpKeyAuthenticationToken(
-                        keyId, "Automation", "hmcp_00000000", "admin", Set.of())));
+                .thenReturn(Mono.just(
+                        new McpKeyAuthenticationToken(keyId, "Automation", "hmcp_00000000", "admin", Set.of())));
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
 
@@ -319,10 +320,9 @@ class McpKeyAuthenticationFilterTest {
 
     @Test
     void releasesThePermitWhenTheHandlerAssemblyFailsSynchronously() {
-        org.springframework.web.reactive.function.server.RouterFunction<ServerResponse> broken =
-                request -> {
-                    throw new IllegalStateException("boom");
-                };
+        org.springframework.web.reactive.function.server.RouterFunction<ServerResponse> broken = request -> {
+            throw new IllegalStateException("boom");
+        };
         when(mcpServer.routerFunction()).thenReturn(broken);
         var inFlightLimiter = new McpInFlightLimiter();
         var brokenFilter = new McpKeyAuthenticationFilter(
@@ -330,8 +330,8 @@ class McpKeyAuthenticationFilterTest {
         var keyId = "00000000-0000-0000-0000-000000000000";
         var rawToken = "hmcp_" + keyId + "_secret";
         when(accessKeyService.authenticate(rawToken, null))
-                .thenReturn(Mono.just(new McpKeyAuthenticationToken(
-                        keyId, "Automation", "hmcp_00000000", "admin", Set.of())));
+                .thenReturn(Mono.just(
+                        new McpKeyAuthenticationToken(keyId, "Automation", "hmcp_00000000", "admin", Set.of())));
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken));
 

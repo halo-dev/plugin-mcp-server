@@ -72,7 +72,8 @@ class McpRequestRateLimiterTest {
         }
         assertThat(limiter.allowRequest(InetSocketAddress.createUnresolved("not-an-ip", 443)))
                 .isFalse();
-        assertThat(limiter.allowRequest(new InetSocketAddress("203.0.113.10", 443))).isTrue();
+        assertThat(limiter.allowRequest(new InetSocketAddress("203.0.113.10", 443)))
+                .isTrue();
     }
 
     @Test

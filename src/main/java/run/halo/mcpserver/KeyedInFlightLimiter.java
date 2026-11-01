@@ -62,9 +62,7 @@ public final class KeyedInFlightLimiter {
                 globalPermits.release(permits);
                 keyPermits.compute(keyId, (key, mapped) -> {
                     semaphore.release(permits);
-                    return mapped == semaphore && semaphore.availablePermits() == perKeyLimit
-                            ? null
-                            : mapped;
+                    return mapped == semaphore && semaphore.availablePermits() == perKeyLimit ? null : mapped;
                 });
             }
         }

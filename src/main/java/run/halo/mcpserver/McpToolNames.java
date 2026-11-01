@@ -17,25 +17,22 @@ final class McpToolNames {
 
     static String contributed(String pluginName, String localName) {
         if (pluginName == null || pluginName.isBlank()) {
-            throw new McpToolException(
-                    "TOOL_PROVIDER_UNAVAILABLE", "Cannot determine the MCP tool provider plugin");
+            throw new McpToolException("TOOL_PROVIDER_UNAVAILABLE", "Cannot determine the MCP tool provider plugin");
         }
         if (localName == null
                 || localName.length() > MAX_COMPONENT_LENGTH
                 || !LOCAL_NAME.matcher(localName).matches()) {
-            throw new McpToolException(
-                    "INVALID_TOOL_NAME", "Tool name must be a lowercase snake_case local name");
+            throw new McpToolException("INVALID_TOOL_NAME", "Tool name must be a lowercase snake_case local name");
         }
         var encodedPluginName = encode(pluginName);
         if (encodedPluginName.length() > MAX_COMPONENT_LENGTH) {
             throw new McpToolException(
-                    "TOOL_PROVIDER_UNAVAILABLE",
-                    "Encoded plugin ID must not exceed 63 characters for MCP tools");
+                    "TOOL_PROVIDER_UNAVAILABLE", "Encoded plugin ID must not exceed 63 characters for MCP tools");
         }
         var protocolName = encodedPluginName + SEPARATOR + localName;
-        if (protocolName.length() > MAX_LENGTH || !PROTOCOL_NAME.matcher(protocolName).matches()) {
-            throw new McpToolException(
-                    "INVALID_TOOL_NAME", "Generated MCP tool name exceeds the protocol limits");
+        if (protocolName.length() > MAX_LENGTH
+                || !PROTOCOL_NAME.matcher(protocolName).matches()) {
+            throw new McpToolException("INVALID_TOOL_NAME", "Generated MCP tool name exceeds the protocol limits");
         }
         return protocolName;
     }
@@ -53,7 +50,8 @@ final class McpToolNames {
             return Optional.empty();
         }
         var localName = protocolName.substring(separator + SEPARATOR.length());
-        if (localName.length() > MAX_COMPONENT_LENGTH || !LOCAL_NAME.matcher(localName).matches()) {
+        if (localName.length() > MAX_COMPONENT_LENGTH
+                || !LOCAL_NAME.matcher(localName).matches()) {
             return Optional.empty();
         }
         return decode(protocolName.substring(0, separator));

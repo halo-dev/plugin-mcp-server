@@ -28,9 +28,9 @@ class McpAccessKeyServiceTest {
     @BeforeEach
     void setUp() {
         service = new McpAccessKeyService(client);
-        when(client.create(any(McpAccessKey.class)))
-                .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
-        lenient().when(client.update(any(McpAccessKey.class)))
+        when(client.create(any(McpAccessKey.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        lenient()
+                .when(client.update(any(McpAccessKey.class)))
                 .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
     }
 
@@ -46,9 +46,7 @@ class McpAccessKeyServiceTest {
 
         assertThat(created).isNotNull();
         assertThat(created.token()).startsWith("hmcp_");
-        assertThat(created.accessKey().getSpec().getKeyHash())
-                .isNotBlank()
-                .doesNotContain(created.token());
+        assertThat(created.accessKey().getSpec().getKeyHash()).isNotBlank().doesNotContain(created.token());
 
         when(client.fetch(McpAccessKey.class, created.accessKey().getMetadata().getName()))
                 .thenReturn(Mono.just(created.accessKey()));
@@ -66,7 +64,8 @@ class McpAccessKeyServiceTest {
 
     @Test
     void wildcardAllowsCurrentAndFutureTools() {
-        var created = service.create("Automation", "admin", Set.of("*"), Set.of(), null).block();
+        var created = service.create("Automation", "admin", Set.of("*"), Set.of(), null)
+                .block();
         when(client.fetch(McpAccessKey.class, created.accessKey().getMetadata().getName()))
                 .thenReturn(Mono.just(created.accessKey()));
 
@@ -94,8 +93,8 @@ class McpAccessKeyServiceTest {
 
     @Test
     void rejectsKeysBeingDeleted() {
-        var created = service.create("Deleting", "admin", Set.of(), Set.of(), null)
-                .block();
+        var created =
+                service.create("Deleting", "admin", Set.of(), Set.of(), null).block();
         created.accessKey().getMetadata().setDeletionTimestamp(Instant.now());
         when(client.fetch(McpAccessKey.class, created.accessKey().getMetadata().getName()))
                 .thenReturn(Mono.just(created.accessKey()));
@@ -105,8 +104,8 @@ class McpAccessKeyServiceTest {
 
     @Test
     void rotationInvalidatesThePreviousSecret() {
-        var created = service.create("Automation", "admin", Set.of(), Set.of(), null)
-                .block();
+        var created =
+                service.create("Automation", "admin", Set.of(), Set.of(), null).block();
         var id = created.accessKey().getMetadata().getName();
         when(client.fetch(McpAccessKey.class, id)).thenReturn(Mono.just(created.accessKey()));
 
@@ -119,7 +118,8 @@ class McpAccessKeyServiceTest {
 
     @Test
     void rotationPreservesDisabledState() {
-        var created = service.create("Disabled", "admin", Set.of(), Set.of(), null).block();
+        var created =
+                service.create("Disabled", "admin", Set.of(), Set.of(), null).block();
         created.accessKey().getSpec().setEnabled(false);
         var id = created.accessKey().getMetadata().getName();
         when(client.fetch(McpAccessKey.class, id)).thenReturn(Mono.just(created.accessKey()));
@@ -132,26 +132,18 @@ class McpAccessKeyServiceTest {
 
     @Test
     void authenticatesOnlyFromAnAllowedIpRange() {
-        var created = service.create(
-                        "Restricted",
-                        "admin",
-                        Set.of(),
-                        Set.of(" 203.0.113.0/24 "),
-                        null)
+        var created = service.create("Restricted", "admin", Set.of(), Set.of(" 203.0.113.0/24 "), null)
                 .block();
         var id = created.accessKey().getMetadata().getName();
         when(client.fetch(McpAccessKey.class, id)).thenReturn(Mono.just(created.accessKey()));
 
-        assertThat(created.accessKey().getSpec().getAllowedIpRanges())
-                .containsExactly("203.0.113.0/24");
-        assertThat(service.authenticate(
-                                created.token(), new InetSocketAddress("198.51.100.10", 443))
+        assertThat(created.accessKey().getSpec().getAllowedIpRanges()).containsExactly("203.0.113.0/24");
+        assertThat(service.authenticate(created.token(), new InetSocketAddress("198.51.100.10", 443))
                         .block())
                 .isNull();
         assertThat(created.accessKey().getStatus().getLastUsedAt()).isNull();
 
-        assertThat(service.authenticate(
-                                created.token(), new InetSocketAddress("203.0.113.42", 443))
+        assertThat(service.authenticate(created.token(), new InetSocketAddress("203.0.113.42", 443))
                         .block())
                 .isNotNull();
         assertThat(created.accessKey().getStatus().getLastUsedAt()).isNotNull();
@@ -159,8 +151,7 @@ class McpAccessKeyServiceTest {
 
     @Test
     void authenticatesWhenTheKeyIsUnchangedDuringVerification() {
-        var created = service.create(
-                        "Automation", "admin", Set.of("halo_search_content"), Set.of(), null)
+        var created = service.create("Automation", "admin", Set.of("halo_search_content"), Set.of(), null)
                 .block();
         var id = created.accessKey().getMetadata().getName();
         when(client.fetch(McpAccessKey.class, id))
@@ -172,8 +163,7 @@ class McpAccessKeyServiceTest {
 
     @Test
     void rejectsAuthenticationWhenRotationCommitsDuringVerification() {
-        var created = service.create(
-                        "Automation", "admin", Set.of("halo_search_content"), Set.of(), null)
+        var created = service.create("Automation", "admin", Set.of("halo_search_content"), Set.of(), null)
                 .block();
         var id = created.accessKey().getMetadata().getName();
         var rotated = copyOf(created.accessKey());
@@ -187,8 +177,7 @@ class McpAccessKeyServiceTest {
 
     @Test
     void rejectsAuthenticationWhenDisablementOrScopeChangeCommitsDuringVerification() {
-        var created = service.create(
-                        "Automation", "admin", Set.of("halo_search_content"), Set.of(), null)
+        var created = service.create("Automation", "admin", Set.of("halo_search_content"), Set.of(), null)
                 .block();
         var id = created.accessKey().getMetadata().getName();
 
@@ -209,7 +198,8 @@ class McpAccessKeyServiceTest {
 
     @Test
     void rejectsAuthenticationWhenDeletionCommitsDuringVerification() {
-        var created = service.create("Automation", "admin", Set.of(), Set.of(), null).block();
+        var created =
+                service.create("Automation", "admin", Set.of(), Set.of(), null).block();
         var id = created.accessKey().getMetadata().getName();
 
         when(client.fetch(McpAccessKey.class, id))
