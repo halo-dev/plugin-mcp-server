@@ -33,7 +33,6 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
     static final String RESTORE_PAGE = "halo_restore_single_page";
 
     private static final int MAX_CONTENT_CHARS = 65_536;
-    private static final String DEFAULT_RAW_TYPE = "html";
 
     private final ReactiveExtensionClient client;
     private final ContentSnapshots snapshots;
@@ -278,8 +277,9 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                                 "slug", stringSchema(),
                                 "raw",
                                         stringSchema("Editable source content stored in the snapshot."
-                                                + " Provide HTML by default so Halo's built-in rich text editor can"
-                                                + " preview and edit it."),
+                                                + " Provide an HTML body fragment by default (no <html>, <head>,"
+                                                + " <body>, <script>, or <style> tags) so Halo's built-in rich text"
+                                                + " editor can preview and edit it."),
                                 "content", stringSchema("Rendered content; defaults to raw when omitted."),
                                 "rawType", described(stringSchemaWithDefault(DEFAULT_RAW_TYPE), RAW_TYPE_DESCRIPTION),
                                 "publish",
@@ -309,13 +309,16 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                                 "slug", stringSchema(),
                                 "raw",
                                         stringSchema("New editable source; omit for a metadata-only update."
-                                                + " Provide HTML by default so Halo's built-in rich text editor can"
-                                                + " preview and edit it."),
+                                                + " Provide an HTML body fragment by default (no <html>, <head>,"
+                                                + " <body>, <script>, or <style> tags) so Halo's built-in rich text"
+                                                + " editor can preview and edit it."),
                                 "content", stringSchema("Rendered content; valid only when raw is provided."),
                                 "rawType",
                                         described(
                                                 stringSchemaWithDefault(DEFAULT_RAW_TYPE),
-                                                RAW_TYPE_DESCRIPTION + " Ignored when raw is omitted."),
+                                                RAW_TYPE_DESCRIPTION + " Only valid when raw is provided; when"
+                                                        + " updating existing content, reuse the rawType returned by"
+                                                        + " the read tool."),
                                 "visible", enumSchema(Post.VisibleEnum.class),
                                 "allowComment", booleanSchema()),
                         List.of("name")),
