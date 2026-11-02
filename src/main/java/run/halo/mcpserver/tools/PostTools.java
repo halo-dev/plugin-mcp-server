@@ -35,7 +35,6 @@ class PostTools extends ToolSupport implements ToolGroup {
     static final String RESTORE_POST = "halo_restore_post";
 
     private static final int MAX_CONTENT_CHARS = 65_536;
-    private static final String DEFAULT_RAW_TYPE = "html";
 
     private final ReactiveExtensionClient client;
     private final PostContentService contentService;
@@ -277,12 +276,13 @@ class PostTools extends ToolSupport implements ToolGroup {
                                 "name", stringSchema("Post metadata.name (a lowercase DNS label)."),
                                 "title", stringSchema(),
                                 "slug", stringSchema(),
-                                "raw", stringSchema("Editable source content stored in the snapshot."),
+                                "raw",
+                                        stringSchema("Editable source content stored in the snapshot."
+                                                + " Provide an HTML body fragment by default (no <html>, <head>,"
+                                                + " <body>, <script>, or <style> tags) so Halo's built-in rich text"
+                                                + " editor can preview and edit it."),
                                 "content", stringSchema("Rendered content; defaults to raw when omitted."),
-                                "rawType",
-                                        described(
-                                                stringSchemaWithDefault(DEFAULT_RAW_TYPE),
-                                                "Format identifier for raw, such as html or markdown."),
+                                "rawType", described(stringSchemaWithDefault(DEFAULT_RAW_TYPE), RAW_TYPE_DESCRIPTION),
                                 "publish",
                                         described(
                                                 booleanSchema(false),
@@ -317,12 +317,18 @@ class PostTools extends ToolSupport implements ToolGroup {
                                 "name", stringSchema("Post metadata.name."),
                                 "title", stringSchema(),
                                 "slug", stringSchema(),
-                                "raw", stringSchema("New editable source; omit for a metadata-only update."),
+                                "raw",
+                                        stringSchema("New editable source; omit for a metadata-only update."
+                                                + " Provide an HTML body fragment by default (no <html>, <head>,"
+                                                + " <body>, <script>, or <style> tags) so Halo's built-in rich text"
+                                                + " editor can preview and edit it."),
                                 "content", stringSchema("Rendered content; valid only when raw is provided."),
                                 "rawType",
                                         described(
                                                 stringSchemaWithDefault(DEFAULT_RAW_TYPE),
-                                                "Format identifier for raw; valid only when raw is provided."),
+                                                RAW_TYPE_DESCRIPTION + " Only valid when raw is provided; when"
+                                                        + " updating existing content, reuse the rawType returned by"
+                                                        + " the read tool."),
                                 "visible", enumSchema(Post.VisibleEnum.class),
                                 "allowComment", booleanSchema(),
                                 "cover", nullableStringSchema(),

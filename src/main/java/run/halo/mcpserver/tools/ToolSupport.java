@@ -35,6 +35,11 @@ abstract class ToolSupport {
 
     static final int DEFAULT_PAGE_SIZE = 20;
     static final int MAX_PAGE_SIZE = 100;
+    static final String DEFAULT_RAW_TYPE = "html";
+    static final String RAW_TYPE_DESCRIPTION =
+            "Format identifier for raw. " + DEFAULT_RAW_TYPE + " (the default) is compatible with Halo's built-in"
+                    + " rich text editor; use markdown only when the user explicitly requests Markdown or confirms a"
+                    + " Markdown editor plugin is installed.";
     static final McpSchema.ToolAnnotations READ_ONLY = annotations(true, false, true, false);
     static final McpSchema.ToolAnnotations CREATE = annotations(false, false, false, false);
     static final McpSchema.ToolAnnotations UPDATE = annotations(false, true, true, false);
