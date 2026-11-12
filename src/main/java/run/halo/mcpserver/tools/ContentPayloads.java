@@ -74,6 +74,8 @@ final class ContentPayloads {
                         "title", halo(SinglePage.SinglePageSpec.class, "title"),
                         "slug", halo(SinglePage.SinglePageSpec.class, "slug"),
                         "excerpt", halo(Post.PostStatus.class, "excerpt"),
+                        "excerptRaw", halo(Post.Excerpt.class, "raw"),
+                        "autoGenerateExcerpt", halo(Post.Excerpt.class, "autoGenerate"),
                         "published",
                                 ToolSupport.described(
                                         ToolSupport.booleanSchema(), "Whether the single page is currently published."),
@@ -293,6 +295,14 @@ final class ContentPayloads {
                 "title", spec == null ? null : spec.getTitle(),
                 "slug", spec == null ? null : spec.getSlug(),
                 "excerpt", status == null ? null : status.getExcerpt(),
+                "excerptRaw",
+                        spec == null || spec.getExcerpt() == null
+                                ? null
+                                : spec.getExcerpt().getRaw(),
+                "autoGenerateExcerpt",
+                        spec == null
+                                || spec.getExcerpt() == null
+                                || Boolean.TRUE.equals(spec.getExcerpt().getAutoGenerate()),
                 "published", published(page.getMetadata(), SinglePage.PUBLISHED_LABEL),
                 "publishRequested", spec != null && Boolean.TRUE.equals(spec.getPublish()),
                 "recycled", spec != null && Boolean.TRUE.equals(spec.getDeleted()),

@@ -287,7 +287,9 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                                                 booleanSchema(false),
                                                 "Whether to publish the initial snapshot immediately."),
                                 "visible", enumSchema(Post.VisibleEnum.class, Post.VisibleEnum.PUBLIC.name()),
-                                "allowComment", booleanSchema(true)),
+                                "allowComment", booleanSchema(true),
+                                "excerpt", nullableStringSchema(),
+                                "autoGenerateExcerpt", booleanSchema()),
                         List.of("name", "title", "raw")),
                 ContentPayloads.singlePageSchema(),
                 CREATE,
@@ -320,7 +322,9 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
                                                         + " updating existing content, reuse the rawType returned by"
                                                         + " the read tool."),
                                 "visible", enumSchema(Post.VisibleEnum.class),
-                                "allowComment", booleanSchema()),
+                                "allowComment", booleanSchema(),
+                                "excerpt", nullableStringSchema(),
+                                "autoGenerateExcerpt", booleanSchema()),
                         List.of("name")),
                 ContentPayloads.singlePageSchema(),
                 UPDATE,
@@ -400,9 +404,7 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
         spec.setAllowComment(optionalBoolean(arguments, "allowComment", true));
         spec.setPinned(false);
         spec.setPriority(0);
-        var excerpt = new Post.Excerpt();
-        excerpt.setAutoGenerate(true);
-        spec.setExcerpt(excerpt);
+        spec.setExcerpt(excerpt(arguments, null));
         return spec;
     }
 
@@ -420,6 +422,26 @@ class SinglePageTools extends ToolSupport implements ToolGroup {
         if (arguments.containsKey("allowComment")) {
             spec.setAllowComment(optionalBoolean(arguments, "allowComment", true));
         }
+        if (arguments.containsKey("excerpt") || arguments.containsKey("autoGenerateExcerpt")) {
+            spec.setExcerpt(excerpt(arguments, spec.getExcerpt()));
+        }
+    }
+
+    private static Post.Excerpt excerpt(Map<String, Object> arguments, Post.Excerpt current) {
+        var excerpt = current == null ? new Post.Excerpt() : current;
+        if (arguments.containsKey("excerpt")) {
+            excerpt.setRaw(nullableString(arguments, "excerpt"));
+        }
+        final boolean autoGenerate;
+        if (arguments.containsKey("autoGenerateExcerpt")) {
+            autoGenerate = optionalBoolean(arguments, "autoGenerateExcerpt", true);
+        } else if (arguments.containsKey("excerpt")) {
+            autoGenerate = false;
+        } else {
+            autoGenerate = current == null || Boolean.TRUE.equals(current.getAutoGenerate());
+        }
+        excerpt.setAutoGenerate(autoGenerate);
+        return excerpt;
     }
 
     private static ContentSnapshots.ContentInput content(Map<String, Object> arguments) {
