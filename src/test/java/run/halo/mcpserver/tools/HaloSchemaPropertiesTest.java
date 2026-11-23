@@ -2,7 +2,6 @@ package run.halo.mcpserver.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import run.halo.app.core.extension.attachment.Attachment;
@@ -25,7 +24,7 @@ class HaloSchemaPropertiesTest {
                         "Visibility used by theme-side and public REST queries; anonymous clients only receive PUBLIC posts.");
         assertThat(HaloSchemaProperties.property(Attachment.AttachmentSpec.class, "size"))
                 .containsEntry("type", "integer")
-                .containsEntry("minimum", BigDecimal.ZERO)
+                .containsEntry("minimum", 0)
                 .containsEntry("description", "Size of the attachment in bytes.");
         assertThat(HaloSchemaProperties.property(Metadata.class, "version"))
                 .containsEntry("type", "integer")
