@@ -1,8 +1,8 @@
 package run.halo.mcpserver.tools;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import io.swagger.v3.core.converter.ModelConverters;
-import io.swagger.v3.core.util.Json;
+import io.swagger.v3.core.util.Json31;
+import io.swagger.v3.oas.models.media.Schema;
 import java.lang.reflect.Field;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,8 +29,14 @@ final class HaloSchemaProperties {
             throw new IllegalArgumentException(
                     "Halo schema property not found: " + key.owner().getName() + "." + key.name());
         }
-        var propertySchema = properties.get(key.name());
-        var result = Json.mapper().convertValue(propertySchema, new TypeReference<Map<String, Object>>() {});
+        var propertySchema = (Schema<?>) properties.get(key.name());
+        // Json31.jsonSchemaAsMap keeps the same descriptor in swagger-core 2.x and 3.x, unlike
+        // Json.mapper() whose return type changed from Jackson 2 to Jackson 3 in swagger-core 3.
+        var result = Json31.jsonSchemaAsMap(propertySchema);
+        if (result == null) {
+            throw new IllegalStateException(
+                    "Failed to convert Halo schema property: " + key.owner().getName() + "." + key.name());
+        }
         normalize(result);
         var description = (String) result.get("description");
         if (!StringUtils.hasText(description)) {
