@@ -8,7 +8,7 @@ Halo 的 [Model Context Protocol（MCP）](https://modelcontextprotocol.io/) 服
 
 - 搜索、读取、创建、更新、发布、回收和恢复文章及独立页面
 - 查询和管理文章分类、标签、评论及评论回复
-- 查询、上传和删除附件；上传沿用 Halo 系统设置中的 Console 附件策略与分组
+- 查询、上传和删除附件；上传沿用 Halo 系统设置中的 Console 附件策略与分组（不建议通过 MCP 上传，见[附件上传](#附件上传)）
 - 按访问密钥选择可用工具，并支持有效期、禁用、轮换和 IP 白名单
 - 在 Halo 控制台查看工具来源和最近调用记录
 - 自动发现其他 Halo 插件贡献的 MCP 工具
@@ -87,6 +87,24 @@ npx @modelcontextprotocol/inspector \
 ```
 
 Inspector 的协议版本请选择 `legacy` 或 `auto`。
+
+## 附件上传
+
+MCP 协议目前不支持传输文件，因此 `halo_upload_attachment` 只能要求调用方把文件内容以 Base64 字符串的形式放进工具参数（解码后上限 7 MiB）。模型需要自行读取并编码文件，实际使用中并不稳定：文件稍大就容易出现编码错误、超出上下文或请求超时。
+
+因此在需要让 AI Agent 上传附件的场景中，更推荐配合 [Halo CLI](https://github.com/halo-dev/cli/) 使用：为 Agent 准备一个已登录的 CLI 环境，让它直接执行附件上传命令。文件的读取、编码和传输都由 CLI 完成，模型只需要给出文件路径或 URL，不必亲自处理文件内容。
+
+```bash
+halo attachment upload --file ./image.png
+```
+
+也可以直接传入远程地址：
+
+```bash
+halo attachment upload --url https://example.com/image.png
+```
+
+MCP 工具仍然保留，适合上传很小的文件，或由客户端自行完成文件读取与编码的场景。
 
 ## 安全提醒
 
