@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
@@ -163,6 +164,36 @@ class McpKeyAuthenticationFilterTest {
 
         verify(accessKeyService).authenticate(rawToken, null);
         assertThat(handledPath.get()).isEqualTo("/mcp/");
+    }
+
+    @Test
+    void readsRequestBodiesLargerThanTheSpringCodecDefault() {
+        var rawToken = "hmcp_00000000-0000-0000-0000-000000000000_secret";
+        var authentication = new McpKeyAuthenticationToken(
+                "00000000-0000-0000-0000-000000000000", "Automation", "hmcp_00000000", "admin", Set.of());
+        when(accessKeyService.authenticate(rawToken, null)).thenReturn(Mono.just(authentication));
+        var body = "x".repeat(300 * 1024);
+        var received = new AtomicReference<String>();
+        when(mcpServer.routerFunction())
+                .thenReturn(RouterFunctions.route()
+                        .POST(
+                                "/mcp",
+                                request -> request.bodyToMono(String.class)
+                                        .doOnNext(received::set)
+                                        .then(ServerResponse.noContent().build()))
+                        .build());
+        var bodyFilter = new McpKeyAuthenticationFilter(
+                accessKeyService, new McpRequestRateLimiter(), new McpInFlightLimiter(), mcpServer);
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.post(McpKeyAuthenticationFilter.MCP_PATH)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body));
+
+        bodyFilter
+                .filter(exchange, ignored -> Mono.error(new AssertionError("Halo chain must not continue")))
+                .block();
+
+        assertThat(received.get()).isEqualTo(body);
     }
 
     @Test

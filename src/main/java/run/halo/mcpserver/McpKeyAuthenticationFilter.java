@@ -9,6 +9,7 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.server.HandlerStrategies;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilterChain;
@@ -22,6 +23,13 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
 
     static final String MCP_PATH = "/mcp";
     static final java.time.Duration DEFAULT_REQUEST_TIMEOUT = java.time.Duration.ofSeconds(30);
+    /**
+     * The transport reads each request body into a String, so its codec limit must cover the 7 MiB attachment limit
+     * once Base64-encoded (about 9.3 MiB) plus the JSON-RPC envelope. Halo allows 10 MB here as well; a bare
+     * {@code toWebHandler(router)} would fall back to Spring's 256 KiB codec default.
+     */
+    static final int MAX_REQUEST_BYTES = 10 * 1024 * 1024;
+
     private static final String BEARER_SCHEME = "Bearer ";
 
     private final McpAccessKeyService accessKeyService;
@@ -49,7 +57,11 @@ class McpKeyAuthenticationFilter implements BeforeSecurityWebFilter {
         this.accessKeyService = accessKeyService;
         this.rateLimiter = rateLimiter;
         this.inFlightLimiter = inFlightLimiter;
-        this.mcpHandler = RouterFunctions.toWebHandler(mcpServer.routerFunction());
+        this.mcpHandler = RouterFunctions.toWebHandler(
+                mcpServer.routerFunction(),
+                HandlerStrategies.builder()
+                        .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(MAX_REQUEST_BYTES))
+                        .build());
         this.protocolVersions = java.util.Set.copyOf(mcpServer.protocolVersions());
         this.requestTimeout = requestTimeout;
     }
